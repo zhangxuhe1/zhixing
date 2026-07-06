@@ -1,0 +1,16 @@
+{
+  "name": "@zhixing/pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import-places": "tsx src/import-places.ts",
+    "generate": "tsx src/generate.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.88",
+    "@zhixing/db": "workspace:*",
+    "zod": "^3.25"
+  },
+  "devDependencies": { "tsx": "^4", "typescript": "^5", "vitest": "^3" }
+}
