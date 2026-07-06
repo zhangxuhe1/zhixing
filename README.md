@@ -15,10 +15,9 @@ pnpm test                       # 全部测试
 
 ## 内容管线（AI 风物卡）
 
-LLM 供应商支持 Gemini 与 DeepSeek，配置 `GEMINI_API_KEY` 或 `DEEPSEEK_API_KEY`（见 `.env.example`）。研究步骤的联网检索仅 Gemini 支持；DeepSeek 下自动跳过检索、直接成稿。
+LLM 供应商支持 Gemini 与 DeepSeek：`cp .env.example .env`，取消注释并填写 `GEMINI_API_KEY` 或 `DEEPSEEK_API_KEY`（一条即可），其余变量保持注释走默认值。API 与管线启动时会自动加载根目录 `.env`。研究步骤的联网检索仅 Gemini 支持；DeepSeek 下自动跳过检索、直接成稿。
 
 ```sh
-export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing
 pnpm --filter @zhixing/pipeline import-places   # 导入北京地点库
 pnpm --filter @zhixing/pipeline generate -- --place 什刹海 --category ANECDOTE --count 1
 ```

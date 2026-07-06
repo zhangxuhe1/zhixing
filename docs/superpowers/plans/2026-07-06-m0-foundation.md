@@ -1432,6 +1432,7 @@ Expected: FAIL（`Cannot find module '../src/import-places.js'`）
 
 `apps/pipeline/src/import-places.ts`:
 ```ts
+import "./env.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createPrisma, type Place, type PrismaClient } from "@zhixing/db";
@@ -1672,7 +1673,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 9: apps/pipeline — AI 生成 CLI（检索 → 成稿 → 入库）
 
 **Files:**
-- Create: `apps/pipeline/src/llm.ts`, `apps/pipeline/src/generate.ts`, `apps/pipeline/test/llm.test.ts`, `apps/pipeline/test/generate.test.ts`
+- Create: `apps/pipeline/src/env.ts`（自动加载根目录 .env）, `apps/pipeline/src/llm.ts`, `apps/pipeline/src/generate.ts`, `apps/pipeline/test/llm.test.ts`, `apps/pipeline/test/generate.test.ts`
 
 **Interfaces:**
 - Consumes: Task 8 的 `buildResearchPrompt` / `buildCardPrompt` / `cardDraftSchema`；`@zhixing/db`
@@ -1725,6 +1726,16 @@ Run: `pnpm --filter @zhixing/pipeline test`
 Expected: generate 测试 FAIL（模块不存在）
 
 - [ ] **Step 3: 写实现**
+
+`apps/pipeline/src/env.ts`（apps/api/src/env.ts 同款，server.ts 首行导入）:
+```ts
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// 自动加载仓库根目录的 .env（cp .env.example .env 后填写）；不存在则跳过，保持零配置可跑
+const envPath = fileURLToPath(new URL("../../../.env", import.meta.url));
+if (existsSync(envPath)) process.loadEnvFile(envPath);
+```
 
 `apps/pipeline/src/llm.ts`（LLM 双供应商抽象）:
 ```ts
@@ -1824,6 +1835,7 @@ export function createLlm(env: Env = process.env): LlmClient {
 
 `apps/pipeline/src/generate.ts`:
 ```ts
+import "./env.js";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { createPrisma, type Card, type CardBlock, type PrismaClient } from "@zhixing/db";

@@ -1,3 +1,4 @@
+import "./env.js";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { createPrisma, type Card, type CardBlock, type PrismaClient } from "@zhixing/db";

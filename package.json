@@ -6,7 +6,7 @@
   "scripts": {
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --workspace-concurrency=1 --if-present test"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "esbuild", "sharp"]

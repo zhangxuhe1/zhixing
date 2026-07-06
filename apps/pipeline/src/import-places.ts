@@ -1,3 +1,4 @@
+import "./env.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createPrisma, type Place, type PrismaClient } from "@zhixing/db";

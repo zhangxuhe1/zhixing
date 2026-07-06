@@ -1,3 +1,4 @@
+import "./env.js";
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
 
