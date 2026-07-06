@@ -6,7 +6,7 @@
 
 **Architecture:** pnpm monorepo，四个包：`packages/db`（Prisma schema 与客户端，唯一数据模型来源）、`apps/api`（Fastify 单体 API）、`apps/admin`（Next.js 管理后台，本地自用）、`apps/pipeline`（TS 脚本：地点库导入 + AI 风物卡生成，直接写库为 AI_GENERATED 状态）。PostgreSQL 16 跑在 Docker Compose。iOS App 不在本计划范围（M1 单独出计划，需 macOS）。
 
-**Tech Stack:** Node 22 + TypeScript (ESM, strict) / pnpm workspaces / Fastify 5 + zod / Prisma 6 + PostgreSQL 16 / Next.js 15 + React 19 / vitest（真实 PG，不 mock DB）/ @anthropic-ai/sdk（结构化输出 + web_search 工具）
+**Tech Stack:** Node 22 + TypeScript (ESM, strict) / pnpm workspaces / Fastify 5 + zod / Prisma 6 + PostgreSQL 16 / Next.js 15 + React 19 / vitest（真实 PG，不 mock DB）/ LLM 双供应商：@google/genai（Gemini，JSON 输出 + Google Search 检索）与 openai SDK（DeepSeek，OpenAI 兼容 json_object 输出）
 
 **规格书:** `docs/superpowers/specs/2026-07-06-zhixing-design.md`（本计划实现其 M0 范围：§3 内容策略、§4 技术方案中的服务端部分）
 
@@ -14,12 +14,12 @@
 
 - Node >= 22，pnpm 10；所有包 `"type": "module"`，TypeScript strict，module/moduleResolution = NodeNext
 - PostgreSQL 16（docker compose 服务名 `db`）；开发库 `zhixing`，测试库 `zhixing_test`，账号 `zhixing`/`zhixing`
-- 默认端口：API `8787`、admin `3000`、Postgres `5432`；开发默认值硬编码在 config 中与 compose 对齐，本地零环境变量可跑
+- 默认端口：API `8787`、admin `3000`、Postgres 宿主机 `5433`（容器内 5432；宿主机 5432 已被其他项目占用）；开发默认值硬编码在 config 中与 compose 对齐，本地零环境变量可跑
 - 管理接口鉴权：`Authorization: Bearer <ADMIN_TOKEN>`，默认 `dev-admin-token`（M0 本地内测专用）
 - 风物卡状态机（规格书 §2.2/§3.2）：`AI_GENERATED → REVIEWED`（复核）；任意非 RETIRED → `RETIRED`（下架）；无其他迁移，不可逆
 - 风物卡五分类枚举：`CUSTOMS`(习俗) `FOOD`(吃食) `DIALECT`(方言) `ANECDOTE`(掌故) `PLACE_NAME`(地名由来)
 - 内容块类型枚举：`TEXT` `IMAGE` `AUDIO` `VIDEO`（M0 只生产 TEXT，结构预留全部——规格书 §2.2）
-- LLM 调用：`@anthropic-ai/sdk`；模型默认 `claude-opus-4-8`（env `ZHIXING_GEN_MODEL` 可覆写）；`thinking: {type: "adaptive"}`；**禁止**设置 `temperature`/`top_p`/`top_k`（Opus 4.8 会 400）；凭据取 `ANTHROPIC_API_KEY` 或 `ant auth login` 的 profile（SDK 零参构造自动解析）
+- LLM 调用：双供应商抽象（`apps/pipeline/src/llm.ts`）。Gemini 走 `@google/genai`（默认模型 `gemini-2.5-pro`），DeepSeek 走 `openai` SDK 指向 `https://api.deepseek.com`（默认模型 `deepseek-chat`）；env `ZHIXING_GEN_MODEL` 覆写模型、`ZHIXING_LLM_PROVIDER` 显式指定供应商（不设时按已配置的 Key 自动选择，gemini 优先）；凭据取 `GEMINI_API_KEY` / `DEEPSEEK_API_KEY`；联网检索（研究步骤）仅 Gemini 的 `googleSearch` 工具支持，DeepSeek 下自动跳过检索直接成稿
 - 自动化测试不调真实 LLM API；live 生成只作为手动验收步骤
 - 每个 git commit message 末尾追加：`Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 - 仓库根目录 = `/root/idea/zhixing`，下文所有路径相对于它
@@ -87,13 +87,15 @@ dist/
 `.env.example`:
 ```
 # 全部可选——默认值与 docker-compose 对齐，本地开发可以不配
-# DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing
-# TEST_DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing_test
+# DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing
+# TEST_DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing_test
 # ADMIN_TOKEN=dev-admin-token
 # PORT=8787
-# 内容管线需要（或使用 ant auth login 的 profile）：
-# ANTHROPIC_API_KEY=sk-ant-...
-# ZHIXING_GEN_MODEL=claude-opus-4-8
+# 内容管线需要（两个 Key 配其一即可；联网检索研究步骤仅 Gemini 支持）：
+# GEMINI_API_KEY=...
+# DEEPSEEK_API_KEY=...
+# ZHIXING_LLM_PROVIDER=gemini        # gemini | deepseek；不设时按已配置的 Key 自动选择（gemini 优先）
+# ZHIXING_GEN_MODEL=gemini-2.5-pro   # 覆写默认模型（gemini 默认 gemini-2.5-pro，deepseek 默认 deepseek-chat）
 ```
 
 `docker-compose.yml`:
@@ -175,7 +177,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "test": "vitest run",
-    "push:test": "DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing_test prisma db push --skip-generate"
+    "push:test": "DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing_test prisma db push --skip-generate"
   },
   "dependencies": { "@prisma/client": "^6" },
   "devDependencies": { "prisma": "^6", "typescript": "^5", "vitest": "^3" }
@@ -346,7 +348,7 @@ export function createPrisma(databaseUrl?: string): PrismaClient {
 Run: `pnpm install`
 Expected: 无报错，生成 pnpm-lock.yaml
 
-Run: `DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing pnpm --filter @zhixing/db exec prisma migrate dev --name init`
+Run: `DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing pnpm --filter @zhixing/db exec prisma migrate dev --name init`
 Expected: `Your database is now in sync with your schema`（Prisma 从 env 读 DATABASE_URL，必须前置）
 
 Run: `pnpm --filter @zhixing/db run push:test`
@@ -366,7 +368,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { createPrisma } from "../src/index.js";
 
 const prisma = createPrisma(
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test",
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test",
 );
 
 beforeEach(async () => {
@@ -467,7 +469,7 @@ export default defineConfig({ test: { fileParallelism: false } });
 import { buildApp } from "../src/app.js";
 
 export const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test";
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test";
 
 export function testApp() {
   return buildApp({ databaseUrl: TEST_DB_URL });
@@ -510,7 +512,7 @@ export const config = {
   port: Number(process.env.PORT ?? 8787),
   adminToken: process.env.ADMIN_TOKEN ?? "dev-admin-token",
   databaseUrl:
-    process.env.DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing",
+    process.env.DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing",
 };
 ```
 
@@ -1339,14 +1341,15 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88",
+    "@google/genai": "^2",
     "@zhixing/db": "workspace:*",
+    "openai": "^6",
     "zod": "^3.25"
   },
   "devDependencies": { "tsx": "^4", "typescript": "^5", "vitest": "^3" }
 }
 ```
-（安装时 pnpm 解析 `@anthropic-ai/sdk` 最新兼容版；若 `^0.88` 不存在以 `pnpm add @anthropic-ai/sdk@latest --filter @zhixing/pipeline` 安装并以 lockfile 为准。）
+（`@google/genai` 用于 Gemini，`openai` 用于 DeepSeek 的 OpenAI 兼容接口；版本以 pnpm 解析的 lockfile 为准。）
 
 `apps/pipeline/tsconfig.json`:
 ```json
@@ -1395,7 +1398,7 @@ import { createPrisma } from "@zhixing/db";
 import { importPlaces } from "../src/import-places.js";
 
 const prisma = createPrisma(
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test",
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test",
 );
 const dataPath = fileURLToPath(new URL("../data/beijing-places.json", import.meta.url));
 
@@ -1478,7 +1481,7 @@ Expected: `1 passed`
 - [ ] **Step 7: 对开发库执行导入**
 
 Run: `pnpm --filter @zhixing/pipeline import-places`
-Expected: `imported: 北京市 + 15 spots`（DATABASE_URL 未设时 createPrisma(undefined) 走 schema env——先 `export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing` 再执行）
+Expected: `imported: 北京市 + 15 spots`（DATABASE_URL 未设时 createPrisma(undefined) 走 schema env——先 `export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing` 再执行）
 
 - [ ] **Step 8: Commit**
 
@@ -1669,14 +1672,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 9: apps/pipeline — AI 生成 CLI（检索 → 成稿 → 入库）
 
 **Files:**
-- Create: `apps/pipeline/src/generate.ts`, `apps/pipeline/test/generate.test.ts`
+- Create: `apps/pipeline/src/llm.ts`, `apps/pipeline/src/generate.ts`, `apps/pipeline/test/llm.test.ts`, `apps/pipeline/test/generate.test.ts`
 
 **Interfaces:**
 - Consumes: Task 8 的 `buildResearchPrompt` / `buildCardPrompt` / `cardDraftSchema`；`@zhixing/db`
 - Produces:
   - `saveDraft(prisma: PrismaClient, placeId: string, category: Category, draft: CardDraft): Promise<Card & { blocks: CardBlock[] }>`（status=AI_GENERATED，blocks 全为 TEXT）
   - CLI：`pnpm --filter @zhixing/pipeline generate -- --place 什刹海 --category ANECDOTE --count 2 [--no-web-search]`
-- LLM 用法（遵守 Global Constraints）：模型 `claude-opus-4-8`；两步调用——①研究：`client.messages.create` + `web_search_20260209`（`max_uses: 3` 控制成本，`--no-web-search` 跳过）；②成稿：`client.messages.parse` + `zodOutputFormat(cardDraftSchema)` 结构化输出
+- LLM 用法（遵守 Global Constraints）：`createLlm()` 按 Key/env 选择 Gemini 或 DeepSeek；两步调用——①研究（仅 Gemini，带 `googleSearch` 联网检索；`--no-web-search` 或 DeepSeek 下跳过）；②成稿：JSON 输出（Gemini `responseMimeType: "application/json"` / DeepSeek `response_format: {type: "json_object"}`）+ `cardDraftSchema` zod 校验
 
 - [ ] **Step 1: 写失败测试（不调真实 API，只测入库函数）**
 
@@ -1687,7 +1690,7 @@ import { createPrisma } from "@zhixing/db";
 import { saveDraft } from "../src/generate.js";
 
 const prisma = createPrisma(
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test",
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test",
 );
 
 beforeEach(async () => {
@@ -1723,50 +1726,121 @@ Expected: generate 测试 FAIL（模块不存在）
 
 - [ ] **Step 3: 写实现**
 
+`apps/pipeline/src/llm.ts`（LLM 双供应商抽象）:
+```ts
+import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+
+export type Provider = "gemini" | "deepseek";
+
+export const DEFAULT_MODELS: Record<Provider, string> = {
+  gemini: "gemini-2.5-pro",
+  deepseek: "deepseek-chat",
+};
+
+type Env = Record<string, string | undefined>;
+
+export function resolveProvider(env: Env = process.env): Provider {
+  const explicit = env.ZHIXING_LLM_PROVIDER;
+  if (explicit) {
+    if (explicit !== "gemini" && explicit !== "deepseek") {
+      throw new Error(`非法 ZHIXING_LLM_PROVIDER: ${explicit}（可选 gemini | deepseek）`);
+    }
+    return explicit;
+  }
+  if (env.GEMINI_API_KEY) return "gemini";
+  if (env.DEEPSEEK_API_KEY) return "deepseek";
+  throw new Error("未配置 LLM 凭据：请设置 GEMINI_API_KEY 或 DEEPSEEK_API_KEY（.env 或环境变量）");
+}
+
+export interface LlmClient {
+  provider: Provider;
+  model: string;
+  /** 是否支持联网检索（研究步骤）；deepseek 不支持，检索步骤将跳过 */
+  canWebSearch: boolean;
+  /** 联网检索并汇集素材，返回纯文本笔记 */
+  research(prompt: string): Promise<string>;
+  /** 生成 JSON 响应并解析（调用方用 zod 校验结构） */
+  generateJson(prompt: string): Promise<unknown>;
+}
+
+function requireKey(env: Env, name: string): string {
+  const v = env[name];
+  if (!v) throw new Error(`缺少环境变量 ${name}`);
+  return v;
+}
+
+export function createLlm(env: Env = process.env): LlmClient {
+  const provider = resolveProvider(env);
+  const model = env.ZHIXING_GEN_MODEL ?? DEFAULT_MODELS[provider];
+
+  if (provider === "gemini") {
+    const ai = new GoogleGenAI({ apiKey: requireKey(env, "GEMINI_API_KEY") });
+    return {
+      provider,
+      model,
+      canWebSearch: true,
+      async research(prompt) {
+        const res = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: { tools: [{ googleSearch: {} }] },
+        });
+        return res.text ?? "";
+      },
+      async generateJson(prompt) {
+        const res = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: { responseMimeType: "application/json" },
+        });
+        return JSON.parse(res.text ?? "");
+      },
+    };
+  }
+
+  const client = new OpenAI({
+    apiKey: requireKey(env, "DEEPSEEK_API_KEY"),
+    baseURL: "https://api.deepseek.com",
+  });
+  return {
+    provider,
+    model,
+    canWebSearch: false,
+    async research() {
+      throw new Error("deepseek 不支持联网检索；请用 --no-web-search 或配置 GEMINI_API_KEY");
+    },
+    async generateJson(prompt) {
+      const res = await client.chat.completions.create({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+      return JSON.parse(res.choices[0]?.message?.content ?? "");
+    },
+  };
+}
+```
+
 `apps/pipeline/src/generate.ts`:
 ```ts
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { createPrisma, type Card, type CardBlock, type PrismaClient } from "@zhixing/db";
+import { createLlm, type LlmClient } from "./llm.js";
 import { buildCardPrompt, buildResearchPrompt, CATEGORY_LABELS, type Category } from "./prompts.js";
 import { cardDraftSchema, type CardDraft } from "./schema.js";
 
-const MODEL = process.env.ZHIXING_GEN_MODEL ?? "claude-opus-4-8";
-
-async function research(
-  client: Anthropic,
-  placeName: string,
-  cityName: string,
-  category: Category,
-): Promise<string> {
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 8192,
-    thinking: { type: "adaptive" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],
-    messages: [{ role: "user", content: buildResearchPrompt(placeName, cityName, category) }],
-  });
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-}
-
 async function writeCard(
-  client: Anthropic,
+  llm: LlmClient,
   opts: Parameters<typeof buildCardPrompt>[0],
 ): Promise<CardDraft> {
-  const res = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    output_config: { format: zodOutputFormat(cardDraftSchema) },
-    messages: [{ role: "user", content: buildCardPrompt(opts) }],
-  });
-  if (!res.parsed_output) throw new Error(`structured output 解析失败 (stop_reason=${res.stop_reason})`);
-  return res.parsed_output;
+  const raw = await llm.generateJson(buildCardPrompt(opts));
+  const parsed = cardDraftSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(`structured output 校验失败: ${parsed.error.message}\n原始输出: ${JSON.stringify(raw).slice(0, 500)}`);
+  }
+  return parsed.data;
 }
 
 export async function saveDraft(
@@ -1810,7 +1884,11 @@ async function main() {
   const count = Number(values.count);
 
   const prisma = createPrisma(process.env.DATABASE_URL);
-  const client = new Anthropic(); // 凭据自动解析：ANTHROPIC_API_KEY 或 ant auth profile
+  const llm = createLlm(); // GEMINI_API_KEY / DEEPSEEK_API_KEY，ZHIXING_LLM_PROVIDER 可显式指定
+  const skipSearch = values["no-web-search"] || !llm.canWebSearch;
+  if (!values["no-web-search"] && !llm.canWebSearch) {
+    console.log(`(${llm.provider} 不支持联网检索，跳过研究步骤，直接依据模型知识成稿)`);
+  }
   try {
     const place = await prisma.place.findFirst({
       where: { name: values.place },
@@ -1826,10 +1904,10 @@ async function main() {
       });
       const existingTitles = existing.map((c) => c.title);
 
-      const notes = values["no-web-search"]
+      const notes = skipSearch
         ? null
-        : await research(client, place.name, cityName, category);
-      const draft = await writeCard(client, {
+        : await llm.research(buildResearchPrompt(place.name, cityName, category));
+      const draft = await writeCard(llm, {
         placeName: place.name,
         cityName,
         category,
@@ -1860,9 +1938,9 @@ Expected: 全部 passed（import 1 + schema 2 + prompts 3 + generate 1）
 
 - [ ] **Step 5: Live 冒烟（需要凭据；无凭据则跳过并在验收时补）**
 
-先确认凭据：`echo ${ANTHROPIC_API_KEY:+set}` 非空，或 `ant auth status` 显示活跃 profile。
+先确认凭据：`echo ${GEMINI_API_KEY:+set}${DEEPSEEK_API_KEY:+set}` 非空（任一 Key 即可；仅 DeepSeek 时研究步骤自动跳过）。
 
-Run: `export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing && pnpm --filter @zhixing/pipeline generate -- --place 什刹海 --category ANECDOTE --count 1`
+Run: `export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing && pnpm --filter @zhixing/pipeline generate -- --place 什刹海 --category ANECDOTE --count 1`
 Expected: 输出 `✓ [掌故] <标题> (<id>)`；随后 `docker compose exec -T db psql -U zhixing -d zhixing -c "select title,status from \"Card\""` 能看到该卡，status=AI_GENERATED
 
 - [ ] **Step 6: Commit**
@@ -1894,7 +1972,7 @@ Expected: 所有包测试通过；admin 构建成功
 Run:
 ```bash
 docker compose up -d db
-export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing
+export DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing
 pnpm --filter @zhixing/pipeline import-places
 pnpm --filter @zhixing/api dev &   # 或单独终端
 pnpm --filter @zhixing/admin dev & # 或单独终端

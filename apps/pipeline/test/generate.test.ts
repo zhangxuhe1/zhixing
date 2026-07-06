@@ -3,7 +3,7 @@ import { createPrisma } from "@zhixing/db";
 import { saveDraft } from "../src/generate.js";
 
 const prisma = createPrisma(
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test",
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test",
 );
 
 beforeEach(async () => {

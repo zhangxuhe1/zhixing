@@ -2,7 +2,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { createPrisma } from "../src/index.js";
 
 const prisma = createPrisma(
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test",
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test",
 );
 
 beforeEach(async () => {

@@ -4,7 +4,7 @@ import { createPrisma } from "@zhixing/db";
 import { importPlaces } from "../src/import-places.js";
 
 const prisma = createPrisma(
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test",
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test",
 );
 const dataPath = fileURLToPath(new URL("../data/beijing-places.json", import.meta.url));
 

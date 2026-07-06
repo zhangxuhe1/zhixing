@@ -8,9 +8,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88",
+    "@google/genai": "^2.10.0",
     "@zhixing/db": "workspace:*",
+    "openai": "^6.45.0",
     "zod": "^3.25"
   },
-  "devDependencies": { "tsx": "^4", "typescript": "^5", "vitest": "^3" }
+  "devDependencies": {
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
 }

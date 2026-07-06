@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: zhixing
       POSTGRES_DB: zhixing
     ports:
-      - "5432:5432"
+      - "5433:5432" # 宿主机 5433（5432 已被其他项目占用），容器内仍是 5432
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d

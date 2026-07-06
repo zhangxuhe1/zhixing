@@ -1,7 +1,7 @@
 import { buildApp } from "../src/app.js";
 
 export const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5432/zhixing_test";
+  process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test";
 
 export function testApp() {
   return buildApp({ databaseUrl: TEST_DB_URL });

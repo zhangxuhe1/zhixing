@@ -1,45 +1,20 @@
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { createPrisma, type Card, type CardBlock, type PrismaClient } from "@zhixing/db";
+import { createLlm, type LlmClient } from "./llm.js";
 import { buildCardPrompt, buildResearchPrompt, CATEGORY_LABELS, type Category } from "./prompts.js";
 import { cardDraftSchema, type CardDraft } from "./schema.js";
 
-const MODEL = process.env.ZHIXING_GEN_MODEL ?? "claude-opus-4-8";
-
-async function research(
-  client: Anthropic,
-  placeName: string,
-  cityName: string,
-  category: Category,
-): Promise<string> {
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 8192,
-    thinking: { type: "adaptive" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],
-    messages: [{ role: "user", content: buildResearchPrompt(placeName, cityName, category) }],
-  });
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-}
-
 async function writeCard(
-  client: Anthropic,
+  llm: LlmClient,
   opts: Parameters<typeof buildCardPrompt>[0],
 ): Promise<CardDraft> {
-  const res = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    output_config: { format: zodOutputFormat(cardDraftSchema) },
-    messages: [{ role: "user", content: buildCardPrompt(opts) }],
-  });
-  if (!res.parsed_output) throw new Error(`structured output 解析失败 (stop_reason=${res.stop_reason})`);
-  return res.parsed_output;
+  const raw = await llm.generateJson(buildCardPrompt(opts));
+  const parsed = cardDraftSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(`structured output 校验失败: ${parsed.error.message}\n原始输出: ${JSON.stringify(raw).slice(0, 500)}`);
+  }
+  return parsed.data;
 }
 
 export async function saveDraft(
@@ -83,7 +58,11 @@ async function main() {
   const count = Number(values.count);
 
   const prisma = createPrisma(process.env.DATABASE_URL);
-  const client = new Anthropic(); // 凭据自动解析：ANTHROPIC_API_KEY 或 ant auth profile
+  const llm = createLlm(); // GEMINI_API_KEY / DEEPSEEK_API_KEY，ZHIXING_LLM_PROVIDER 可显式指定
+  const skipSearch = values["no-web-search"] || !llm.canWebSearch;
+  if (!values["no-web-search"] && !llm.canWebSearch) {
+    console.log(`(${llm.provider} 不支持联网检索，跳过研究步骤，直接依据模型知识成稿)`);
+  }
   try {
     const place = await prisma.place.findFirst({
       where: { name: values.place },
@@ -99,10 +78,10 @@ async function main() {
       });
       const existingTitles = existing.map((c) => c.title);
 
-      const notes = values["no-web-search"]
+      const notes = skipSearch
         ? null
-        : await research(client, place.name, cityName, category);
-      const draft = await writeCard(client, {
+        : await llm.research(buildResearchPrompt(place.name, cityName, category));
+      const draft = await writeCard(llm, {
         placeName: place.name,
         cityName,
         category,

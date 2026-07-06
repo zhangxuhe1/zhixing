@@ -52,5 +52,7 @@ ${TEMPLATE_RULES}
 
 ${material}
 
-按输出格式返回：title（2–30 字，有钩子，不用书名号）、blocks（1–3 个 text 块，合计 300–500 字）、sources（至少 1 条）。`;
+只返回一个 JSON 对象（不要代码块围栏、不要多余文字），格式：
+{"title": "2–30 字标题，有钩子，不用书名号", "blocks": [{"type": "text", "content": "段落正文"}], "sources": ["参考来源"]}
+其中 blocks 为 1–3 个 text 块（合计 300–500 字），sources 至少 1 条。`;
 }
