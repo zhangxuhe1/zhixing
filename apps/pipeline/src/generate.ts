@@ -1,4 +1,4 @@
-import "./env.js";
+import { databaseUrl } from "./env.js";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { createPrisma, type Card, type CardBlock, type PrismaClient } from "@zhixing/db";
@@ -40,7 +40,10 @@ export async function saveDraft(
 }
 
 async function main() {
+  // pnpm run 会把 "--" 透传进来，剥掉它避免 parseArgs 把后续参数当 positional
+  const rawArgs = process.argv.slice(2);
   const { values } = parseArgs({
+    args: rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs,
     options: {
       place: { type: "string" },
       category: { type: "string" },
@@ -58,7 +61,7 @@ async function main() {
   const category = values.category as Category;
   const count = Number(values.count);
 
-  const prisma = createPrisma(process.env.DATABASE_URL);
+  const prisma = createPrisma(databaseUrl);
   const llm = createLlm(); // GEMINI_API_KEY / DEEPSEEK_API_KEY，ZHIXING_LLM_PROVIDER 可显式指定
   const skipSearch = values["no-web-search"] || !llm.canWebSearch;
   if (!values["no-web-search"] && !llm.canWebSearch) {

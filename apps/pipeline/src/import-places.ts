@@ -1,4 +1,4 @@
-import "./env.js";
+import { databaseUrl } from "./env.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createPrisma, type Place, type PrismaClient } from "@zhixing/db";
@@ -32,7 +32,7 @@ export async function importPlaces(
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
-  const prisma = createPrisma(process.env.DATABASE_URL);
+  const prisma = createPrisma(databaseUrl);
   const dataPath = fileURLToPath(new URL("../data/beijing-places.json", import.meta.url));
   importPlaces(prisma, dataPath)
     .then((r) => console.log(`imported: ${r.city.name} + ${r.spotCount} spots`))
