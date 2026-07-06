@@ -1,0 +1,11 @@
+{
+  "name": "zhixing",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "test": "pnpm -r --if-present test"
+  }
+}
