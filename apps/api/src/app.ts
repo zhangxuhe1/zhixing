@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { createPrisma } from "@zhixing/db";
 import { config } from "./config.js";
+import { cardsRoutes } from "./routes/cards.js";
 import { placesRoutes } from "./routes/places.js";
 
 declare module "fastify" {
@@ -17,6 +18,7 @@ export function buildApp(opts: { databaseUrl?: string } = {}) {
   app.register(cors, { origin: true });
   app.get("/health", async () => ({ ok: true }));
   app.register(placesRoutes);
+  app.register(cardsRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });
