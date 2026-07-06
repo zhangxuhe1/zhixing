@@ -1,0 +1,16 @@
+{
+  "name": "@zhixing/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10",
+    "@zhixing/db": "workspace:*",
+    "fastify": "^5",
+    "zod": "^3.25"
+  },
+  "devDependencies": { "tsx": "^4", "typescript": "^5", "vitest": "^3" }
+}
