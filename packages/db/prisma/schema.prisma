@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlaceLevel {
+  PROVINCE
+  CITY
+  DISTRICT // 区县 / 古镇 / 街区
+  POI
+}
+
+enum CardCategory {
+  CUSTOMS    // 习俗
+  FOOD       // 吃食
+  DIALECT    // 方言
+  ANECDOTE   // 掌故
+  PLACE_NAME // 地名由来
+}
+
+enum CardStatus {
+  AI_GENERATED // AI 整理·待复核（可上架，卡面带标识）
+  REVIEWED     // 已人工复核
+  RETIRED      // 下架
+}
+
+enum BlockType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Place {
+  id         String      @id @default(cuid())
+  name       String
+  level      PlaceLevel
+  parentId   String?
+  parent     Place?      @relation("PlaceTree", fields: [parentId], references: [id])
+  children   Place[]     @relation("PlaceTree")
+  lat        Float
+  lng        Float
+  intro      String?
+  cards      Card[]
+  footprints Footprint[]
+  createdAt  DateTime    @default(now())
+
+  @@unique([name, parentId])
+  @@index([level])
+}
+
+model Card {
+  id        String       @id @default(cuid())
+  placeId   String
+  place     Place        @relation(fields: [placeId], references: [id])
+  category  CardCategory
+  title     String
+  status    CardStatus   @default(AI_GENERATED)
+  sources   Json // string[] 参考来源
+  blocks    CardBlock[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([placeId, status])
+}
+
+model CardBlock {
+  id       String    @id @default(cuid())
+  cardId   String
+  card     Card      @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  order    Int
+  type     BlockType
+  text     String? // TEXT 块内容
+  mediaUrl String? // IMAGE/AUDIO/VIDEO 块的媒体地址（M0 预留）
+
+  @@unique([cardId, order])
+}
+
+model User {
+  id         String      @id @default(cuid())
+  appleSub   String      @unique // Sign in with Apple 的 subject
+  nickname   String
+  createdAt  DateTime    @default(now())
+  footprints Footprint[]
+}
+
+model Footprint {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id])
+  placeId      String
+  place        Place           @relation(fields: [placeId], references: [id])
+  text         String?
+  date         DateTime
+  visibility   Visibility      @default(PRIVATE)
+  reviewStatus ReviewStatus    @default(PENDING)
+  likeCount    Int             @default(0)
+  viewCount    Int             @default(0)
+  photos       FootprintPhoto[]
+  createdAt    DateTime        @default(now())
+
+  @@index([placeId, visibility])
+  @@index([userId])
+}
+
+model FootprintPhoto {
+  id          String    @id @default(cuid())
+  footprintId String
+  footprint   Footprint @relation(fields: [footprintId], references: [id], onDelete: Cascade)
+  mediaUrl    String
+  takenAt     DateTime?
+  lat         Float? // 原始坐标；公开展示时由服务端脱敏到地点级
+  lng         Float?
+}
+
+model SearchMiss {
+  id     String   @id @default(cuid())
+  query  String   @unique
+  count  Int      @default(1)
+  lastAt DateTime @updatedAt
+}

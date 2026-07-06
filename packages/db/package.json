@@ -1,0 +1,12 @@
+{
+  "name": "@zhixing/db",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "push:test": "DATABASE_URL=postgresql://zhixing:zhixing@localhost:5432/zhixing_test prisma db push --skip-generate"
+  },
+  "dependencies": { "@prisma/client": "^6" },
+  "devDependencies": { "prisma": "^6", "typescript": "^5", "vitest": "^3" }
+}
