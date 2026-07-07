@@ -13,7 +13,22 @@
 5. 灌数据：在 VPS 上 `DATABASE_URL=postgresql://zhixing:<密码>@localhost:5432/zhixing` 无法直连
    （db 未暴露端口）——用 `docker compose -f compose.prod.yml exec api sh` 进容器跑
    `pnpm --filter @zhixing/pipeline import-places && pnpm --filter @zhixing/pipeline import-regions`，
-   或本地生成后 `pg_dump | psql` 导入（推荐：内容在本地生成复核，dump 上传）
+   或本地生成后 `pg_dump | psql` 导入（推荐：内容在本地生成复核，dump 上传）。推荐路径的精确命令：
+
+   ```sh
+   # 本地 Mac：整库导出（LLM Key 与配额只留本地，生产不需要 GEMINI_API_KEY）
+   docker exec zhixing-db-1 pg_dump -U zhixing zhixing | gzip > zhixing-content.sql.gz
+   scp zhixing-content.sql.gz <vps>:~/zhixing/
+
+   # VPS（步骤 3 已起服务、migrate deploy 已建表）：导入 + 清掉本地测试数据只留内容
+   gunzip -c zhixing-content.sql.gz | docker compose -f compose.prod.yml exec -T db psql -U zhixing zhixing
+   docker compose -f compose.prod.yml exec -T db psql -U zhixing zhixing \
+     -c 'TRUNCATE TABLE "FootprintPhoto","Footprint","User","SearchMiss" RESTART IDENTITY CASCADE'
+   ```
+
+   适用前提：生产库还没有真实用户数据（首次部署/内测重置）。一旦有真实用户，禁止整库覆盖，
+   改为只导内容三表：`pg_dump --data-only --disable-triggers -t '"Place"' -t '"Card"' -t '"CardBlock"'`
+   （容器内 zhixing 用户是超级用户，--disable-triggers 可用；导入前先在后台确认无 placeId 冲突）
 6. crontab 加 `scripts/backup.sh` 每日备份
 7. 安全检查：ADMIN_TOKEN/SESSION_SECRET 已换强值；`ZHIXING_DEV_AUTH` 未设置；
    db/minio 无宿主端口暴露；只有 caddy 开 80/443
