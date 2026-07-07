@@ -2,6 +2,10 @@ import Foundation
 import Observation
 import UIKit
 
+struct PhotoTranscodeError: LocalizedError {
+    var errorDescription: String? { "无法处理所选照片" }
+}
+
 @MainActor
 @Observable
 final class FootprintStore {
@@ -35,7 +39,9 @@ final class FootprintStore {
         footprintId: String, imageData: Data,
         takenAt: Date? = nil, lat: Double? = nil, lng: Double? = nil
     ) async throws {
-        let jpeg = UIImage(data: imageData)?.jpegData(compressionQuality: 0.85) ?? imageData
+        guard let jpeg = UIImage(data: imageData)?.jpegData(compressionQuality: 0.85) else {
+            throw PhotoTranscodeError()
+        }
         var fields: [String: String] = [:]
         if let takenAt { fields["takenAt"] = ISO8601DateFormatter().string(from: takenAt) }
         if let lat { fields["lat"] = String(lat) }

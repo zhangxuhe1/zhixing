@@ -10,6 +10,7 @@ struct FootprintComposer: View {
     @State private var items: [PhotosPickerItem] = []
     @State private var saving = false
     @State private var error: String?
+    @State private var createdFootprint: Footprint?
 
     var body: some View {
         NavigationStack {
@@ -57,12 +58,19 @@ struct FootprintComposer: View {
         saving = true
         defer { saving = false }
         do {
-            let fp = try await store.create(
-                placeId: pin.id, text: text.isEmpty ? nil : text, date: date)
-            for item in items {
+            let fp: Footprint
+            if let existing = createdFootprint {
+                fp = existing
+            } else {
+                fp = try await store.create(
+                    placeId: pin.id, text: text.isEmpty ? nil : text, date: date)
+                createdFootprint = fp
+            }
+            while let item = items.first {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     try await store.uploadPhoto(footprintId: fp.id, imageData: data)
                 }
+                items.removeFirst() // 上传成功或该项不可读才走到这；失败会 throw，项留在队列里供重试
             }
             await store.load()
             dismiss()
