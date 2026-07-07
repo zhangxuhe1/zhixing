@@ -6,12 +6,17 @@
 
 ```sh
 pnpm install
-pnpm db:up                      # 启动 Postgres（宿主机端口 5433，zhixing + zhixing_test 两个库）
-pnpm --filter @zhixing/db exec prisma migrate dev   # 建表
-pnpm --filter @zhixing/api dev  # API :8787
+pnpm db:up                      # Postgres(:5433) + MinIO(:9000)
+pnpm --filter @zhixing/db exec prisma migrate dev   # 建表（fresh clone 后会顺带 prisma generate）
+pnpm --filter @zhixing/pipeline import-places       # 北京地点
+pnpm --filter @zhixing/pipeline import-regions      # 六地 + 省会
+pnpm --filter @zhixing/api dev  # API :8787（iOS 模拟器直连 localhost）
 pnpm --filter @zhixing/admin dev # 管理后台 :3000
 pnpm test                       # 全部测试
 ```
+
+- 内容灌入见 docs/content-ops.md；部署见 docs/deploy.md
+- iOS 工程见 apps/ios（需 Xcode，计划：docs/superpowers/plans/2026-07-07-m1-ios.md）
 
 ## 内容管线（AI 风物卡）
 
