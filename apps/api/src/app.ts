@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import Fastify from "fastify";
 import { createPrisma } from "@zhixing/db";
 import { remoteAppleJwks, type AppleJwks } from "./apple.js";
@@ -6,6 +7,7 @@ import { config } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardsRoutes } from "./routes/cards.js";
 import { footprintsRoutes } from "./routes/footprints.js";
+import { photosRoutes } from "./routes/photos.js";
 import { placesRoutes } from "./routes/places.js";
 import { createStorage, type Storage } from "./storage.js";
 
@@ -37,11 +39,13 @@ export function buildApp(opts: BuildAppOpts = {}) {
     await storage.ensureBucket();
   });
   app.register(cors, { origin: true });
+  app.register(multipart, { limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
   app.get("/health", async () => ({ ok: true }));
   app.register(placesRoutes);
   app.register(cardsRoutes);
   app.register(authRoutes);
   app.register(footprintsRoutes);
+  app.register(photosRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });

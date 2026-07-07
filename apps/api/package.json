@@ -10,6 +10,7 @@
     "@aws-sdk/client-s3": "^3.1080.0",
     "@aws-sdk/s3-request-presigner": "^3.1080.0",
     "@fastify/cors": "^10",
+    "@fastify/multipart": "^10.0.0",
     "@zhixing/db": "workspace:*",
     "fastify": "^5",
     "jose": "^6.2.3",
