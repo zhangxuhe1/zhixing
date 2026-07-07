@@ -78,3 +78,129 @@ test("placeId 不存在 400；未登录 401", async () => {
   expect(bad.statusCode).toBe(400);
   expect((await app.inject({ method: "GET", url: "/me/footprints" })).statusCode).toBe(401);
 });
+
+test("POST 带 visibility=PUBLIC → PENDING 且 publicRequestedAt 非空", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z", visibility: "PUBLIC" },
+  });
+  expect(created.statusCode).toBe(201);
+  expect(created.json().reviewStatus).toBe("PENDING");
+  expect(created.json().visibility).toBe("PUBLIC");
+  const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id: created.json().id } });
+  expect(row.publicRequestedAt).not.toBeNull();
+});
+
+test("PATCH 改 text（APPROVED 公开态）→ 回 PENDING 且 publicRequestedAt 被刷新", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z", visibility: "PUBLIC" },
+  });
+  const id = created.json().id;
+  const oldRequestedAt = new Date("2020-01-01T00:00:00.000Z");
+  await app.prisma.footprint.update({
+    where: { id },
+    data: { reviewStatus: "APPROVED", publicRequestedAt: oldRequestedAt },
+  });
+
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { text: "新的文字" },
+  });
+  expect(patched.statusCode).toBe(200);
+  expect(patched.json().reviewStatus).toBe("PENDING");
+  const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id } });
+  expect(row.publicRequestedAt).not.toBeNull();
+  expect(row.publicRequestedAt!.getTime()).toBeGreaterThan(oldRequestedAt.getTime());
+});
+
+test("PATCH 只改 date（私密态）→ reviewStatus 不变", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z" },
+  });
+  const id = created.json().id;
+  const before = await app.prisma.footprint.findUniqueOrThrow({ where: { id } });
+
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { date: "2026-05-02T10:00:00.000Z" },
+  });
+  expect(patched.statusCode).toBe(200);
+  expect(patched.json().reviewStatus).toBe(before.reviewStatus);
+  expect(patched.json().date).toBe("2026-05-02T10:00:00.000Z");
+});
+
+test("PATCH visibility=PUBLIC → reviewStatus=PENDING", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z" },
+  });
+  const id = created.json().id;
+
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { visibility: "PUBLIC" },
+  });
+  expect(patched.statusCode).toBe(200);
+  expect(patched.json().visibility).toBe("PUBLIC");
+  expect(patched.json().reviewStatus).toBe("PENDING");
+});
+
+test("PATCH visibility=PRIVATE（原 APPROVED）→ visibility=PRIVATE 且 reviewStatus 仍 APPROVED", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z", visibility: "PUBLIC" },
+  });
+  const id = created.json().id;
+  await app.prisma.footprint.update({ where: { id }, data: { reviewStatus: "APPROVED" } });
+
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { visibility: "PRIVATE" },
+  });
+  expect(patched.statusCode).toBe(200);
+  expect(patched.json().visibility).toBe("PRIVATE");
+  expect(patched.json().reviewStatus).toBe("APPROVED");
+});
+
+test("非属主 PATCH → 404", async () => {
+  const { shichahai } = await seedPlaces();
+  const alice = await userAuth(app, "alice");
+  const bob = await userAuth(app, "bob");
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers: alice.headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z" },
+  });
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${created.json().id}`, headers: bob.headers,
+    payload: { text: "改一下" },
+  });
+  expect(patched.statusCode).toBe(404);
+  expect(patched.json().error).toBe("not_found");
+});
+
+test("PATCH 空 body → 400 invalid_body", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z" },
+  });
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${created.json().id}`, headers,
+    payload: {},
+  });
+  expect(patched.statusCode).toBe(400);
+  expect(patched.json().error).toBe("invalid_body");
+});
