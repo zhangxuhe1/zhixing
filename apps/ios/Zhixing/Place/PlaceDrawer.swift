@@ -4,6 +4,7 @@ struct PlaceDrawer: View {
     let pin: Pin
     @State private var cards: [Card] = []
     @State private var loading = true
+    @State private var showComposer = false
 
     var body: some View {
         NavigationStack {
@@ -38,11 +39,12 @@ struct PlaceDrawer: View {
             .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
             .toolbar {
                 ToolbarItem(placement: .bottomBar) {
-                    // Task 7 接线足迹撰写
-                    Button { } label: { Label("在此留足迹", systemImage: "shoeprints.fill") }
-                        .disabled(true)
+                    Button { showComposer = true } label: {
+                        Label("在此留足迹", systemImage: "shoeprints.fill")
+                    }
                 }
             }
+            .sheet(isPresented: $showComposer) { FootprintComposer(pin: pin) }
         }
         .presentationDetents([.medium, .large])
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))

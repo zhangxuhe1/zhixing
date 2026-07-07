@@ -6,6 +6,8 @@ struct MapScreen: View {
     @State private var flyTo: Pin?
     @State private var showSearch = false
     @State private var loadError: String?
+    @State private var showPlacePicker = false
+    @State private var composerPin: Pin?
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -32,6 +34,15 @@ struct MapScreen: View {
                 goTo(pin)
             }
         }
+        .sheet(isPresented: $showPlacePicker) {
+            SearchSheet(prompt: "搜地点，在那里留足迹") { pin in
+                showPlacePicker = false
+                composerPin = pin
+            }
+        }
+        .sheet(item: $composerPin) { pin in
+            FootprintComposer(pin: pin)
+        }
     }
 
     private var controls: some View {
@@ -44,6 +55,7 @@ struct MapScreen: View {
                     }
                 }
             }
+            controlButton("plus") { showPlacePicker = true }
         }
     }
 
