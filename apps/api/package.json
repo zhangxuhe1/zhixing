@@ -10,7 +10,12 @@
     "@fastify/cors": "^10",
     "@zhixing/db": "workspace:*",
     "fastify": "^5",
+    "jose": "^6.2.3",
     "zod": "^3.25"
   },
-  "devDependencies": { "tsx": "^4", "typescript": "^5", "vitest": "^3" }
+  "devDependencies": {
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
 }
