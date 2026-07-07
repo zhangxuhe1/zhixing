@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "import-places": "tsx src/import-places.ts",
+    "import-regions": "tsx src/import-regions.ts",
     "generate": "tsx src/generate.ts",
+    "batch": "tsx src/batch.ts",
     "test": "vitest run"
   },
   "dependencies": {

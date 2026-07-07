@@ -39,6 +39,42 @@ export async function saveDraft(
   });
 }
 
+export async function generateCards(
+  prisma: PrismaClient,
+  llm: LlmClient,
+  opts: { placeName: string; category: Category; count: number; webSearch: boolean },
+): Promise<number> {
+  const place = await prisma.place.findFirst({
+    where: { name: opts.placeName },
+    include: { parent: true },
+  });
+  if (!place) throw new Error(`地点不存在: ${opts.placeName}（先运行 import-places / import-regions）`);
+  const cityName = place.parent?.name ?? place.name;
+
+  let ok = 0;
+  for (let i = 0; i < opts.count; i++) {
+    const existing = await prisma.card.findMany({
+      where: { placeId: place.id, status: { not: "RETIRED" } },
+      select: { title: true },
+    });
+    const notes =
+      opts.webSearch && llm.canWebSearch
+        ? await llm.research(buildResearchPrompt(place.name, cityName, opts.category))
+        : null;
+    const draft = await writeCard(llm, {
+      placeName: place.name,
+      cityName,
+      category: opts.category,
+      notes,
+      existingTitles: existing.map((c) => c.title),
+    });
+    const card = await saveDraft(prisma, place.id, opts.category, draft);
+    console.log(`✓ [${CATEGORY_LABELS[opts.category]}] ${place.name}：${card.title} (${card.id})`);
+    ok++;
+  }
+  return ok;
+}
+
 async function main() {
   // pnpm run 会把 "--" 透传进来，剥掉它避免 parseArgs 把后续参数当 positional
   const rawArgs = process.argv.slice(2);
@@ -68,33 +104,12 @@ async function main() {
     console.log(`(${llm.provider} 不支持联网检索，跳过研究步骤，直接依据模型知识成稿)`);
   }
   try {
-    const place = await prisma.place.findFirst({
-      where: { name: values.place },
-      include: { parent: true },
+    await generateCards(prisma, llm, {
+      placeName: values.place,
+      category,
+      count,
+      webSearch: !skipSearch,
     });
-    if (!place) throw new Error(`地点不存在: ${values.place}（先运行 import-places 或在后台创建）`);
-    const cityName = place.parent?.name ?? place.name;
-
-    for (let i = 0; i < count; i++) {
-      const existing = await prisma.card.findMany({
-        where: { placeId: place.id, status: { not: "RETIRED" } },
-        select: { title: true },
-      });
-      const existingTitles = existing.map((c) => c.title);
-
-      const notes = skipSearch
-        ? null
-        : await llm.research(buildResearchPrompt(place.name, cityName, category));
-      const draft = await writeCard(llm, {
-        placeName: place.name,
-        cityName,
-        category,
-        notes,
-        existingTitles,
-      });
-      const card = await saveDraft(prisma, place.id, category, draft);
-      console.log(`✓ [${CATEGORY_LABELS[category]}] ${card.title} (${card.id})`);
-    }
   } finally {
     await prisma.$disconnect();
   }
