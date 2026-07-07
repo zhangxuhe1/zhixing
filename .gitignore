@@ -3,4 +3,5 @@ node_modules/
 dist/
 *.log
 .env
+.env.production
 .DS_Store
