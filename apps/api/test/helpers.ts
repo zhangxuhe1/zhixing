@@ -27,7 +27,7 @@ export function testApp() {
 
 export async function resetDb(app: ReturnType<typeof buildApp>) {
   await app.prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "FootprintPhoto","Footprint","CardBlock","Card","Place","User","SearchMiss" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Like","FootprintPhoto","Footprint","CardBlock","Card","Place","User","SearchMiss" RESTART IDENTITY CASCADE',
   );
 }
 

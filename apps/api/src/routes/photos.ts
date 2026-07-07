@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { MultipartFields } from "@fastify/multipart";
 import { requireUser } from "../auth.js";
+import { PUBLICLY_VISIBLE } from "../visibility.js";
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -51,9 +52,14 @@ export async function photosRoutes(app: FastifyInstance) {
   app.get("/photos/:id", { preHandler: requireUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const photo = await app.prisma.footprintPhoto.findUnique({
-      where: { id }, include: { footprint: { select: { userId: true } } },
+      where: { id },
+      include: { footprint: { select: { userId: true, visibility: true, reviewStatus: true } } },
     });
-    if (!photo || photo.footprint.userId !== req.userId) {
+    const isOwner = photo?.footprint.userId === req.userId;
+    const isPublic =
+      photo?.footprint.visibility === PUBLICLY_VISIBLE.visibility &&
+      photo?.footprint.reviewStatus === PUBLICLY_VISIBLE.reviewStatus;
+    if (!photo || (!isOwner && !isPublic)) {
       return reply.code(404).send({ error: "not_found" });
     }
     return { url: await app.storage.presignGet(photo.mediaUrl, 300) };

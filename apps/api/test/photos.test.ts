@@ -90,3 +90,38 @@ test("MIME 白名单外 415；别人的足迹传不了、照片读不到", async
     (await app.inject({ method: "GET", url: `/photos/${ok.json().id}`, headers: bob.headers })).statusCode,
   ).toBe(404);
 });
+
+test("photos 授权矩阵：陌生人 + 私密 → 404；陌生人 + PUBLIC+APPROVED → 200 含 url", async () => {
+  const alice = await userAuth(app, "alice2");
+  const bob = await userAuth(app, "bob2");
+
+  const privateFpId = await makeFootprint(alice.headers);
+  const mpPrivate = multipartPayload({}, PNG_1PX, "image/png");
+  const privateUp = await app.inject({
+    method: "POST", url: `/footprints/${privateFpId}/photos`,
+    headers: { ...alice.headers, ...mpPrivate.headers }, payload: mpPrivate.payload,
+  });
+  expect(
+    (await app.inject({ method: "GET", url: `/photos/${privateUp.json().id}`, headers: bob.headers })).statusCode,
+  ).toBe(404);
+
+  const place = await app.prisma.place.create({
+    data: { name: "公开测试地", level: "DISTRICT", lat: 1, lng: 1 },
+  });
+  const publicFp = await app.prisma.footprint.create({
+    data: {
+      userId: alice.user.id, placeId: place.id, date: new Date("2026-05-01T10:00:00.000Z"),
+      visibility: "PUBLIC", reviewStatus: "APPROVED",
+    },
+  });
+  const mpPublic = multipartPayload({}, PNG_1PX, "image/png");
+  const publicUp = await app.inject({
+    method: "POST", url: `/footprints/${publicFp.id}/photos`,
+    headers: { ...alice.headers, ...mpPublic.headers }, payload: mpPublic.payload,
+  });
+  const publicGet = await app.inject({
+    method: "GET", url: `/photos/${publicUp.json().id}`, headers: bob.headers,
+  });
+  expect(publicGet.statusCode).toBe(200);
+  expect(publicGet.json().url).toBeTruthy();
+});

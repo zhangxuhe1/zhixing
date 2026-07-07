@@ -9,6 +9,7 @@ import { cardsRoutes } from "./routes/cards.js";
 import { footprintsRoutes } from "./routes/footprints.js";
 import { photosRoutes } from "./routes/photos.js";
 import { placesRoutes } from "./routes/places.js";
+import { publicRoutes } from "./routes/public.js";
 import { searchRoutes } from "./routes/search.js";
 import { createStorage, type Storage } from "./storage.js";
 
@@ -48,6 +49,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(authRoutes);
   app.register(footprintsRoutes);
   app.register(photosRoutes);
+  app.register(publicRoutes);
   app.register(searchRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
