@@ -56,7 +56,12 @@ struct MapView: UIViewRepresentable {
 
         /// 数据没变就不重建标注（updateUIView 会被 SwiftUI 频繁调用）
         func sync(map: MKMapView) {
-            let key = "\(parent.pins.count)-\(parent.litPlaceIds.count)-\(parent.showHumanities)-\(parent.showFootprints)"
+            var hasher = Hasher()
+            hasher.combine(parent.pins.map(\.id))
+            hasher.combine(parent.litPlaceIds)
+            hasher.combine(parent.showHumanities)
+            hasher.combine(parent.showFootprints)
+            let key = String(hasher.finalize())
             guard key != syncedKey else { return }
             syncedKey = key
             map.removeAnnotations(map.annotations)
