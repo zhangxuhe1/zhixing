@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MapScreen: View {
+    @Environment(FootprintStore.self) private var footprints
     @State private var pins: [Pin] = []
     @State private var selected: Pin?
     @State private var flyTo: Pin?
@@ -8,10 +9,13 @@ struct MapScreen: View {
     @State private var loadError: String?
     @State private var showPlacePicker = false
     @State private var composerPin: Pin?
+    @State private var showHumanities = true
+    @State private var showFootprintLayer = true
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            MapView(pins: pins, litPlaceIds: [], showHumanities: true, showFootprints: false,
+            MapView(pins: pins, litPlaceIds: footprints.litPlaceIds,
+                    showHumanities: showHumanities, showFootprints: showFootprintLayer,
                     flyTo: $flyTo, onSelect: { selected = $0 })
                 .ignoresSafeArea()
             controls.padding(.trailing, 12)
@@ -24,7 +28,10 @@ struct MapScreen: View {
                     .padding(.bottom, 24)
             }
         }
-        .task { await load() }
+        .task {
+            await load()
+            await footprints.load()
+        }
         .sheet(item: $selected) { pin in
             PlaceDrawer(pin: pin)
         }
@@ -54,6 +61,15 @@ struct MapScreen: View {
                         goTo(pin)
                     }
                 }
+            }
+            Menu {
+                Toggle("人文层（知）", isOn: $showHumanities)
+                Toggle("足迹层（行）", isOn: $showFootprintLayer)
+            } label: {
+                Image(systemName: "square.3.layers.3d")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(.thinMaterial, in: Circle())
             }
             controlButton("plus") { showPlacePicker = true }
         }
