@@ -3,6 +3,7 @@ import SwiftUI
 struct MeScreen: View {
     @Environment(SessionStore.self) private var session
     @Environment(FootprintStore.self) private var store
+    @State private var showImport = false
 
     var body: some View {
         NavigationStack {
@@ -27,17 +28,16 @@ struct MeScreen: View {
                     }
                 }
                 Section {
-                    // Task 9 接线相册导入
-                    Button { } label: {
+                    Button { showImport = true } label: {
                         Label("从相册批量导入", systemImage: "photo.stack")
                     }
-                    .disabled(true)
                 }
                 Section {
                     Button("退出登录", role: .destructive) { session.signOut() }
                 }
             }
             .navigationTitle(session.user?.nickname ?? "我的")
+            .sheet(isPresented: $showImport) { AlbumImportScreen() }
             .task { await store.load() }
         }
     }
