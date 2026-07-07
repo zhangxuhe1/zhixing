@@ -1,0 +1,9 @@
+api.{$ZHIXING_DOMAIN} {
+	reverse_proxy api:8787
+}
+admin.{$ZHIXING_DOMAIN} {
+	reverse_proxy admin:3000
+}
+s3.{$ZHIXING_DOMAIN} {
+	reverse_proxy minio:9000
+}

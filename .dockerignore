@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/.next
+.git
+apps/ios
+backups
+*.log
+.env
+.env.production
