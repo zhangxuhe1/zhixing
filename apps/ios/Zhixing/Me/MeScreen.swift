@@ -20,8 +20,9 @@ struct MeScreen: View {
                         FootprintRow(footprint: fp)
                     }
                     .onDelete { indexSet in
+                        let targets = indexSet.map { store.footprints[$0] } // 删除前按索引快照，避免边删边移位
                         Task {
-                            for index in indexSet { await store.delete(store.footprints[index]) }
+                            for footprint in targets { await store.delete(footprint) }
                         }
                     }
                 }
