@@ -6,4 +6,12 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET ?? "dev-session-secret",
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? "app.zhixing.ios",
   devAuth: process.env.ZHIXING_DEV_AUTH === "1",
+  s3: {
+    endpoint: process.env.S3_ENDPOINT ?? "http://localhost:9000",
+    publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? process.env.S3_ENDPOINT ?? "http://localhost:9000",
+    region: process.env.S3_REGION ?? "us-east-1",
+    bucket: process.env.S3_BUCKET ?? "zhixing",
+    accessKey: process.env.S3_ACCESS_KEY ?? "zhixing",
+    secretKey: process.env.S3_SECRET_KEY ?? "zhixing-secret",
+  },
 };
