@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { optionalUser } from "../auth.js";
+import { requireUser } from "../auth.js";
 import { PUBLICLY_VISIBLE } from "../visibility.js";
 
 const storiesQuerySchema = z.object({
@@ -41,8 +41,8 @@ function toStoryDto(fp: FootprintForDto, likedFootprintIds: Set<string>) {
   };
 }
 
-async function likedFootprintIdsFor(app: FastifyInstance, userId: string | undefined, footprintIds: string[]) {
-  if (!userId || footprintIds.length === 0) return new Set<string>();
+async function likedFootprintIdsFor(app: FastifyInstance, userId: string, footprintIds: string[]) {
+  if (footprintIds.length === 0) return new Set<string>();
   const likes = await app.prisma.like.findMany({
     where: { userId, footprintId: { in: footprintIds } },
     select: { footprintId: true },
@@ -61,7 +61,7 @@ function seasonLabel(date: Date): { year: number; seasonRank: number; label: str
 }
 
 export async function publicRoutes(app: FastifyInstance) {
-  app.get("/places/:id/stories", { preHandler: optionalUser }, async (req, reply) => {
+  app.get("/places/:id/stories", { preHandler: requireUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const q = storiesQuerySchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: "invalid_query", detail: q.error.flatten() });
@@ -106,7 +106,7 @@ export async function publicRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/places/:id/photo-wall", async (req, reply) => {
+  app.get("/places/:id/photo-wall", { preHandler: requireUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const place = await app.prisma.place.findUnique({ where: { id } });
     if (!place) return reply.code(404).send({ error: "not_found" });
@@ -114,7 +114,11 @@ export async function publicRoutes(app: FastifyInstance) {
     const rows = await app.prisma.footprint.findMany({
       where: { placeId: id, ...PUBLICLY_VISIBLE },
       orderBy: [{ date: "desc" }, { id: "desc" }],
-      select: { id: true, date: true, photos: { select: { id: true } } },
+      select: {
+        id: true,
+        date: true,
+        photos: { select: { id: true }, orderBy: { id: "desc" } },
+      },
     });
 
     const groups = new Map<
@@ -141,7 +145,7 @@ export async function publicRoutes(app: FastifyInstance) {
     return { groups: ordered };
   });
 
-  app.get("/stories/:footprintId", { preHandler: optionalUser }, async (req, reply) => {
+  app.get("/stories/:footprintId", { preHandler: requireUser }, async (req, reply) => {
     const { footprintId } = req.params as { footprintId: string };
     const fp = await app.prisma.footprint.findUnique({
       where: { id: footprintId },

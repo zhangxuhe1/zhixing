@@ -25,14 +25,3 @@ export async function requireUser(req: FastifyRequest, reply: FastifyReply) {
     return reply.code(401).send({ error: "unauthorized" });
   }
 }
-
-/** 公开端点用：有合法 Bearer 则填 req.userId，缺失/无效均放行（不 401）。 */
-export async function optionalUser(req: FastifyRequest) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return;
-  try {
-    req.userId = await verifySession(header.slice(7));
-  } catch {
-    // 忽略无效 token，按匿名处理
-  }
-}
