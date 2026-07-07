@@ -18,7 +18,29 @@ const createPlaceSchema = z.object({
   intro: z.string().optional(),
 });
 
+async function queryPins(app: FastifyInstance) {
+  const [places, counts] = await Promise.all([
+    app.prisma.place.findMany({
+      select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    app.prisma.card.groupBy({
+      by: ["placeId"], where: { status: { not: "RETIRED" } }, _count: { _all: true },
+    }),
+  ]);
+  const countBy = new Map(counts.map((c) => [c.placeId, c._count._all]));
+  return places.map((p) => ({ ...p, cardCount: countBy.get(p.id) ?? 0 }));
+}
+
 export async function placesRoutes(app: FastifyInstance) {
+  app.get("/places/pins", async () => queryPins(app));
+
+  app.get("/places/random", async (_req, reply) => {
+    const withContent = (await queryPins(app)).filter((p) => p.cardCount > 0);
+    if (withContent.length === 0) return reply.code(404).send({ error: "no_content" });
+    return withContent[Math.floor(Math.random() * withContent.length)];
+  });
+
   app.get("/places", async (req, reply) => {
     const q = listQuerySchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: "invalid_query" });
