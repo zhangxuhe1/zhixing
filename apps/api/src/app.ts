@@ -7,6 +7,7 @@ import { config } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardsRoutes } from "./routes/cards.js";
 import { footprintsRoutes } from "./routes/footprints.js";
+import { interactionsRoutes } from "./routes/interactions.js";
 import { photosRoutes } from "./routes/photos.js";
 import { placesRoutes } from "./routes/places.js";
 import { publicRoutes } from "./routes/public.js";
@@ -48,6 +49,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(cardsRoutes);
   app.register(authRoutes);
   app.register(footprintsRoutes);
+  app.register(interactionsRoutes);
   app.register(photosRoutes);
   app.register(publicRoutes);
   app.register(searchRoutes);
