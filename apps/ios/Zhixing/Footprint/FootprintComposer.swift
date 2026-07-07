@@ -35,6 +35,7 @@ struct FootprintComposer: View {
                     Text(error).foregroundStyle(.red).font(.footnote)
                 }
             }
+            .disabled(saving)
             .navigationTitle("留下足迹")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -70,7 +71,7 @@ struct FootprintComposer: View {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     try await store.uploadPhoto(footprintId: fp.id, imageData: data)
                 }
-                items.removeFirst() // 上传成功或该项不可读才走到这；失败会 throw，项留在队列里供重试
+                if !items.isEmpty { items.removeFirst() } // 上传成功或该项不可读才走到这；失败会 throw，项留在队列里供重试
             }
             await store.load()
             dismiss()
