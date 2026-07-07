@@ -45,6 +45,9 @@ async function main() {
 
   const prisma = createPrisma(databaseUrl);
   const llm = createLlm();
+  if (!values["no-web-search"] && !llm.canWebSearch) {
+    console.log(`(${llm.provider} 不支持联网检索，跳过研究步骤，直接依据模型知识成稿)`);
+  }
   try {
     // 城市本身与其下街区都参与补卡
     const where = values.city

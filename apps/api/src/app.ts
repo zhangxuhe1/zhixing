@@ -26,10 +26,11 @@ export interface BuildAppOpts {
   appleJwks?: AppleJwks;
   devAuth?: boolean;
   s3Bucket?: string;
+  logger?: boolean;
 }
 
 export function buildApp(opts: BuildAppOpts = {}) {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: opts.logger ?? false });
   const prisma = createPrisma(opts.databaseUrl ?? config.databaseUrl);
   app.decorate("prisma", prisma);
   app.decorate("appleJwks", opts.appleJwks ?? remoteAppleJwks());
