@@ -6,11 +6,13 @@ import { remoteAppleJwks, type AppleJwks } from "./apple.js";
 import { config } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardsRoutes } from "./routes/cards.js";
+import { favoritesRoutes } from "./routes/favorites.js";
 import { footprintsRoutes } from "./routes/footprints.js";
 import { interactionsRoutes } from "./routes/interactions.js";
 import { photosRoutes } from "./routes/photos.js";
 import { placesRoutes } from "./routes/places.js";
 import { publicRoutes } from "./routes/public.js";
+import { reportsRoutes } from "./routes/reports.js";
 import { searchRoutes } from "./routes/search.js";
 import { createStorage, type Storage } from "./storage.js";
 
@@ -53,6 +55,8 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(photosRoutes);
   app.register(publicRoutes);
   app.register(searchRoutes);
+  app.register(favoritesRoutes);
+  app.register(reportsRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });
