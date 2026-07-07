@@ -5,3 +5,6 @@ dist/
 .env
 .env.production
 .DS_Store
+apps/ios/Zhixing.xcodeproj/
+xcuserdata/
+DerivedData/

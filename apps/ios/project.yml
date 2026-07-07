@@ -1,0 +1,57 @@
+name: Zhixing
+options:
+  bundleIdPrefix: app.zhixing
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_STYLE: Automatic
+    # DEVELOPMENT_TEAM: XXXXXXXXXX  # 加入 Apple Developer 后填 Team ID（真机/TestFlight 必需，模拟器不用）
+  configs:
+    debug:
+      APP_API_BASE: http://localhost:8787
+    release:
+      APP_API_BASE: https://api.zhixing.example.com  # 服务端部署后改真实域名
+targets:
+  Zhixing:
+    type: application
+    platform: iOS
+    sources: [Zhixing]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.zhixing.ios
+    info:
+      path: Zhixing/Info.plist
+      properties:
+        CFBundleDisplayName: 知行
+        UILaunchScreen: {}
+        APIBase: $(APP_API_BASE)
+        ITSAppUsesNonExemptEncryption: false
+        NSPhotoLibraryUsageDescription: 用于批量导入你的旅行照片，按地点点亮足迹地图。照片默认仅自己可见。
+        NSLocationWhenInUseUsageDescription: 用于在留足迹时快速定位到你所在的地点。
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    entitlements:
+      path: Zhixing/Zhixing.entitlements
+      properties:
+        com.apple.developer.applesignin: [Default]
+  ZhixingTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: Zhixing
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Zhixing.app/Zhixing
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  Zhixing:
+    build:
+      targets:
+        Zhixing: all
+    test:
+      targets: [ZhixingTests]
