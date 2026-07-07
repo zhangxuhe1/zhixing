@@ -26,11 +26,7 @@ struct MainTabView: View {
     }
 }
 
-// Task 4 / Task 8 会用真实实现替换这两个占位
-struct MapScreen: View {
-    var body: some View { Text("地图（Task 4）") }
-}
-
+// Task 8 会用真实实现替换这个占位
 struct MeScreen: View {
     var body: some View { Text("我的（Task 8）") }
 }
