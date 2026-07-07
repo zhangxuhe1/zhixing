@@ -14,6 +14,14 @@ struct MapScreen: View {
                 .ignoresSafeArea()
             controls.padding(.trailing, 12)
         }
+        .overlay(alignment: .bottom) {
+            if let loadError {
+                Text(loadError)
+                    .font(.footnote).foregroundStyle(.red)
+                    .padding(8).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.bottom, 24)
+            }
+        }
         .task { await load() }
         .sheet(item: $selected) { pin in
             PlaceDrawer(pin: pin)
