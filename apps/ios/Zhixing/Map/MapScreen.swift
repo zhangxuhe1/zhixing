@@ -18,8 +18,7 @@ struct MapScreen: View {
         }
         .task { await load() }
         .sheet(item: $selected) { pin in
-            // Task 5 替换为 PlaceDrawer(pin:)
-            Text(pin.name).presentationDetents([.medium])
+            PlaceDrawer(pin: pin)
         }
     }
 

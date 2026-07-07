@@ -1,0 +1,54 @@
+import SwiftUI
+
+struct PlaceDrawer: View {
+    let pin: Pin
+    @State private var cards: [Card] = []
+    @State private var loading = true
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if loading {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                } else if cards.isEmpty {
+                    Text("这里还没有风物卡，搜索或报错会帮我们知道该补哪儿")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(cards) { card in
+                    NavigationLink(value: card) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Text(card.categoryLabel)
+                                    .font(.caption)
+                                    .padding(.horizontal, 7).padding(.vertical, 2)
+                                    .background(.teal.opacity(0.15), in: Capsule())
+                                if card.isAIGenerated {
+                                    Text("AI 整理·待复核")
+                                        .font(.caption2).foregroundStyle(.orange)
+                                }
+                            }
+                            Text(card.title).font(.headline)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+            .navigationTitle(pin.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
+            .toolbar {
+                ToolbarItem(placement: .bottomBar) {
+                    // Task 7 接线足迹撰写
+                    Button { } label: { Label("在此留足迹", systemImage: "shoeprints.fill") }
+                        .disabled(true)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .task {
+            cards = (try? await APIClient.shared.get("/places/\(pin.id)/cards")) ?? []
+            loading = false
+        }
+    }
+}
