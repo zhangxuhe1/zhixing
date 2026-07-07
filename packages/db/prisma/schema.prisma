@@ -15,17 +15,17 @@ enum PlaceLevel {
 }
 
 enum CardCategory {
-  CUSTOMS    // 习俗
-  FOOD       // 吃食
-  DIALECT    // 方言
-  ANECDOTE   // 掌故
+  CUSTOMS // 习俗
+  FOOD // 吃食
+  DIALECT // 方言
+  ANECDOTE // 掌故
   PLACE_NAME // 地名由来
 }
 
 enum CardStatus {
   AI_GENERATED // AI 整理·待复核（可上架，卡面带标识）
-  REVIEWED     // 已人工复核
-  RETIRED      // 下架
+  REVIEWED // 已人工复核
+  RETIRED // 下架
 }
 
 enum BlockType {
@@ -44,6 +44,11 @@ enum ReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
 }
 
 model Place {
@@ -65,16 +70,18 @@ model Place {
 }
 
 model Card {
-  id        String       @id @default(cuid())
+  id        String         @id @default(cuid())
   placeId   String
-  place     Place        @relation(fields: [placeId], references: [id])
+  place     Place          @relation(fields: [placeId], references: [id])
   category  CardCategory
   title     String
-  status    CardStatus   @default(AI_GENERATED)
+  status    CardStatus     @default(AI_GENERATED)
   sources   Json // string[] 参考来源
   blocks    CardBlock[]
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  favorites CardFavorite[]
+  reports   CardReport[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   @@index([placeId, status])
 }
@@ -92,30 +99,39 @@ model CardBlock {
 }
 
 model User {
-  id         String      @id @default(cuid())
-  appleSub   String      @unique // Sign in with Apple 的 subject
+  id         String         @id @default(cuid())
+  appleSub   String         @unique // Sign in with Apple 的 subject
   nickname   String
-  createdAt  DateTime    @default(now())
+  createdAt  DateTime       @default(now())
   footprints Footprint[]
+  likes      Like[]
+  favorites  CardFavorite[]
+  reports    CardReport[]
+  trips      Trip[]
 }
 
 model Footprint {
-  id           String          @id @default(cuid())
-  userId       String
-  user         User            @relation(fields: [userId], references: [id])
-  placeId      String
-  place        Place           @relation(fields: [placeId], references: [id])
-  text         String?
-  date         DateTime
-  visibility   Visibility      @default(PRIVATE)
-  reviewStatus ReviewStatus    @default(PENDING)
-  likeCount    Int             @default(0)
-  viewCount    Int             @default(0)
-  photos       FootprintPhoto[]
-  createdAt    DateTime        @default(now())
+  id                String           @id @default(cuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id])
+  placeId           String
+  place             Place            @relation(fields: [placeId], references: [id])
+  text              String?
+  date              DateTime
+  visibility        Visibility       @default(PRIVATE)
+  reviewStatus      ReviewStatus     @default(PENDING)
+  likeCount         Int              @default(0)
+  viewCount         Int              @default(0)
+  photos            FootprintPhoto[]
+  likes             Like[]
+  tripId            String?
+  trip              Trip?            @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  publicRequestedAt DateTime? // 进审核队列时间，排序用
+  createdAt         DateTime         @default(now())
 
   @@index([placeId, visibility])
   @@index([userId])
+  @@index([visibility, reviewStatus])
 }
 
 model FootprintPhoto {
@@ -133,4 +149,53 @@ model SearchMiss {
   query  String   @unique
   count  Int      @default(1)
   lastAt DateTime @updatedAt
+}
+
+model Like {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  footprintId String
+  footprint   Footprint @relation(fields: [footprintId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, footprintId])
+  @@index([footprintId])
+}
+
+model CardFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, cardId])
+}
+
+model CardReport {
+  id        String       @id @default(cuid())
+  cardId    String
+  card      Card         @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  status    ReportStatus @default(OPEN)
+  createdAt DateTime     @default(now())
+
+  @@index([status])
+}
+
+model Trip {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  startDate  DateTime
+  endDate    DateTime
+  footprints Footprint[]
+  createdAt  DateTime    @default(now())
+
+  @@index([userId])
 }
