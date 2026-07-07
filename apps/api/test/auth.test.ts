@@ -20,6 +20,13 @@ test("apple 登录：首次创建用户，二次登录复用", async () => {
   });
   expect(second.json().user.id).toBe(first.json().user.id);
   expect(await app.prisma.user.count()).toBe(1);
+
+  const renamed = await app.inject({
+    method: "POST", url: "/auth/apple",
+    payload: { identityToken: token, nickname: "老张二号" },
+  });
+  expect(renamed.json().user.nickname).toBe("老张二号");
+  expect(await app.prisma.user.count()).toBe(1);
 });
 
 test("audience 不匹配的 identityToken 被拒", async () => {

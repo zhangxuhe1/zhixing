@@ -13,7 +13,7 @@ export async function signSession(userId: string): Promise<string> {
 }
 
 export async function verifySession(token: string): Promise<string> {
-  const { payload } = await jwtVerify(token, secret());
+  const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
   if (!payload.sub) throw new Error("session token missing sub");
   return payload.sub;
 }

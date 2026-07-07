@@ -14,6 +14,7 @@ export async function verifyAppleIdentityToken(
   const { payload } = await jwtVerify(token, jwks, {
     issuer: "https://appleid.apple.com",
     audience: bundleId,
+    algorithms: ["RS256"],
   });
   if (!payload.sub) throw new Error("apple token missing sub");
   return { sub: payload.sub };
