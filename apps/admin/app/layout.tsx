@@ -12,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <strong>知行后台</strong>
           <Link href="/places">地点库</Link>
           <Link href="/cards">风物卡</Link>
+          <Link href="/search-misses">搜索缺失</Link>
           <TokenBar />
         </nav>
         <main>{children}</main>
