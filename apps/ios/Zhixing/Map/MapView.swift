@@ -78,11 +78,12 @@ struct MapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-            if annotation is MKClusterAnnotation {
+            if let cluster = annotation as? MKClusterAnnotation {
                 let v = mapView.dequeueReusableAnnotationView(
                     withIdentifier: MKMapViewDefaultClusterAnnotationViewReuseIdentifier,
                     for: annotation) as! MKMarkerAnnotationView
-                v.markerTintColor = .systemTeal
+                let isFootprint = (cluster.memberAnnotations.first as? PlaceAnnotation)?.isFootprint ?? false
+                v.markerTintColor = isFootprint ? .systemOrange : .systemTeal
                 return v
             }
             guard let pa = annotation as? PlaceAnnotation else { return nil }

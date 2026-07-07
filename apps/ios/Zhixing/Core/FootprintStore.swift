@@ -56,4 +56,9 @@ final class FootprintStore {
         footprints.removeAll { $0.id == footprint.id }
         stats = try? await APIClient.shared.get("/me/stats")
     }
+
+    func reset() {
+        footprints = []
+        stats = nil
+    }
 }
