@@ -5,6 +5,7 @@ import { remoteAppleJwks, type AppleJwks } from "./apple.js";
 import { config } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardsRoutes } from "./routes/cards.js";
+import { footprintsRoutes } from "./routes/footprints.js";
 import { placesRoutes } from "./routes/places.js";
 import { createStorage, type Storage } from "./storage.js";
 
@@ -40,6 +41,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(placesRoutes);
   app.register(cardsRoutes);
   app.register(authRoutes);
+  app.register(footprintsRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });
