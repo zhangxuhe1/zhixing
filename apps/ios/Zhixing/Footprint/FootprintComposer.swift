@@ -8,6 +8,8 @@ struct FootprintComposer: View {
     @State private var text = ""
     @State private var date = Date()
     @State private var items: [PhotosPickerItem] = []
+    @State private var isPublic = false // 默认私密铁律：公开开关默认关
+    @State private var showPublicConfirm = false
     @State private var saving = false
     @State private var error: String?
     @State private var createdFootprint: Footprint?
@@ -31,6 +33,13 @@ struct FootprintComposer: View {
                         .lineLimit(4 ... 8)
                     DatePicker("日期", selection: $date, displayedComponents: .date)
                 }
+                Section("公开") {
+                    Toggle("公开这条足迹", isOn: $isPublic)
+                    if isPublic {
+                        Text("提交前会再次确认；审核通过前，其他旅人暂时还看不到它。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 if let error {
                     Text(error).foregroundStyle(.red).font(.footnote)
                 }
@@ -47,13 +56,28 @@ struct FootprintComposer: View {
                     if saving {
                         ProgressView()
                     } else {
-                        Button("保存") { Task { await save() } }
+                        Button("保存") { handleSaveTap() }
                             .disabled(text.isEmpty && items.isEmpty)
                     }
                 }
             }
         }
         .interactiveDismissDisabled(saving)
+        .alert(PublicityConfirmationCopy.title, isPresented: $showPublicConfirm) {
+            Button("再想想", role: .cancel) {}
+            Button("确认") { Task { await save() } }
+        } message: {
+            Text(PublicityConfirmationCopy.message)
+        }
+    }
+
+    /// 足迹一旦创建（createdFootprint 非 nil），后续「保存」只是重试照片上传——不再重复弹隐私确认。
+    private func handleSaveTap() {
+        if createdFootprint == nil, isPublic {
+            showPublicConfirm = true
+        } else {
+            Task { await save() }
+        }
     }
 
     private func save() async {
@@ -65,7 +89,8 @@ struct FootprintComposer: View {
                 fp = existing
             } else {
                 fp = try await store.create(
-                    placeId: pin.id, text: text.isEmpty ? nil : text, date: date)
+                    placeId: pin.id, text: text.isEmpty ? nil : text, date: date,
+                    visibility: isPublic ? "PUBLIC" : "PRIVATE")
                 createdFootprint = fp
             }
             while let item = items.first {

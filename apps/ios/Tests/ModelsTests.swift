@@ -140,4 +140,43 @@ final class ModelsTests: XCTestCase {
         """.data(using: .utf8)!)
         XCTAssertEqual(stats.cities, 2)
     }
+
+    // MARK: - FootprintStore.UpdateBody（PATCH 请求体的三态 text 语义 + visibility 未变更必须不出现）
+
+    private func encodedKeys(_ body: FootprintStore.UpdateBody) throws -> [String: Any] {
+        let data = try APIClient.encoder.encode(body)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+
+    func testUpdateBodyOmitsTextKeyWhenUnchanged() throws {
+        // 外层 nil = 不改：text 键不应出现，即便 date/visibility 都携带了新值
+        let json = try encodedKeys(FootprintStore.UpdateBody(
+            text: nil, date: Date(timeIntervalSince1970: 0), visibility: "PUBLIC"))
+        XCTAssertFalse(json.keys.contains("text"))
+        XCTAssertTrue(json.keys.contains("date"))
+        XCTAssertTrue(json.keys.contains("visibility"))
+    }
+
+    func testUpdateBodyEncodesNullWhenTextCleared() throws {
+        // 外层非 nil、内层 nil = 清空：键必须出现且值为 JSON null
+        let json = try encodedKeys(FootprintStore.UpdateBody(text: .some(nil), date: nil, visibility: nil))
+        XCTAssertTrue(json.keys.contains("text"))
+        XCTAssertTrue(json["text"] is NSNull)
+    }
+
+    func testUpdateBodyEncodesStringWhenTextSet() throws {
+        // 外层非 nil、内层非 nil = 设新值
+        let json = try encodedKeys(FootprintStore.UpdateBody(text: .some("新的想法"), date: nil, visibility: nil))
+        XCTAssertEqual(json["text"] as? String, "新的想法")
+    }
+
+    func testUpdateBodyOmitsVisibilityKeyWhenUnchanged() throws {
+        // 服务端行为地雷：visibility 未变更绝不可回传，否则 APPROVED 足迹会被无条件重排队。
+        // 即便 text/date 都在变更，visibility 传 nil 时键必须彻底不出现。
+        let json = try encodedKeys(FootprintStore.UpdateBody(
+            text: .some("改过的文字"), date: Date(timeIntervalSince1970: 0), visibility: nil))
+        XCTAssertFalse(json.keys.contains("visibility"))
+        XCTAssertTrue(json.keys.contains("text"))
+        XCTAssertTrue(json.keys.contains("date"))
+    }
 }

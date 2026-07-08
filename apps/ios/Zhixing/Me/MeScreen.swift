@@ -4,6 +4,7 @@ struct MeScreen: View {
     @Environment(SessionStore.self) private var session
     @Environment(FootprintStore.self) private var store
     @State private var showImport = false
+    @State private var editingFootprint: Footprint?
 
     var body: some View {
         NavigationStack {
@@ -18,7 +19,10 @@ struct MeScreen: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(store.footprints) { fp in
-                        FootprintRow(footprint: fp)
+                        Button { editingFootprint = fp } label: {
+                            FootprintRow(footprint: fp)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .onDelete { indexSet in
                         let targets = indexSet.map { store.footprints[$0] } // 删除前按索引快照，避免边删边移位
@@ -38,6 +42,7 @@ struct MeScreen: View {
             }
             .navigationTitle(session.user?.nickname ?? "我的")
             .sheet(isPresented: $showImport) { AlbumImportScreen() }
+            .sheet(item: $editingFootprint) { fp in FootprintEditor(footprint: fp) }
             .task { await store.load() }
         }
     }
@@ -68,6 +73,9 @@ struct FootprintRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(footprint.place.name).font(.headline)
+                if let badge = footprint.publishBadge {
+                    PublishBadgeLabel(badge: badge)
+                }
                 Spacer()
                 Text(footprint.date, format: .dateTime.year().month().day())
                     .font(.caption).foregroundStyle(.secondary)
