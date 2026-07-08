@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAdmin } from "../auth.js";
+import { countCardsByPlace } from "../placeCounts.js";
 
 export async function searchRoutes(app: FastifyInstance) {
   app.get(
@@ -24,12 +25,7 @@ export async function searchRoutes(app: FastifyInstance) {
         });
         return [];
       }
-      const counts = await app.prisma.card.groupBy({
-        by: ["placeId"],
-        where: { placeId: { in: places.map((p) => p.id) }, status: { not: "RETIRED" } },
-        _count: { _all: true },
-      });
-      const countBy = new Map(counts.map((c) => [c.placeId, c._count._all]));
+      const countBy = await countCardsByPlace(app.prisma, places.map((p) => p.id));
       return places.map((p) => ({ ...p, cardCount: countBy.get(p.id) ?? 0 }));
     },
   );

@@ -185,3 +185,47 @@ test("C1：私密足迹上传照片不改状态（reviewStatus 原样保留）",
   expect(after.reviewStatus).toBe(before.reviewStatus);
   expect(after.publicRequestedAt).toEqual(before.publicRequestedAt);
 });
+
+test("meta 非法（takenAt 非 ISO8601 / lat·lng 越界）→ 400 invalid_photo_meta", async () => {
+  const { headers } = await userAuth(app);
+  const fpId = await makeFootprint(headers);
+
+  const badDate = multipartPayload({ takenAt: "not-a-date" }, PNG_1PX, "image/png");
+  const r1 = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...headers, ...badDate.headers }, payload: badDate.payload,
+  });
+  expect(r1.statusCode).toBe(400);
+  expect(r1.json().error).toBe("invalid_photo_meta");
+
+  const badLat = multipartPayload({ lat: "999" }, PNG_1PX, "image/png");
+  const r2 = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...headers, ...badLat.headers }, payload: badLat.payload,
+  });
+  expect(r2.statusCode).toBe(400);
+  expect(r2.json().error).toBe("invalid_photo_meta");
+
+  const badLng = multipartPayload({ lng: "-181" }, PNG_1PX, "image/png");
+  const r3 = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...headers, ...badLng.headers }, payload: badLng.payload,
+  });
+  expect(r3.statusCode).toBe(400);
+  expect(r3.json().error).toBe("invalid_photo_meta");
+
+  // 未上传任何合法照片记录
+  expect(await app.prisma.footprintPhoto.count()).toBe(0);
+});
+
+test("超过 15MB → 413（fastify-multipart 文件大小限制固化）", async () => {
+  const { headers } = await userAuth(app);
+  const fpId = await makeFootprint(headers);
+  const big = Buffer.alloc(16 * 1024 * 1024, 1);
+  const mp = multipartPayload({}, big, "image/png");
+  const res = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...headers, ...mp.headers }, payload: mp.payload,
+  });
+  expect(res.statusCode).toBe(413);
+});

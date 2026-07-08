@@ -28,10 +28,12 @@ test("创建/列出/删除足迹（默认私密）", async () => {
   });
   expect(created.statusCode).toBe(201);
   expect(created.json().place.name).toBe("什刹海");
+  expect(created.json()).not.toHaveProperty("userId");
   expect((await app.prisma.footprint.findFirstOrThrow()).visibility).toBe("PRIVATE");
 
   const list = await app.inject({ method: "GET", url: "/me/footprints", headers });
   expect(list.json()).toHaveLength(1);
+  expect(list.json()[0]).not.toHaveProperty("userId");
 
   const del = await app.inject({
     method: "DELETE", url: `/footprints/${created.json().id}`, headers,
@@ -67,6 +69,23 @@ test("统计：城市按祖先链归并", async () => {
   const stats = await app.inject({ method: "GET", url: "/me/stats", headers });
   // 什刹海归并进北京 → 2 城（北京、济南），3 地点，3 足迹
   expect(stats.json()).toEqual({ footprints: 3, places: 3, cities: 2, provinces: 0 });
+});
+
+test("统计：DISTRICT 直挂 PROVINCE（无 CITY 祖先）→ cities 按该顶层归并", async () => {
+  const province = await app.prisma.place.create({
+    data: { name: "云南省", level: "PROVINCE", lat: 25.04, lng: 102.71 },
+  });
+  const oldTown = await app.prisma.place.create({
+    data: { name: "丽江古城", level: "DISTRICT", parentId: province.id, lat: 26.87, lng: 100.23 },
+  });
+  const { headers } = await userAuth(app);
+  await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: oldTown.id, date: "2026-05-01T10:00:00.000Z" },
+  });
+  const stats = await app.inject({ method: "GET", url: "/me/stats", headers });
+  // 无 CITY 祖先 → 回退到链顶（省本身）计 1 城；同时该链顶也是 PROVINCE → provinces 计 1
+  expect(stats.json()).toEqual({ footprints: 1, places: 1, cities: 1, provinces: 1 });
 });
 
 test("placeId 不存在 400；未登录 401", async () => {
@@ -113,6 +132,7 @@ test("PATCH 改 text（APPROVED 公开态）→ 回 PENDING 且 publicRequestedA
   });
   expect(patched.statusCode).toBe(200);
   expect(patched.json().reviewStatus).toBe("PENDING");
+  expect(patched.json()).not.toHaveProperty("userId");
   const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id } });
   expect(row.publicRequestedAt).not.toBeNull();
   expect(row.publicRequestedAt!.getTime()).toBeGreaterThan(oldRequestedAt.getTime());

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Prisma } from "@zhixing/db";
+import { Prisma } from "@zhixing/db";
 import { z } from "zod";
 import { requireUser } from "../auth.js";
 
@@ -40,32 +40,31 @@ const patchSchema = z
     message: "at least one field required",
   });
 
-const includeShape = {
+/**
+ * 私密面足迹响应的唯一 select 形状：POST/PATCH/GET(/me/footprints) 三处共用，
+ * 显式白名单字段，userId 等内部字段不外传。
+ */
+export const FOOTPRINT_SELECT = {
+  id: true,
+  placeId: true,
+  text: true,
+  date: true,
+  visibility: true,
+  reviewStatus: true,
+  likeCount: true,
+  viewCount: true,
+  tripId: true,
+  createdAt: true,
   place: { select: { id: true, name: true } },
   photos: { select: { id: true, takenAt: true } },
 } as const;
 
-type PlaceNode = { id: string; parentId: string | null; level: string };
-
-export function rollup(placeIds: string[], byId: Map<string, PlaceNode>) {
-  const cities = new Set<string>();
-  const provinces = new Set<string>();
-  for (const placeId of placeIds) {
-    let city: string | null = null;
-    let province: string | null = null;
-    let top = placeId;
-    let cur = byId.get(placeId);
-    while (cur) {
-      if (cur.level === "CITY") city = cur.id;
-      if (cur.level === "PROVINCE") province = cur.id;
-      top = cur.id;
-      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-    }
-    cities.add(city ?? top);
-    if (province) provinces.add(province);
-  }
-  return { cities: cities.size, provinces: provinces.size };
-}
+/**
+ * `/me/stats` 城市/省份归并统计（PG 递归 CTE，见路由内 SQL 注释）。
+ * 语义镜像原纯 JS 版 rollup：沿 place.parentId 链从自身往上走，
+ * 记录途中最后一个 CITY/PROVINCE 节点；无 CITY 祖先则退回链顶（parentId 为空的节点）计入 cities。
+ */
+type StatsRow = { places: number; cities: number; provinces: number };
 
 export async function footprintsRoutes(app: FastifyInstance) {
   app.post("/footprints", { preHandler: requireUser }, async (req, reply) => {
@@ -84,7 +83,7 @@ export async function footprintsRoutes(app: FastifyInstance) {
         reviewStatus: isPublic ? "PENDING" : undefined,
         publicRequestedAt: isPublic ? new Date() : undefined,
       },
-      include: includeShape,
+      select: FOOTPRINT_SELECT,
     });
     return reply.code(201).send(footprint);
   });
@@ -128,7 +127,7 @@ export async function footprintsRoutes(app: FastifyInstance) {
           reviewStatus,
           publicRequestedAt,
         },
-        include: includeShape,
+        select: FOOTPRINT_SELECT,
       });
       if (dateChanged && existing.tripId) {
         await recomputeTripRange(tx, existing.tripId);
@@ -142,7 +141,7 @@ export async function footprintsRoutes(app: FastifyInstance) {
     return app.prisma.footprint.findMany({
       where: { userId: req.userId },
       orderBy: { date: "desc" },
-      include: includeShape,
+      select: FOOTPRINT_SELECT,
     });
   });
 
@@ -169,15 +168,43 @@ export async function footprintsRoutes(app: FastifyInstance) {
   });
 
   app.get("/me/stats", { preHandler: requireUser }, async (req) => {
-    const [footprints, fpPlaces, places] = await Promise.all([
+    const [footprints, rows] = await Promise.all([
       app.prisma.footprint.count({ where: { userId: req.userId } }),
-      app.prisma.footprint.findMany({
-        where: { userId: req.userId }, select: { placeId: true }, distinct: ["placeId"],
-      }),
-      app.prisma.place.findMany({ select: { id: true, parentId: true, level: true } }),
+      // 递归 CTE：从每个已访问 place 出发沿 parentId 链爬到链顶，depth 加安全上限
+      // （树实际最深 4 层，10 纯属防呆），逐 origin 取"深度最大的 CITY/PROVINCE 祖先"
+      // 及"链顶节点"，语义与原 JS rollup 一致：无 CITY 祖先则退回链顶计入 cities。
+      // 相比旧实现（先 place.findMany 全表加载），这里只遍历用户实际访问过的地点的祖先链。
+      app.prisma.$queryRaw<StatsRow[]>(Prisma.sql`
+        WITH RECURSIVE origins AS (
+          SELECT DISTINCT "placeId" AS origin FROM "Footprint" WHERE "userId" = ${req.userId}
+        ),
+        ancestry AS (
+          SELECT o.origin, p.id, p."parentId", p.level, 0 AS depth
+          FROM origins o
+          JOIN "Place" p ON p.id = o.origin
+          UNION ALL
+          SELECT a.origin, p.id, p."parentId", p.level, a.depth + 1
+          FROM ancestry a
+          JOIN "Place" p ON p.id = a."parentId"
+          WHERE a.depth < 10
+        ),
+        per_origin AS (
+          SELECT
+            origin,
+            (array_agg(id ORDER BY depth DESC) FILTER (WHERE level = 'CITY'))[1] AS city_id,
+            (array_agg(id ORDER BY depth DESC) FILTER (WHERE level = 'PROVINCE'))[1] AS province_id,
+            (array_agg(id ORDER BY depth DESC))[1] AS top_id
+          FROM ancestry
+          GROUP BY origin
+        )
+        SELECT
+          COUNT(*)::int AS places,
+          COUNT(DISTINCT COALESCE(city_id, top_id))::int AS cities,
+          COUNT(DISTINCT province_id)::int AS provinces
+        FROM per_origin
+      `),
     ]);
-    const byId = new Map(places.map((p) => [p.id, p]));
-    const placeIds = fpPlaces.map((f) => f.placeId);
-    return { footprints, places: placeIds.length, ...rollup(placeIds, byId) };
+    const stats = rows[0] ?? { places: 0, cities: 0, provinces: 0 };
+    return { footprints, places: stats.places, cities: stats.cities, provinces: stats.provinces };
   });
 }

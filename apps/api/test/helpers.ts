@@ -4,6 +4,13 @@ import { buildApp } from "../src/app.js";
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test";
 
+/**
+ * 测试专用 bucket 名——任何直接调用 buildApp() 的测试都必须显式传它，
+ * 否则 s3Bucket 会落到 config 的生产/开发默认值（"zhixing"），onReady 里的
+ * ensureBucket() 就会误建一个非测试用的桶（副作用污染本地 MinIO）。
+ */
+export const TEST_S3_BUCKET = "zhixing-test";
+
 const applePair = await generateKeyPair("RS256");
 export const appleJwks = createLocalJWKSet({
   keys: [{ ...(await exportJWK(applePair.publicKey)), alg: "RS256", kid: "test-key" }],
@@ -26,7 +33,7 @@ export function testApp() {
     databaseUrl: TEST_DB_URL,
     appleJwks,
     devAuth: true,
-    s3Bucket: "zhixing-test",
+    s3Bucket: TEST_S3_BUCKET,
     rateLimit: false,
   });
 }

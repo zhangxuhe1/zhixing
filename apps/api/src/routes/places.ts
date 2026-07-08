@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAdmin } from "../auth.js";
+import { countCardsByPlace } from "../placeCounts.js";
 
 const levelEnum = z.enum(["PROVINCE", "CITY", "DISTRICT", "POI"]);
 
@@ -19,16 +20,11 @@ const createPlaceSchema = z.object({
 });
 
 async function queryPins(app: FastifyInstance) {
-  const [places, counts] = await Promise.all([
-    app.prisma.place.findMany({
-      select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    app.prisma.card.groupBy({
-      by: ["placeId"], where: { status: { not: "RETIRED" } }, _count: { _all: true },
-    }),
-  ]);
-  const countBy = new Map(counts.map((c) => [c.placeId, c._count._all]));
+  const places = await app.prisma.place.findMany({
+    select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const countBy = await countCardsByPlace(app.prisma, places.map((p) => p.id));
   return places.map((p) => ({ ...p, cardCount: countBy.get(p.id) ?? 0 }));
 }
 

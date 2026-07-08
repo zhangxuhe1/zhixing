@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { buildApp } from "../src/app.js";
-import { appleJwks, fakeAppleToken, resetDb, testApp, TEST_DB_URL } from "./helpers.js";
+import { appleJwks, fakeAppleToken, resetDb, testApp, TEST_DB_URL, TEST_S3_BUCKET } from "./helpers.js";
 
 const app = testApp();
 beforeEach(() => resetDb(app));
@@ -48,7 +48,9 @@ test("会话 token 能访问 /me；无 token 401", async () => {
 });
 
 test("devAuth 关闭时 /auth/dev 不存在", async () => {
-  const closed = buildApp({ databaseUrl: TEST_DB_URL, appleJwks, devAuth: false });
+  // s3Bucket 须显式传：devAuth-off 场景若漏传会落到生产默认桶名，onReady 触发
+  // ensureBucket() 时误在本地 MinIO 建一个非测试桶（副作用，与本用例无关）。
+  const closed = buildApp({ databaseUrl: TEST_DB_URL, appleJwks, devAuth: false, s3Bucket: TEST_S3_BUCKET });
   const res = await closed.inject({ method: "POST", url: "/auth/dev", payload: { appleSub: "x" } });
   expect(res.statusCode).toBe(404);
   await closed.close();
