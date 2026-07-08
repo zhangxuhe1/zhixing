@@ -43,6 +43,9 @@ struct AuthResponse: Codable { let token: String; let user: User }
 struct PlaceRef: Codable { let id: String; let name: String }
 struct FootprintPhotoMeta: Codable, Identifiable { let id: String; let takenAt: Date? }
 
+/// 足迹公开状态徽标：由 visibility/reviewStatus 纯映射得出，不直接来自服务端字段。
+enum PublishBadge: String { case pending = "审核中", rejected = "未通过", published = "已公开" }
+
 struct Footprint: Codable, Identifiable {
     let id: String
     let placeId: String
@@ -50,7 +53,93 @@ struct Footprint: Codable, Identifiable {
     let date: Date
     let place: PlaceRef
     let photos: [FootprintPhotoMeta]
+    let visibility: String
+    let reviewStatus: String
+    let likeCount: Int
+    let viewCount: Int
+    let tripId: String?
+
+    /// PRIVATE→nil；PUBLIC+PENDING→审核中；PUBLIC+REJECTED→未通过；PUBLIC+APPROVED→已公开；未知组合→nil（容错）。
+    var publishBadge: PublishBadge? {
+        guard visibility == "PUBLIC" else { return nil }
+        switch reviewStatus {
+        case "PENDING": return .pending
+        case "REJECTED": return .rejected
+        case "APPROVED": return .published
+        default: return nil
+        }
+    }
 }
 
 struct Stats: Codable { let footprints: Int; let places: Int; let cities: Int; let provinces: Int }
 struct PhotoURL: Codable { let url: String }
+
+// MARK: - M2：旅人故事 / 旅人镜头 / 旅程 / 收藏 / 远程配置
+
+struct StoryPhoto: Codable, Identifiable {
+    let photoId: String
+    var id: String { photoId }
+}
+
+struct Story: Codable, Identifiable {
+    let footprintId: String
+    let text: String?
+    let date: Date
+    let authorNickname: String
+    let likeCount: Int
+    let viewCount: Int
+    let likedByMe: Bool
+    let photos: [StoryPhoto]
+    var id: String { footprintId }
+}
+
+struct StoriesPage: Codable {
+    let items: [Story]
+    let nextCursor: String?
+}
+
+struct WallPhoto: Codable, Identifiable {
+    let photoId: String
+    let footprintId: String
+    var id: String { photoId }
+}
+
+struct PhotoWallGroup: Codable, Identifiable {
+    let label: String
+    let photos: [WallPhoto]
+    var id: String { label }
+}
+
+struct PhotoWall: Codable {
+    let groups: [PhotoWallGroup]
+}
+
+struct TripSuggestion: Codable, Identifiable, Hashable {
+    let footprintIds: [String]
+    let suggestedTitle: String
+    let startDate: Date
+    let endDate: Date
+    var id: String { footprintIds.joined(separator: ",") }
+}
+
+struct Trip: Codable, Identifiable {
+    let id: String
+    let title: String
+    let startDate: Date
+    let endDate: Date
+    let footprintCount: Int
+}
+
+struct FavoriteItem: Codable, Identifiable {
+    let cardId: String
+    let title: String
+    let category: String
+    let placeId: String
+    let placeName: String
+    let favoritedAt: Date
+    var id: String { cardId }
+}
+
+struct RemoteAppConfig: Codable {
+    let shareLandingUrl: String
+}

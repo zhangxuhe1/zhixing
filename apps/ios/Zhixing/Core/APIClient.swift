@@ -62,6 +62,15 @@ final class APIClient {
         _ = try await raw(path: path, method: "DELETE", body: nil, contentType: nil)
     }
 
+    func put(_ path: String) async throws {
+        _ = try await raw(path: path, method: "PUT", body: nil, contentType: nil)
+    }
+
+    func patch<T: Decodable>(_ path: String, json: some Encodable) async throws -> T {
+        try await send(path: path, method: "PATCH",
+                       body: try Self.encoder.encode(json), contentType: "application/json")
+    }
+
     func upload<T: Decodable>(
         _ path: String, file: Data, filename: String, mime: String, fields: [String: String]
     ) async throws -> T {
