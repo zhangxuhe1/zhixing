@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 
 /// 旅程小结 · 分享长图：装配（拉取旅程成员足迹 → 城市名/摘录/照片/二维码）与出图
@@ -17,8 +18,13 @@ struct TripShareScreen: View {
     @State private var dataState: LoadState<ShareCardData> = .idle
     @State private var renderState: LoadState<UIImage> = .idle
 
-    /// ImageRenderer 内存上界（评审重点）：九宫格最多渲染这么多张全尺寸解码后的 UIImage。
+    /// ImageRenderer 内存上界之一（评审重点）：九宫格最多容纳的照片张数。
     private static let maxPhotos = 9
+    /// 内存上界之二（评审修复）：单张照片解码后的最大长边像素。仓库上传路径存的是原图（24MP 级
+    /// 解码位图近百 MB，9 张原图叠加 ImageRenderer 3x 主线程绘制足以触发 jetsam，进程直接被杀、
+    /// 绕过"渲染失败可重试"兜底）。版式最大需求是单张通栏 342pt @3x ≈ 1026px，1200 留出裕量后
+    /// 视觉零损失；9 张 1200px 位图约 50MB，安全。
+    private static let photoMaxPixelSize: CGFloat = 1200
     private static let excerptCount = 3
     private static let excerptMaxLength = 60
 
@@ -118,12 +124,14 @@ struct TripShareScreen: View {
 
     /// 单张失败直接跳过、不阻塞整体装配：任何一步出错（presign 失败、URL 非法、字节下载失败、
     /// 解码失败）都归一处理成"这张不要了"，调用方看到的只是最终 `images` 数组少一张。
+    /// 落地为 UIImage 前必须经 `downsampledImage` 降采样（评审修复）——不走 `UIImage(data:)`，
+    /// 那会保留原图分辨率，内存上界见 `photoMaxPixelSize` 注释。
     private func downloadPhoto(_ photoId: String) async -> UIImage? {
         do {
             let signed: PhotoURL = try await APIClient.shared.get("/photos/\(photoId)")
             guard let url = URL(string: signed.url) else { return nil }
             let (bytes, _) = try await APIClient.photoSession.data(from: url)
-            return UIImage(data: bytes)
+            return downsampledImage(from: bytes, maxPixelSize: Self.photoMaxPixelSize)
         } catch {
             return nil
         }
@@ -217,4 +225,22 @@ func downloadAllSkippingFailures(_ ids: [String], download: (String) async -> UI
         }
     }
     return images
+}
+
+/// 字节 → 降采样 UIImage（评审修复：≤9 只封张数，这里封每张的像素）：长边超过 `maxPixelSize`
+/// 的图缩到恰好 `maxPixelSize`，不足的保持原尺寸（不放大）；解不出图（损坏/非图字节）返回 nil。
+/// 用 ImageIO 的 `CGImageSourceCreateThumbnailAtIndex` 而非 `UIImage(data:)` 后再缩——前者按目标
+/// 尺寸直接解码，全程不产生原始分辨率位图（24MP 原图的全尺寸解码近百 MB，正是要规避的东西）；
+/// `kCGImageSourceCreateThumbnailWithTransform` 让 EXIF 方向在解码时一并烘进像素，竖拍照片不横躺。
+func downsampledImage(from data: Data, maxPixelSize: CGFloat) -> UIImage? {
+    let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+    let thumbnailOptions = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceShouldCacheImmediately: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+    ] as CFDictionary
+    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else { return nil }
+    return UIImage(cgImage: cgImage)
 }

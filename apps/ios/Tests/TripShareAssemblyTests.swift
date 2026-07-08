@@ -117,6 +117,51 @@ final class TripShareAssemblyTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
+    // MARK: - downsampledImage（评审修复：字节上界——≤9 封张数，这里封每张像素）
+
+    /// 合成指定像素尺寸的 JPEG 字节。format.scale 必须钉 1——UIGraphicsImageRenderer 默认用
+    /// 设备 scale（本模拟器 3x），不钉的话 "3000×2000" 实际产出 9000×6000 像素，断言全乱。
+    private func jpegBytes(width: CGFloat, height: CGFloat) -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
+            .image { context in
+                UIColor.systemTeal.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            }
+        return image.jpegData(compressionQuality: 0.7)!
+    }
+
+    /// UIImage 的真实像素长边（size 是 pt，乘 scale 才是像素）。
+    private func longEdgePixels(_ image: UIImage) -> CGFloat {
+        max(image.size.width * image.scale, image.size.height * image.scale)
+    }
+
+    /// 大图必须被降采样到长边 ≤ maxPixelSize 且保持宽高比——这是 ImageRenderer 内存上界的
+    /// 另一半：若退回 `UIImage(data:)`，24MP 原图 ×9 张的解码位图叠加 3x 渲染会触发 jetsam。
+    func testDownsampledImageCapsLongEdgeAndPreservesAspectRatio() throws {
+        let bytes = jpegBytes(width: 3000, height: 2000)
+
+        let image = try XCTUnwrap(downsampledImage(from: bytes, maxPixelSize: 1200))
+
+        XCTAssertLessThanOrEqual(longEdgePixels(image), 1200, "长边必须被压到上界以内")
+        let aspect = (image.size.width * image.scale) / (image.size.height * image.scale)
+        XCTAssertEqual(aspect, 1.5, accuracy: 0.01, "降采样只缩尺寸，不改变宽高比")
+    }
+
+    func testDownsampledImageLeavesSmallImageUnscaled() throws {
+        let bytes = jpegBytes(width: 800, height: 600)
+
+        let image = try XCTUnwrap(downsampledImage(from: bytes, maxPixelSize: 1200))
+
+        XCTAssertEqual(image.size.width * image.scale, 800, accuracy: 1, "小于上界的图不应被放大")
+        XCTAssertEqual(image.size.height * image.scale, 600, accuracy: 1)
+    }
+
+    func testDownsampledImageGarbageBytesProducesNil() {
+        XCTAssertNil(downsampledImage(from: Data("这不是一张图".utf8), maxPixelSize: 1200))
+    }
+
     // MARK: - TripShareCard.columns(forPhotoCount:)
 
     func testPhotoGridColumnsThreeTierSplit() {
