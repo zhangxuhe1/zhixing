@@ -42,7 +42,7 @@ struct MapScreen: View {
             }
         }
         .sheet(isPresented: $showPlacePicker) {
-            SearchSheet(prompt: "搜地点，在那里留足迹") { pin in
+            PlacePickerSheet(pins: pins) { pin in
                 showPlacePicker = false
                 composerPin = pin
             }
@@ -102,6 +102,64 @@ struct MapScreen: View {
             pins = try await APIClient.shared.get("/places/pins")
         } catch {
             loadError = "加载地点失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+/// ［+］选点 sheet：顶部「使用当前位置」一键命中最近地点，其下沿用既有搜索选点不变。
+private struct PlacePickerSheet: View {
+    let pins: [Pin]
+    var onPick: (Pin) -> Void
+
+    @State private var locating = false
+    @State private var hint: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    Task { await useCurrentLocation() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if locating {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "location.fill")
+                        }
+                        Text("使用当前位置")
+                        Spacer()
+                    }
+                }
+                .disabled(locating)
+                if let hint {
+                    Text(hint)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            Divider()
+            SearchSheet(prompt: "搜地点，在那里留足迹", onPick: onPick)
+        }
+    }
+
+    private func useCurrentLocation() async {
+        locating = true
+        hint = nil
+        defer { locating = false }
+        do {
+            let coordinate = try await LocationOnce.current()
+            if let pin = nearestPin(lat: coordinate.latitude, lng: coordinate.longitude, pins: pins) {
+                onPick(pin)
+            } else {
+                hint = "附近还没有收录的地点，试试搜索"
+            }
+        } catch LocationError.denied {
+            hint = "尚未开启定位权限，请到系统设置中开启后重试"
+        } catch LocationError.timeout {
+            hint = "定位超时，请重试"
+        } catch {
+            hint = "定位失败，请重试"
         }
     }
 }
