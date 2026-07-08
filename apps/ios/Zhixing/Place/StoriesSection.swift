@@ -9,6 +9,7 @@ struct StoriesSection: View {
     @State private var state: LoadState<[Story]> = .idle
     @State private var nextCursor: String?
     @State private var isLoadingMore = false
+    @State private var loadMoreFailed = false
     @State private var likingIds: Set<String> = []
     @State private var likeError: String?
     @State private var likeErrorToken = 0
@@ -25,9 +26,12 @@ struct StoriesSection: View {
                             StoryRow(story: story, onToggleLike: { Task { await toggleLike(story) } })
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedStory = story }
-                                .onAppear {
-                                    if story.id == stories.last?.id { Task { await loadMore() } }
-                                }
+                        }
+                        // 分页 footer：nextCursor 非空时常驻末尾。`.id(nextCursor)` 让每成功翻一页
+                        // 都重建 footer——若它仍停留在屏内，onAppear 会再次触发、继续加载下一页
+                        //（末行 .onAppear 方案在"行没离开过屏幕"时不会重发，这里用身份重建绕开）。
+                        if nextCursor != nil {
+                            loadMoreFooter.id(nextCursor)
                         }
                     }
                     .listStyle(.plain)
@@ -49,6 +53,26 @@ struct StoriesSection: View {
         .task { await load() }
     }
 
+    /// 正常态：小转圈，出现即触发下一页；失败态：可点重试的文案——第 2 页起的加载失败
+    /// 不再静默（浏览打点是全项目唯一允许静默的失败面）。重试点按后 loadMoreFailed 复位，
+    /// footer 换回转圈分支；其 onAppear 的重复触发由 loadMore 的 in-flight 守卫吸收。
+    private var loadMoreFooter: some View {
+        Group {
+            if loadMoreFailed {
+                Button { Task { await loadMore() } } label: {
+                    Text("加载更多失败 · 点按重试")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
+                    .onAppear { Task { await loadMore() } }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             Text("还没有旅人在此留下公开足迹")
@@ -62,6 +86,7 @@ struct StoriesSection: View {
 
     private func load() async {
         state = .loading
+        loadMoreFailed = false
         do {
             let page: StoriesPage = try await APIClient.shared.get("/places/\(placeId)/stories")
             state = .loaded(page.items)
@@ -72,22 +97,27 @@ struct StoriesSection: View {
     }
 
     /// in-flight 保护（isLoadingMore）+ 游标耗尽保护（nextCursor 为 nil 即不再请求）：
-    /// 末行 `.onAppear` 在滚动抖动下可能重复触发，两道守卫共同保证同一页不会被并发/重复请求。
+    /// footer 的 onAppear 在滚动抖动/分支切换下可能重复触发，两道守卫共同保证同一页不会被并发/重复请求。
     private func loadMore() async {
         guard let cursor = nextCursor, !isLoadingMore else { return }
         guard let encodedCursor = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
         else { return }
         isLoadingMore = true
+        loadMoreFailed = false
         defer { isLoadingMore = false }
         do {
             let page: StoriesPage = try await APIClient.shared.get(
                 "/places/\(placeId)/stories?cursor=\(encodedCursor)")
             guard var stories = state.value else { return }
-            stories.append(contentsOf: page.items)
+            // 服务端对失效游标不回 404 而是反探测地回退返回第一页（public.ts 设计如此），
+            // 此时整页都是已有内容——按已有 id 去重后再追加，防 ForEach 撞重复 id。
+            let existing = Set(stories.map(\.id))
+            stories.append(contentsOf: page.items.filter { !existing.contains($0.id) })
             state = .loaded(stories)
             nextCursor = page.nextCursor
         } catch {
-            // 翻页失败：保留已加载内容，静默放弃本次追加；nextCursor 未清空，用户可再次触发重试。
+            // 翻页失败可见可重试：footer 换成「加载更多失败 · 点按重试」；已加载内容保留，nextCursor 不动。
+            loadMoreFailed = true
         }
     }
 
