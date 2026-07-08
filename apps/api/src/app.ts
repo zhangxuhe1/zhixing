@@ -14,6 +14,7 @@ import { placesRoutes } from "./routes/places.js";
 import { publicRoutes } from "./routes/public.js";
 import { reportsRoutes } from "./routes/reports.js";
 import { searchRoutes } from "./routes/search.js";
+import { tripsRoutes } from "./routes/trips.js";
 import { createStorage, type Storage } from "./storage.js";
 
 declare module "fastify" {
@@ -47,6 +48,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(cors, { origin: true });
   app.register(multipart, { limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
   app.get("/health", async () => ({ ok: true }));
+  app.get("/app-config", async () => ({ shareLandingUrl: config.shareLandingUrl }));
   app.register(placesRoutes);
   app.register(cardsRoutes);
   app.register(authRoutes);
@@ -57,6 +59,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(searchRoutes);
   app.register(favoritesRoutes);
   app.register(reportsRoutes);
+  app.register(tripsRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });

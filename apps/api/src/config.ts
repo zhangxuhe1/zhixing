@@ -6,6 +6,7 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET ?? "dev-session-secret",
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? "app.zhixing.ios",
   devAuth: process.env.ZHIXING_DEV_AUTH === "1",
+  shareLandingUrl: process.env.SHARE_LANDING_URL ?? "http://localhost:8787/beta",
   s3: {
     endpoint: process.env.S3_ENDPOINT ?? "http://localhost:9000",
     publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? process.env.S3_ENDPOINT ?? "http://localhost:9000",
