@@ -58,6 +58,11 @@ final class APIClient {
                        body: try Self.encoder.encode(json), contentType: "application/json")
     }
 
+    /// 无 body、不关心响应体，只要求 2xx（如浏览打点 `POST /footprints/:id/view`）。
+    func post(_ path: String) async throws {
+        _ = try await raw(path: path, method: "POST", body: nil, contentType: nil)
+    }
+
     func delete(_ path: String) async throws {
         _ = try await raw(path: path, method: "DELETE", body: nil, contentType: nil)
     }

@@ -89,6 +89,29 @@ final class APIClientMethodTests: XCTestCase {
         }
     }
 
+    /// 无 json 参数的 post(_:)：ViewTracker 默认 send（POST /footprints/:id/view）依赖此方法，与 put 同形状。
+    @MainActor
+    func testPostWithoutJSONSendsNoBodyAndSucceedsOn2xx() async throws {
+        StubURLProtocol.stub = .init(status: 204, body: Data())
+        try await APIClient.shared.post("/footprints/f1/view")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.httpMethod, "POST")
+        XCTAssertNil(StubURLProtocol.lastBody)
+    }
+
+    @MainActor
+    func testPostWithoutJSONThrowsOnNon2xx() async {
+        StubURLProtocol.stub = .init(status: 404, body: Data("not_found".utf8))
+        do {
+            try await APIClient.shared.post("/footprints/missing/view")
+            XCTFail("应抛出错误")
+        } catch let APIError.status(code, body) {
+            XCTAssertEqual(code, 404)
+            XCTAssertTrue(body.contains("not_found"))
+        } catch {
+            XCTFail("错误类型不符：\(error)")
+        }
+    }
+
     private struct Ping: Codable, Equatable { let ok: Bool }
     private struct Payload: Encodable { let text: String }
 
