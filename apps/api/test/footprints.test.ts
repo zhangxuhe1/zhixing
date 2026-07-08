@@ -224,3 +224,98 @@ test("PATCH 空 body → 400 invalid_body", async () => {
   expect(patched.statusCode).toBe(400);
   expect(patched.json().error).toBe("invalid_body");
 });
+
+// 状态机链式场景：多次 PATCH 连续跨越"已过审/已拒/转私"等历史分支，
+// 锁定当前实现在每一步的确切行为，防止未来改动悄悄改变语义。
+
+test("链式1·撤回再公开重新排队：APPROVED→PRIVATE（仍 APPROVED）→PUBLIC（回 PENDING 且 publicRequestedAt 刷新）", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z", visibility: "PUBLIC" },
+  });
+  const id = created.json().id;
+  const oldRequestedAt = new Date("2020-01-01T00:00:00.000Z");
+  await app.prisma.footprint.update({
+    where: { id },
+    data: { reviewStatus: "APPROVED", publicRequestedAt: oldRequestedAt },
+  });
+
+  // 第一跳：撤回为私密 → reviewStatus 原样保留 APPROVED（镜像既有单跳测试）。
+  const toPrivate = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { visibility: "PRIVATE" },
+  });
+  expect(toPrivate.statusCode).toBe(200);
+  expect(toPrivate.json().reviewStatus).toBe("APPROVED");
+
+  // 第二跳：重新公开 → 无论此前是什么审核结果，一律回 PENDING 排队，且时间戳被刷新。
+  const toPublicAgain = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { visibility: "PUBLIC" },
+  });
+  expect(toPublicAgain.statusCode).toBe(200);
+  expect(toPublicAgain.json().reviewStatus).toBe("PENDING");
+  const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id } });
+  expect(row.publicRequestedAt).not.toBeNull();
+  expect(row.publicRequestedAt!.getTime()).toBeGreaterThan(oldRequestedAt.getTime());
+});
+
+test("链式2·拒后改文重提：REJECTED 公开态改文 → 回 PENDING 且 publicRequestedAt 刷新", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z", visibility: "PUBLIC" },
+  });
+  const id = created.json().id;
+  const oldRequestedAt = new Date("2020-01-01T00:00:00.000Z");
+  await app.prisma.footprint.update({
+    where: { id },
+    data: { reviewStatus: "REJECTED", publicRequestedAt: oldRequestedAt },
+  });
+
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { text: "改过的文字，重新申请公开" },
+  });
+  expect(patched.statusCode).toBe(200);
+  expect(patched.json().reviewStatus).toBe("PENDING");
+  const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id } });
+  expect(row.publicRequestedAt).not.toBeNull();
+  expect(row.publicRequestedAt!.getTime()).toBeGreaterThan(oldRequestedAt.getTime());
+});
+
+test("链式3·曾公开转私后改文不触审：APPROVED→PRIVATE 后改文 → reviewStatus 仍 APPROVED 且 publicRequestedAt 不变", async () => {
+  const { shichahai } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const created = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId: shichahai.id, date: "2026-05-01T10:00:00.000Z", visibility: "PUBLIC" },
+  });
+  const id = created.json().id;
+  const requestedAt = new Date("2020-01-01T00:00:00.000Z");
+  await app.prisma.footprint.update({
+    where: { id },
+    data: { reviewStatus: "APPROVED", publicRequestedAt: requestedAt },
+  });
+
+  const toPrivate = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { visibility: "PRIVATE" },
+  });
+  expect(toPrivate.statusCode).toBe(200);
+  expect(toPrivate.json().visibility).toBe("PRIVATE");
+
+  // 转私后只改文字（不碰 visibility）：既然当前已是 PRIVATE，不应触发"内容变更回审"分支。
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${id}`, headers,
+    payload: { text: "私密态下随便改改" },
+  });
+  expect(patched.statusCode).toBe(200);
+  expect(patched.json().reviewStatus).toBe("APPROVED");
+  const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id } });
+  expect(row.reviewStatus).toBe("APPROVED");
+  expect(row.publicRequestedAt).toEqual(requestedAt);
+});

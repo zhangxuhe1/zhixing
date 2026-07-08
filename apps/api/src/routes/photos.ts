@@ -38,9 +38,10 @@ export async function photosRoutes(app: FastifyInstance) {
     const ext = EXT_BY_MIME[data.mimetype];
     if (!ext) return reply.code(415).send({ error: "unsupported_media_type" });
 
+    // toBuffer() 必须先于 fields 读取——若 fields 排在多部分表单里 file 之后，
+    // @fastify/multipart 要消费完文件流才会填好 data.fields。但 meta 校验本身
+    // 必须排在 storage.put 之前：先校验后落盘，避免非法 meta 在 MinIO 里留孤儿对象。
     const buffer = await data.toBuffer();
-    const key = `photos/${footprint.id}/${randomUUID()}.${ext}`;
-    await app.storage.put(key, buffer, data.mimetype);
 
     const takenAt = fieldValue(data.fields, "takenAt");
     const lat = fieldValue(data.fields, "lat");
@@ -53,6 +54,9 @@ export async function photosRoutes(app: FastifyInstance) {
     if (!meta.success) {
       return reply.code(400).send({ error: "invalid_photo_meta", detail: meta.error.flatten() });
     }
+
+    const key = `photos/${footprint.id}/${randomUUID()}.${ext}`;
+    await app.storage.put(key, buffer, data.mimetype);
     // 公开态足迹新增照片 = 内容变更，须回审核队列（镜像 PATCH 改内容分支），
     // 同一事务原子完成，防"审后偷加图"绕过审核直接上公开面。
     const isPublic = footprint.visibility === PUBLICLY_VISIBLE.visibility;

@@ -141,6 +141,8 @@ export async function wipeSeedData(
   });
   await storage.remove(photos.map((p) => p.mediaUrl));
 
+  // 边界假设：seed 点赞只指向 seed 足迹（plan 保证）；dev-auth 环境下若有人以 seed-*
+  // 身份跨界点赞非 seed 足迹，wipe 删行不减其 likeCount——生产 devAuth 恒关，不可达。
   await prisma.like.deleteMany({
     where: { OR: [{ userId: { in: userIds } }, { footprintId: { in: footprintIds } }] },
   });

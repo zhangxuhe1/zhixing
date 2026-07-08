@@ -70,3 +70,28 @@ test("auth 路由恒按 IP 计数：伪造不同 Authorization 头无法绕过 1
   }
   expect(last.statusCode).toBe(429);
 });
+
+// 同上：全局档位调高，避免与 /search 专属的 30/min 档互相干扰——本用例只关心
+// /search 自己的限流档 + 按 IP 计数是否恒生效。/search 本身匿名，无需登录态。
+const searchApp = buildApp({
+  databaseUrl: TEST_DB_URL,
+  appleJwks,
+  devAuth: true,
+  s3Bucket: "zhixing-test",
+  rateLimit: { max: 300 },
+});
+afterAll(async () => searchApp.close());
+
+test("/search 恒按 IP 计数：伪造不同 Authorization 头无法绕过 30/min 限制", async () => {
+  // /search 未鉴权，Authorization 头本应完全不影响业务逻辑——这里故意每次换一个随机
+  // 假头，若 keyGenerator 仍是"头优先"，每次都会开一个新桶，永远不会 429。
+  let last!: Awaited<ReturnType<typeof searchApp.inject>>;
+  for (let i = 0; i < 31; i++) {
+    last = await searchApp.inject({
+      method: "GET",
+      url: "/search?q=x",
+      headers: { authorization: `Bearer junk-${i}-${Math.random()}` },
+    });
+  }
+  expect(last.statusCode).toBe(429);
+});

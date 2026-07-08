@@ -1,5 +1,6 @@
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { resetDb, testApp, userAuth } from "./helpers.js";
+import { resetDb, testApp, TEST_S3_BUCKET, userAuth } from "./helpers.js";
 
 const app = testApp();
 beforeEach(() => resetDb(app));
@@ -9,6 +10,21 @@ const PNG_1PX = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
 );
+
+const rawS3 = new S3Client({
+  endpoint: "http://localhost:9000",
+  region: "us-east-1",
+  forcePathStyle: true,
+  credentials: { accessKeyId: "zhixing", secretAccessKey: "zhixing-secret" },
+});
+
+/** meta 校验须先于 storage.put——用来断言非法 meta 请求没有在 MinIO 里留孤儿对象。 */
+async function countStorageObjects(prefix: string): Promise<number> {
+  const res = await rawS3.send(
+    new ListObjectsV2Command({ Bucket: TEST_S3_BUCKET, Prefix: prefix }),
+  );
+  return res.Contents?.length ?? 0;
+}
 
 function multipartPayload(fields: Record<string, string>, fileBuf: Buffer, mime: string) {
   const boundary = "----zx-test-boundary";
@@ -214,8 +230,9 @@ test("meta 非法（takenAt 非 ISO8601 / lat·lng 越界）→ 400 invalid_phot
   expect(r3.statusCode).toBe(400);
   expect(r3.json().error).toBe("invalid_photo_meta");
 
-  // 未上传任何合法照片记录
+  // 未上传任何合法照片记录，且 meta 校验先于 storage.put——MinIO 里也不该留孤儿对象。
   expect(await app.prisma.footprintPhoto.count()).toBe(0);
+  expect(await countStorageObjects(`photos/${fpId}/`)).toBe(0);
 });
 
 test("超过 15MB → 413（fastify-multipart 文件大小限制固化）", async () => {

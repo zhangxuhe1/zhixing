@@ -1,7 +1,14 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireAdmin } from "../auth.js";
 import { countCardsByPlace } from "../placeCounts.js";
+
+// pins/random 未鉴权且是重查询（全量地点 + 卡数聚合），同样受全局 keyGenerator
+// "有 Authorization 头就按头计费"的伪造绕过影响——覆盖为按 req.ip 计数；不传 max/
+// timeWindow，@fastify/rate-limit 按路由 config 与全局配置合并，自动继承全局档位。
+const ipKeyedRateLimit = {
+  rateLimit: { keyGenerator: (req: FastifyRequest) => req.ip },
+};
 
 const levelEnum = z.enum(["PROVINCE", "CITY", "DISTRICT", "POI"]);
 
@@ -29,9 +36,9 @@ async function queryPins(app: FastifyInstance) {
 }
 
 export async function placesRoutes(app: FastifyInstance) {
-  app.get("/places/pins", async () => queryPins(app));
+  app.get("/places/pins", { config: ipKeyedRateLimit }, async () => queryPins(app));
 
-  app.get("/places/random", async (_req, reply) => {
+  app.get("/places/random", { config: ipKeyedRateLimit }, async (_req, reply) => {
     const withContent = (await queryPins(app)).filter((p) => p.cardCount > 0);
     if (withContent.length === 0) return reply.code(404).send({ error: "no_content" });
     return withContent[Math.floor(Math.random() * withContent.length)];

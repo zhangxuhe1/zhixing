@@ -1,11 +1,17 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { requireAdmin } from "../auth.js";
 import { countCardsByPlace } from "../placeCounts.js";
+
+// /search 未鉴权，全局 keyGenerator 在有 Authorization 头时按头计费——攻击者可给每次
+// 请求都塞一个随机头骗出新桶，绕开 30/min 限流刷查询。这里显式覆盖为按 req.ip 计数。
+const searchRateLimit = {
+  rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (req: FastifyRequest) => req.ip },
+};
 
 export async function searchRoutes(app: FastifyInstance) {
   app.get(
     "/search",
-    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { config: searchRateLimit },
     async (req, reply) => {
       const { q } = req.query as { q?: string };
       const query = q?.trim() ?? "";
