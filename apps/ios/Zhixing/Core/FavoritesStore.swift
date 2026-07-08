@@ -45,7 +45,10 @@ final class FavoritesStore {
         cardIds = Set(list.map(\.cardId))
     }
 
-    /// 乐观翻转 cardIds（驱动 CardDetailView 书签图标即时切换），失败回滚。
+    /// 乐观翻转 cardIds（驱动 CardDetailView 书签图标即时切换），失败回滚并返回 false——调用方
+    /// 负责把失败呈现给用户（M2 全局规则：仅浏览打点允许静默，用户主动操作的失败必须可见）。
+    /// 返回值语义：收藏/取消这件事本身是否成功；加入方向 PUT 成功后 best-effort 重取 items 的
+    /// 失败不影响返回 true（收藏已经成立，不该向用户误报失败）。
     /// 回滚只做"手术式"单元素撤销（Set.insert/remove + 按原下标插回/删除单条 item），不整体快照/
     /// 恢复 items、cardIds 两个容器——两个 CardDetailView 各自 toggle 不同 cardId 时会在 MainActor
     /// 上交替推进（各自的 await 点之间可能穿插对方的写入），若回滚时把整个容器摞回调用前的快照，
@@ -55,7 +58,7 @@ final class FavoritesStore {
     /// 这次重取即便失败也不影响本次收藏已经成功的事实（cardIds 已经是对的），仅 items 暂缺该行，
     /// 下次成功 load() 会自愈，属一次性、可自愈的短暂不一致（与 I4 故事点赞"详情页点亮不即时回写
     /// 列表行"同族取舍）。
-    func toggle(cardId: String) async {
+    func toggle(cardId: String) async -> Bool {
         if cardIds.contains(cardId) {
             let removedIndex = items.firstIndex { $0.cardId == cardId }
             let removedItem = removedIndex.map { items[$0] }
@@ -63,6 +66,7 @@ final class FavoritesStore {
             if let removedIndex { items.remove(at: removedIndex) }
             do {
                 try await deleteFavorite(cardId)
+                return true
             } catch {
                 cardIds.insert(cardId)
                 if let removedItem {
@@ -74,14 +78,17 @@ final class FavoritesStore {
                         items.append(removedItem)
                     }
                 }
+                return false
             }
         } else {
             cardIds.insert(cardId)
             do {
                 try await putFavorite(cardId)
                 try? await load()
+                return true
             } catch {
                 cardIds.remove(cardId)
+                return false
             }
         }
     }

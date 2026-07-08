@@ -3,7 +3,8 @@ import XCTest
 
 /// FavoritesStore 契约：items（列表展示用）与 cardIds（CardDetailView 书签态判定用）由 load()/toggle()
 /// 统一维护；toggle 乐观翻转 cardIds，失败按单个 cardId 手术式回滚（不整体快照/恢复两个容器，
-/// 避免抹掉并发的另一次 toggle 的写入）；reset 登出清空两容器。
+/// 避免抹掉并发的另一次 toggle 的写入）并返回 false——调用方据此向用户呈现失败（M2 全局规则：
+/// 仅浏览打点允许静默，用户主动操作失败必须可见）；reset 登出清空两容器。
 /// 测试缝：init(fetchFavorites:putFavorite:deleteFavorite:) 注入三个假执行闭包，不发真实网络请求。
 final class FavoritesStoreTests: XCTestCase {
     private func sample(_ cardId: String = "c1") -> FavoriteItem {
@@ -58,8 +59,9 @@ final class FavoritesStoreTests: XCTestCase {
             },
             deleteFavorite: { _ in })
 
-        await store.toggle(cardId: "c1")
+        let succeeded = await store.toggle(cardId: "c1")
 
+        XCTAssertFalse(succeeded, "失败应向调用方返回 false（供界面呈现错误条）")
         XCTAssertTrue(cardIdsSeenDuringRequest.contains("c1"), "PUT 发出时应已乐观加入 cardIds")
         XCTAssertFalse(store.cardIds.contains("c1"), "失败后应回滚移除")
         XCTAssertTrue(store.items.isEmpty, "加入方向本就未曾写入 items，回滚不应产生变化")
@@ -72,12 +74,28 @@ final class FavoritesStoreTests: XCTestCase {
             putFavorite: { _ in }, // 成功
             deleteFavorite: { _ in })
 
-        await store.toggle(cardId: "c1")
+        let succeeded = await store.toggle(cardId: "c1")
 
+        XCTAssertTrue(succeeded)
         XCTAssertEqual(store.cardIds, ["c1"])
         // 本地无法合成完整 FavoriteItem（缺标题/分类/地点等服务端字段），PUT 成功后 best-effort 重新
         // load() 补全 items——验证这条自愈路径确实发生。
         XCTAssertEqual(store.items.map(\.cardId), ["c1"])
+    }
+
+    /// PUT 成功但紧随其后的 best-effort items 重取失败：收藏本身已成立，不得向用户误报失败。
+    @MainActor
+    func testToggleAddStillReturnsTrueWhenBackfillReloadFails() async {
+        struct Boom: Error {}
+        let store = FavoritesStore(
+            fetchFavorites: { throw Boom() },
+            putFavorite: { _ in }, // PUT 成功
+            deleteFavorite: { _ in })
+
+        let succeeded = await store.toggle(cardId: "c1")
+
+        XCTAssertTrue(succeeded, "重取 items 失败不应改写 toggle 本身成功的结论")
+        XCTAssertEqual(store.cardIds, ["c1"])
     }
 
     // MARK: - toggle() 移除方向
@@ -98,8 +116,9 @@ final class FavoritesStoreTests: XCTestCase {
         try await store.load()
         XCTAssertTrue(store.cardIds.contains("c1")) // 前置条件：已收藏
 
-        await store.toggle(cardId: "c1")
+        let succeeded = await store.toggle(cardId: "c1")
 
+        XCTAssertFalse(succeeded, "失败应向调用方返回 false（供界面呈现错误条）")
         XCTAssertFalse(cardIdsSeenDuringRequest.contains("c1"), "DELETE 发出时应已乐观移除 cardIds")
         XCTAssertTrue(store.cardIds.contains("c1"), "失败后应回滚恢复")
         XCTAssertEqual(store.items.map(\.cardId), ["c1"], "items 应恢复原样")
@@ -117,8 +136,9 @@ final class FavoritesStoreTests: XCTestCase {
             deleteFavorite: { cardId in if cardId == "c2" { throw Boom() } })
         try await store.load()
 
-        await store.toggle(cardId: "c2")
+        let succeeded = await store.toggle(cardId: "c2")
 
+        XCTAssertFalse(succeeded)
         XCTAssertEqual(store.cardIds, ["c1", "c2", "c3"])
         XCTAssertEqual(store.items.map(\.cardId), ["c1", "c2", "c3"], "回滚应把 c2 插回原下标，兄弟项顺序不变")
     }
@@ -130,8 +150,9 @@ final class FavoritesStoreTests: XCTestCase {
             putFavorite: { _ in }, deleteFavorite: { _ in })
         try await store.load()
 
-        await store.toggle(cardId: "c1")
+        let succeeded = await store.toggle(cardId: "c1")
 
+        XCTAssertTrue(succeeded)
         XCTAssertTrue(store.cardIds.isEmpty)
         XCTAssertTrue(store.items.isEmpty)
     }
