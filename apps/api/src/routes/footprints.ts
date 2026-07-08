@@ -1,6 +1,27 @@
 import type { FastifyInstance } from "fastify";
+import type { Prisma } from "@zhixing/db";
 import { z } from "zod";
 import { requireUser } from "../auth.js";
+
+/**
+ * 依据旅程剩余成员重算去规范化的 start/end；无成员则删除该 Trip。
+ * 必须在事务内调用（与触发它的足迹增删改同一事务），保持范围/空态一致。
+ */
+async function recomputeTripRange(tx: Prisma.TransactionClient, tripId: string) {
+  const members = await tx.footprint.findMany({
+    where: { tripId },
+    select: { date: true },
+  });
+  if (members.length === 0) {
+    await tx.trip.delete({ where: { id: tripId } });
+    return;
+  }
+  const times = members.map((m) => m.date.getTime());
+  await tx.trip.update({
+    where: { id: tripId },
+    data: { startDate: new Date(Math.min(...times)), endDate: new Date(Math.max(...times)) },
+  });
+}
 
 const createSchema = z.object({
   placeId: z.string(),
@@ -94,16 +115,25 @@ export async function footprintsRoutes(app: FastifyInstance) {
       publicRequestedAt = new Date();
     }
 
-    const footprint = await app.prisma.footprint.update({
-      where: { id },
-      data: {
-        text,
-        date: date !== undefined ? new Date(date) : undefined,
-        visibility,
-        reviewStatus,
-        publicRequestedAt,
-      },
-      include: includeShape,
+    // I1b：改了成员日期须重算所属旅程范围；与更新同一事务保证一致。
+    const dateChanged =
+      date !== undefined && new Date(date).getTime() !== existing.date.getTime();
+    const footprint = await app.prisma.$transaction(async (tx) => {
+      const updated = await tx.footprint.update({
+        where: { id },
+        data: {
+          text,
+          date: date !== undefined ? new Date(date) : undefined,
+          visibility,
+          reviewStatus,
+          publicRequestedAt,
+        },
+        include: includeShape,
+      });
+      if (dateChanged && existing.tripId) {
+        await recomputeTripRange(tx, existing.tripId);
+      }
+      return updated;
     });
     return reply.code(200).send(footprint);
   });
@@ -124,7 +154,14 @@ export async function footprintsRoutes(app: FastifyInstance) {
     if (!footprint || footprint.userId !== req.userId) {
       return reply.code(404).send({ error: "not_found" });
     }
-    await app.prisma.footprint.delete({ where: { id } }); // photos 级联删除
+    const tripId = footprint.tripId;
+    await app.prisma.$transaction(async (tx) => {
+      await tx.footprint.delete({ where: { id } }); // photos 级联删除
+      if (tripId) {
+        // I1a：删掉的是旅程成员 → 用剩余成员重算 start/end；无成员则删掉 Trip 本身。
+        await recomputeTripRange(tx, tripId);
+      }
+    });
     app.storage.remove(footprint.photos.map((p) => p.mediaUrl)).catch(() => {
       app.log.warn({ id }, "storage cleanup failed");
     });

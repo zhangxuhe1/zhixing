@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth.js";
 import { PUBLICLY_VISIBLE } from "../visibility.js";
+import { cstParts } from "../time.js";
 
 const storiesQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -50,10 +51,9 @@ async function likedFootprintIdsFor(app: FastifyInstance, userId: string, footpr
   return new Set(likes.map((l) => l.footprintId));
 }
 
-/** 3-5 春 / 6-8 夏 / 9-11 秋 / 12-2 冬；年取足迹日期年份（12 月不跨年归下一年冬） */
+/** 3-5 春 / 6-8 夏 / 9-11 秋 / 12-2 冬；年取足迹日期年份（12 月不跨年归下一年冬）。按 CST 日历分桶。 */
 function seasonLabel(date: Date): { year: number; seasonRank: number; label: string } {
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth() + 1;
+  const { y: year, m: month } = cstParts(date);
   if (month >= 3 && month <= 5) return { year, seasonRank: 0, label: `${year}·春` };
   if (month >= 6 && month <= 8) return { year, seasonRank: 1, label: `${year}·夏` };
   if (month >= 9 && month <= 11) return { year, seasonRank: 2, label: `${year}·秋` };
@@ -72,8 +72,10 @@ export async function publicRoutes(app: FastifyInstance) {
     const limit = q.data.limit ?? 20;
     let cursorFootprint: { date: Date; id: string } | null = null;
     if (q.data.cursor) {
-      cursorFootprint = await app.prisma.footprint.findUnique({
-        where: { id: q.data.cursor },
+      // 游标须是本地点下的可见足迹，否则会沦为存在性/日期探测 oracle（可探任意 id，含撤回私密）。
+      // 不匹配则当作无游标（回首页），对外无法区分"错游标"与"首页"。
+      cursorFootprint = await app.prisma.footprint.findFirst({
+        where: { id: q.data.cursor, placeId: id, ...PUBLICLY_VISIBLE },
         select: { date: true, id: true },
       });
     }
@@ -112,7 +114,8 @@ export async function publicRoutes(app: FastifyInstance) {
     if (!place) return reply.code(404).send({ error: "not_found" });
 
     const rows = await app.prisma.footprint.findMany({
-      where: { placeId: id, ...PUBLICLY_VISIBLE },
+      // M1：只取有照片的足迹，避免纯文字足迹产出空分组 { label, photos: [] }。
+      where: { placeId: id, ...PUBLICLY_VISIBLE, photos: { some: {} } },
       orderBy: [{ date: "desc" }, { id: "desc" }],
       select: {
         id: true,
@@ -147,11 +150,12 @@ export async function publicRoutes(app: FastifyInstance) {
 
   app.get("/stories/:footprintId", { preHandler: requireUser }, async (req, reply) => {
     const { footprintId } = req.params as { footprintId: string };
-    const fp = await app.prisma.footprint.findUnique({
-      where: { id: footprintId },
-      select: { ...footprintSelect, visibility: true, reviewStatus: true },
+    // 可见性判据走单一来源 PUBLICLY_VISIBLE，不再手写 visibility/reviewStatus 条件。
+    const fp = await app.prisma.footprint.findFirst({
+      where: { id: footprintId, ...PUBLICLY_VISIBLE },
+      select: footprintSelect,
     });
-    if (!fp || fp.visibility !== "PUBLIC" || fp.reviewStatus !== "APPROVED") {
+    if (!fp) {
       return reply.code(404).send({ error: "not_found" });
     }
     const likedIds = await likedFootprintIdsFor(app, req.userId, [fp.id]);

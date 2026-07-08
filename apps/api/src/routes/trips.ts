@@ -14,6 +14,9 @@ const patchSchema = z.object({
   removeFootprintIds: z.array(z.string()).optional(),
 });
 
+/** 事务内认领足迹失败的哨兵错误：捕获后回滚并返回 400 invalid_footprints。 */
+class InvalidFootprintsError extends Error {}
+
 type PlaceNode = { id: string; parentId: string | null; level: string; name: string };
 
 /** 沿 place.parentId 链找 CITY 级祖先；无则回退自身 id/name。 */
@@ -67,30 +70,46 @@ export async function tripsRoutes(app: FastifyInstance) {
     const body = postSchema.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body", detail: body.error.flatten() });
 
-    const footprints = await app.prisma.footprint.findMany({
-      where: { id: { in: body.data.footprintIds } },
-      select: { id: true, userId: true, tripId: true, date: true },
-    });
-    const valid =
-      footprints.length === body.data.footprintIds.length &&
-      footprints.every((fp) => fp.userId === req.userId && fp.tripId === null);
-    if (!valid) return reply.code(400).send({ error: "invalid_footprints" });
-
-    const startDate = new Date(Math.min(...footprints.map((fp) => fp.date.getTime())));
-    const endDate = new Date(Math.max(...footprints.map((fp) => fp.date.getTime())));
-
-    const trip = await app.prisma.trip.create({
-      data: {
-        userId: req.userId,
-        title: body.data.title,
-        startDate,
-        endDate,
-        footprints: { connect: body.data.footprintIds.map((id) => ({ id })) },
-      },
-      include: { footprints: { select: { id: true } } },
-    });
-
-    return reply.code(201).send(tripDTO(trip));
+    // I2：事务内"认领"——先建空壳 Trip，再用 updateMany 原子占有满足
+    // (属主本人 且 未归属) 的足迹；认领数 != 目标数 即抛错回滚 → 400。
+    // 消除 read-validate-then-connect 竞态（并发/重复占用不会重复归属）。
+    const ids = body.data.footprintIds;
+    try {
+      const trip = await app.prisma.$transaction(async (tx) => {
+        const shell = await tx.trip.create({
+          data: {
+            userId: req.userId,
+            title: body.data.title,
+            // 占位；认领后用真实成员日期回填。
+            startDate: new Date(0),
+            endDate: new Date(0),
+          },
+        });
+        const claimed = await tx.footprint.updateMany({
+          where: { id: { in: ids }, userId: req.userId, tripId: null },
+          data: { tripId: shell.id },
+        });
+        if (claimed.count !== ids.length) {
+          throw new InvalidFootprintsError();
+        }
+        const members = await tx.footprint.findMany({
+          where: { tripId: shell.id },
+          select: { date: true },
+        });
+        const times = members.map((m) => m.date.getTime());
+        return tx.trip.update({
+          where: { id: shell.id },
+          data: { startDate: new Date(Math.min(...times)), endDate: new Date(Math.max(...times)) },
+          include: { footprints: { select: { id: true } } },
+        });
+      });
+      return reply.code(201).send(tripDTO(trip));
+    } catch (err) {
+      if (err instanceof InvalidFootprintsError) {
+        return reply.code(400).send({ error: "invalid_footprints" });
+      }
+      throw err;
+    }
   });
 
   app.get("/me/trips", { preHandler: requireUser }, async (req) => {
@@ -118,47 +137,55 @@ export async function tripsRoutes(app: FastifyInstance) {
     const addIds = body.data.addFootprintIds ?? [];
     const removeIds = body.data.removeFootprintIds ?? [];
 
-    if (addIds.length > 0) {
-      const toAdd = await app.prisma.footprint.findMany({
-        where: { id: { in: addIds } },
-        select: { id: true, userId: true, tripId: true },
-      });
-      const valid =
-        toAdd.length === addIds.length &&
-        toAdd.every((fp) => fp.userId === req.userId && fp.tripId === null);
-      if (!valid) return reply.code(400).send({ error: "invalid_footprints" });
-    }
-
-    const currentIds = new Set(existing.footprints.map((fp) => fp.id));
-    for (const rid of removeIds) currentIds.delete(rid);
-    for (const aid of addIds) currentIds.add(aid);
-
-    if (currentIds.size === 0) {
+    // 预判空态：现有成员 - 移除 + 新增（去重）。空则直接 400，不进事务。
+    const projected = new Set(existing.footprints.map((fp) => fp.id));
+    for (const rid of removeIds) projected.delete(rid);
+    for (const aid of addIds) projected.add(aid);
+    if (projected.size === 0) {
       return reply.code(400).send({ error: "would_be_empty" });
     }
 
-    const memberDates = await app.prisma.footprint.findMany({
-      where: { id: { in: [...currentIds] } },
-      select: { date: true },
-    });
-    const startDate = new Date(Math.min(...memberDates.map((fp) => fp.date.getTime())));
-    const endDate = new Date(Math.max(...memberDates.map((fp) => fp.date.getTime())));
-
-    const trip = await app.prisma.trip.update({
-      where: { id },
-      data: {
-        title: body.data.title,
-        startDate,
-        endDate,
-        footprints: {
-          disconnect: removeIds.map((rid) => ({ id: rid })),
-          connect: addIds.map((aid) => ({ id: aid })),
-        },
-      },
-      include: { footprints: { select: { id: true } } },
-    });
-
-    return reply.code(200).send(tripDTO(trip));
+    try {
+      // I2：add 路径同样用事务内 updateMany 认领，消除 validate-then-connect 竞态。
+      const trip = await app.prisma.$transaction(async (tx) => {
+        if (removeIds.length > 0) {
+          // 只解绑本旅程下的成员，避免误动他人/他程足迹。
+          await tx.footprint.updateMany({
+            where: { id: { in: removeIds }, tripId: id },
+            data: { tripId: null },
+          });
+        }
+        if (addIds.length > 0) {
+          const claimed = await tx.footprint.updateMany({
+            where: { id: { in: addIds }, userId: req.userId, tripId: null },
+            data: { tripId: id },
+          });
+          if (claimed.count !== addIds.length) {
+            throw new InvalidFootprintsError();
+          }
+        }
+        const members = await tx.footprint.findMany({
+          where: { tripId: id },
+          select: { date: true },
+        });
+        const times = members.map((m) => m.date.getTime());
+        return tx.trip.update({
+          where: { id },
+          data: {
+            title: body.data.title,
+            startDate: new Date(Math.min(...times)),
+            endDate: new Date(Math.max(...times)),
+          },
+          include: { footprints: { select: { id: true } } },
+        });
+      });
+      return reply.code(200).send(tripDTO(trip));
+    } catch (err) {
+      if (err instanceof InvalidFootprintsError) {
+        return reply.code(400).send({ error: "invalid_footprints" });
+      }
+      throw err;
+    }
   });
 
   app.delete("/me/trips/:id", { preHandler: requireUser }, async (req, reply) => {

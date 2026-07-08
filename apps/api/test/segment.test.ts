@@ -225,3 +225,36 @@ test("startDate/endDate 为组内实际最早/最晚 Date", () => {
   expect(result[0].startDate).toEqual(d("2024-05-01T20:00:00.000Z"));
   expect(result[0].endDate).toEqual(d("2024-05-03T08:00:00.000Z"));
 });
+
+test("CST 日界：22:00Z(=次日06:00 CST) 与其 CST 同日足迹归同一日历日做 gap 聚类与年月标题", () => {
+  // 2024-05-31T22:00Z = 2024-06-01 06:00 CST → 该足迹应按 6/1 参与聚类与标题（2024年6月）。
+  // 同组配一条 5/31 22:30Z(=6/1 06:30 CST)，两者同为 CST 6/1，日差=0 必同组。
+  const input: SegmentInput[] = [
+    fp("a", "2024-05-31T22:00:00.000Z", "jinan", "济南"),
+    fp("b", "2024-05-31T22:30:00.000Z", "jinan", "济南"),
+  ];
+  const result = segmentTrips(input);
+  expect(result).toHaveLength(1);
+  expect(result[0].footprintIds.sort()).toEqual(["a", "b"]);
+  // 标题按 CST：起始日 CST 为 2024/6 → 2024年6月（UTC 语义会误判成 5 月）
+  expect(result[0].suggestedTitle).toBe("济南·2024年6月");
+});
+
+test("M4 ≥7 门槛用全局去重日：4 日历日 × 2 城/日（8 城·日）→ 全局 4<7 不排常驻", () => {
+  // 4 个日历日，每天两座城市各一条 → 每城 dedupDays=4，城·日合计 8；
+  // 但全局去重日历日 = 4 < 7，不触发常驻排除，两城都应参与成行。
+  const input: SegmentInput[] = [
+    fp("a1", "2024-05-01T06:00:00.000Z", "jinan", "济南"),
+    fp("b1", "2024-05-01T07:00:00.000Z", "qingdao", "青岛"),
+    fp("a2", "2024-05-02T06:00:00.000Z", "jinan", "济南"),
+    fp("b2", "2024-05-02T07:00:00.000Z", "qingdao", "青岛"),
+    fp("a3", "2024-05-03T06:00:00.000Z", "jinan", "济南"),
+    fp("b3", "2024-05-03T07:00:00.000Z", "qingdao", "青岛"),
+    fp("a4", "2024-05-04T06:00:00.000Z", "jinan", "济南"),
+    fp("b4", "2024-05-04T07:00:00.000Z", "qingdao", "青岛"),
+  ];
+  const result = segmentTrips(input);
+  const allIds = result.flatMap((t) => t.footprintIds).sort();
+  // 无常驻排除：8 条全部在同一连续日历段内成一组。
+  expect(allIds).toEqual(["a1", "a2", "a3", "a4", "b1", "b2", "b3", "b4"]);
+});

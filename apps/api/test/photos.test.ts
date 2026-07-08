@@ -119,9 +119,69 @@ test("photos 授权矩阵：陌生人 + 私密 → 404；陌生人 + PUBLIC+APPR
     method: "POST", url: `/footprints/${publicFp.id}/photos`,
     headers: { ...alice.headers, ...mpPublic.headers }, payload: mpPublic.payload,
   });
+  // C1：上传照片使公开态足迹回 PENDING（内容变更须重审）；模拟管理员再次通过后陌生人才可读图。
+  await app.prisma.footprint.update({
+    where: { id: publicFp.id }, data: { reviewStatus: "APPROVED" },
+  });
   const publicGet = await app.inject({
     method: "GET", url: `/photos/${publicUp.json().id}`, headers: bob.headers,
   });
   expect(publicGet.statusCode).toBe(200);
   expect(publicGet.json().url).toBeTruthy();
+});
+
+test("C1：向 PUBLIC+APPROVED 足迹上传照片 → 回 PENDING 且从公开 stories 消失", async () => {
+  const alice = await userAuth(app, "aliceC1");
+  const viewer = await userAuth(app, "viewerC1");
+  const place = await app.prisma.place.create({
+    data: { name: "审核绕过测试地", level: "DISTRICT", lat: 2, lng: 2 },
+  });
+  const fp = await app.prisma.footprint.create({
+    data: {
+      userId: alice.user.id, placeId: place.id, date: new Date("2026-05-01T10:00:00.000Z"),
+      visibility: "PUBLIC", reviewStatus: "APPROVED", publicRequestedAt: new Date("2020-01-01T00:00:00.000Z"),
+      text: "已过审的公开故事",
+    },
+  });
+
+  // 上传前：出现在公开 stories。
+  const before = await app.inject({
+    method: "GET", url: `/places/${place.id}/stories`, headers: viewer.headers,
+  });
+  expect(before.json().items.map((i: { footprintId: string }) => i.footprintId)).toContain(fp.id);
+
+  const mp = multipartPayload({}, PNG_1PX, "image/png");
+  const up = await app.inject({
+    method: "POST", url: `/footprints/${fp.id}/photos`,
+    headers: { ...alice.headers, ...mp.headers }, payload: mp.payload,
+  });
+  expect(up.statusCode).toBe(201);
+
+  // 库里状态回 PENDING，publicRequestedAt 被刷新。
+  const row = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fp.id } });
+  expect(row.reviewStatus).toBe("PENDING");
+  expect(row.publicRequestedAt!.getTime()).toBeGreaterThan(new Date("2020-01-01T00:00:00.000Z").getTime());
+
+  // 不再出现在公开 stories。
+  const after = await app.inject({
+    method: "GET", url: `/places/${place.id}/stories`, headers: viewer.headers,
+  });
+  expect(after.json().items.map((i: { footprintId: string }) => i.footprintId)).not.toContain(fp.id);
+});
+
+test("C1：私密足迹上传照片不改状态（reviewStatus 原样保留）", async () => {
+  const alice = await userAuth(app, "alicePriv");
+  const fpId = await makeFootprint(alice.headers); // 默认 PRIVATE
+  const before = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fpId } });
+
+  const mp = multipartPayload({}, PNG_1PX, "image/png");
+  const up = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...alice.headers, ...mp.headers }, payload: mp.payload,
+  });
+  expect(up.statusCode).toBe(201);
+
+  const after = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fpId } });
+  expect(after.reviewStatus).toBe(before.reviewStatus);
+  expect(after.publicRequestedAt).toEqual(before.publicRequestedAt);
 });

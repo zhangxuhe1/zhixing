@@ -1,3 +1,5 @@
+import { cstDayKey, cstParts } from "../time.js";
+
 export type SegmentInput = {
   footprintId: string;
   date: Date;
@@ -14,13 +16,8 @@ export type TripSuggestion = {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** UTC 日期字符串（YYYY-MM-DD），用于按日粒度去重/比较，避免时区抖动。 */
-function utcDayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-/** 由 UTC 日期字符串计算相对天数序号，用于计算日历日差。 */
-function utcDayOrdinal(dayKey: string): number {
+/** 由 CST 日期字符串计算相对天数序号，用于计算日历日差。 */
+function dayOrdinal(dayKey: string): number {
   return Date.UTC(
     Number(dayKey.slice(0, 4)),
     Number(dayKey.slice(5, 7)) - 1,
@@ -41,12 +38,15 @@ export function segmentTrips(footprints: SegmentInput[]): TripSuggestion[] {
 
   type CityStat = { cityKey: string; dedupDays: number; total: number };
   const cityStats: CityStat[] = [];
-  let totalDedupDays = 0;
   for (const [cityKey, list] of byCity) {
-    const days = new Set(list.map((fp) => utcDayKey(fp.date)));
+    const days = new Set(list.map((fp) => cstDayKey(fp.date)));
     cityStats.push({ cityKey, dedupDays: days.size, total: list.length });
-    totalDedupDays += days.size;
   }
+
+  // ≥7 门槛用"足迹总天数"= 全局去重日历日（一天多城不重复计），
+  // 与 spec 一致；per-city dedupDays 仅用于挑选常驻城市。
+  const globalDays = new Set(footprints.map((fp) => cstDayKey(fp.date)));
+  const totalDedupDays = globalDays.size;
 
   let working = footprints;
   if (totalDedupDays >= 7) {
@@ -66,18 +66,18 @@ export function segmentTrips(footprints: SegmentInput[]): TripSuggestion[] {
 
   const groups: SegmentInput[][] = [];
   let current: SegmentInput[] = [sorted[0]];
-  let currentDayOrdinal = utcDayOrdinal(utcDayKey(sorted[0].date));
+  let currentDayOrdinal = dayOrdinal(cstDayKey(sorted[0].date));
 
   for (let i = 1; i < sorted.length; i++) {
     const fp = sorted[i];
-    const dayOrdinal = utcDayOrdinal(utcDayKey(fp.date));
-    if (dayOrdinal - currentDayOrdinal <= 2) {
+    const ord = dayOrdinal(cstDayKey(fp.date));
+    if (ord - currentDayOrdinal <= 2) {
       current.push(fp);
     } else {
       groups.push(current);
       current = [fp];
     }
-    currentDayOrdinal = dayOrdinal;
+    currentDayOrdinal = ord;
   }
   groups.push(current);
 
@@ -110,8 +110,7 @@ export function segmentTrips(footprints: SegmentInput[]): TripSuggestion[] {
       cityPart = `${seenCities.slice(0, 2).join("·")}等${seenCities.length}地`;
     }
 
-    const year = startDate.getUTCFullYear();
-    const month = startDate.getUTCMonth() + 1;
+    const { y: year, m: month } = cstParts(startDate);
     const suggestedTitle = `${cityPart}·${year}年${month}月`;
 
     trips.push({

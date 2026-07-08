@@ -344,3 +344,128 @@ test("GET /app-config 返回非空 URL 字符串，无需鉴权", async () => {
   expect(typeof res.json().shareLandingUrl).toBe("string");
   expect(res.json().shareLandingUrl.length).toBeGreaterThan(0);
 });
+
+test("I1a：删除两成员之一 → 旅程范围收缩到剩余成员", async () => {
+  const { jinan } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const fp1 = await createFootprint(headers, jinan.id, "2026-05-01T08:00:00.000Z");
+  const fp2 = await createFootprint(headers, jinan.id, "2026-05-10T08:00:00.000Z");
+  const created = await app.inject({
+    method: "POST", url: "/me/trips", headers,
+    payload: { title: "旅程", footprintIds: [fp1.id, fp2.id] },
+  });
+  const tripId = created.json().id;
+  expect(created.json().startDate).toBe("2026-05-01T08:00:00.000Z");
+  expect(created.json().endDate).toBe("2026-05-10T08:00:00.000Z");
+
+  // 删掉最早的成员 → 范围两端都应变成剩余成员 fp2 的日期。
+  const del = await app.inject({ method: "DELETE", url: `/footprints/${fp1.id}`, headers });
+  expect(del.statusCode).toBe(204);
+
+  const trip = await app.prisma.trip.findUniqueOrThrow({ where: { id: tripId } });
+  expect(trip.startDate.toISOString()).toBe("2026-05-10T08:00:00.000Z");
+  expect(trip.endDate.toISOString()).toBe("2026-05-10T08:00:00.000Z");
+});
+
+test("I1a：删除最后一个成员 → 旅程被删除", async () => {
+  const { jinan } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const fp1 = await createFootprint(headers, jinan.id, "2026-05-01T08:00:00.000Z");
+  const fp2 = await createFootprint(headers, jinan.id, "2026-05-02T08:00:00.000Z");
+  const created = await app.inject({
+    method: "POST", url: "/me/trips", headers,
+    payload: { title: "旅程", footprintIds: [fp1.id, fp2.id] },
+  });
+  const tripId = created.json().id;
+
+  await app.inject({ method: "DELETE", url: `/footprints/${fp1.id}`, headers });
+  // 删到最后一个 → Trip 应随之消失。
+  await app.inject({ method: "DELETE", url: `/footprints/${fp2.id}`, headers });
+
+  expect(await app.prisma.trip.findUnique({ where: { id: tripId } })).toBeNull();
+  const list = await app.inject({ method: "GET", url: "/me/trips", headers });
+  expect(list.json().items).toHaveLength(0);
+});
+
+test("I1b：PATCH 成员日期越出原范围 → 旅程范围扩展", async () => {
+  const { jinan } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const fp1 = await createFootprint(headers, jinan.id, "2026-05-01T08:00:00.000Z");
+  const fp2 = await createFootprint(headers, jinan.id, "2026-05-02T08:00:00.000Z");
+  const created = await app.inject({
+    method: "POST", url: "/me/trips", headers,
+    payload: { title: "旅程", footprintIds: [fp1.id, fp2.id] },
+  });
+  const tripId = created.json().id;
+  expect(created.json().endDate).toBe("2026-05-02T08:00:00.000Z");
+
+  // 把 fp2 日期改到远超原 endDate → 旅程 endDate 应随之扩展。
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${fp2.id}`, headers,
+    payload: { date: "2026-05-20T08:00:00.000Z" },
+  });
+  expect(patched.statusCode).toBe(200);
+
+  const trip = await app.prisma.trip.findUniqueOrThrow({ where: { id: tripId } });
+  expect(trip.startDate.toISOString()).toBe("2026-05-01T08:00:00.000Z");
+  expect(trip.endDate.toISOString()).toBe("2026-05-20T08:00:00.000Z");
+});
+
+test("I1b：改非成员足迹日期不误伤任何旅程", async () => {
+  const { jinan } = await seedPlaces();
+  const { headers } = await userAuth(app);
+  const fp1 = await createFootprint(headers, jinan.id, "2026-05-01T08:00:00.000Z");
+  const fp2 = await createFootprint(headers, jinan.id, "2026-05-02T08:00:00.000Z");
+  const loose = await createFootprint(headers, jinan.id, "2026-05-03T08:00:00.000Z");
+  const created = await app.inject({
+    method: "POST", url: "/me/trips", headers,
+    payload: { title: "旅程", footprintIds: [fp1.id, fp2.id] },
+  });
+  const tripId = created.json().id;
+
+  const patched = await app.inject({
+    method: "PATCH", url: `/footprints/${loose.id}`, headers,
+    payload: { date: "2026-09-09T08:00:00.000Z" },
+  });
+  expect(patched.statusCode).toBe(200);
+
+  const trip = await app.prisma.trip.findUniqueOrThrow({ where: { id: tripId } });
+  expect(trip.startDate.toISOString()).toBe("2026-05-01T08:00:00.000Z");
+  expect(trip.endDate.toISOString()).toBe("2026-05-02T08:00:00.000Z");
+});
+
+test("I2：复用已归属足迹的第二次 POST 回滚 → 400，旅程 A 完好且无残留空壳 Trip", async () => {
+  const { jinan } = await seedPlaces();
+  const { headers, user } = await userAuth(app);
+  const fp1 = await createFootprint(headers, jinan.id, "2026-05-01T08:00:00.000Z");
+  const fp2 = await createFootprint(headers, jinan.id, "2026-05-02T08:00:00.000Z");
+
+  const created = await app.inject({
+    method: "POST", url: "/me/trips", headers,
+    payload: { title: "旅程 A", footprintIds: [fp1.id, fp2.id] },
+  });
+  expect(created.statusCode).toBe(201);
+  const tripId = created.json().id;
+
+  // 同一批足迹已被旅程 A 认领；第二次 POST 应在事务内认领失败并整体回滚。
+  const dup = await app.inject({
+    method: "POST", url: "/me/trips", headers,
+    payload: { title: "旅程 B", footprintIds: [fp1.id, fp2.id] },
+  });
+  expect(dup.statusCode).toBe(400);
+  expect(dup.json().error).toBe("invalid_footprints");
+
+  // 旅程 A 应完全不受影响：成员数、起止日期均保持不变。
+  const list = await app.inject({ method: "GET", url: "/me/trips", headers });
+  expect(list.json().items).toHaveLength(1);
+  expect(list.json().items[0]).toMatchObject({
+    id: tripId,
+    footprintCount: 2,
+    startDate: "2026-05-01T08:00:00.000Z",
+    endDate: "2026-05-02T08:00:00.000Z",
+  });
+
+  // 失败的认领必须整体回滚：不应残留一个认领失败的空壳 Trip 行。
+  const count = await app.prisma.trip.count({ where: { userId: user.id } });
+  expect(count).toBe(1);
+});

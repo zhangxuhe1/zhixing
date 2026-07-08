@@ -37,14 +37,26 @@ export async function photosRoutes(app: FastifyInstance) {
     const takenAt = fieldValue(data.fields, "takenAt");
     const lat = fieldValue(data.fields, "lat");
     const lng = fieldValue(data.fields, "lng");
-    const photo = await app.prisma.footprintPhoto.create({
-      data: {
-        footprintId: footprint.id,
-        mediaUrl: key,
-        takenAt: takenAt ? new Date(takenAt) : null,
-        lat: lat ? Number(lat) : null,
-        lng: lng ? Number(lng) : null,
-      },
+    // 公开态足迹新增照片 = 内容变更，须回审核队列（镜像 PATCH 改内容分支），
+    // 同一事务原子完成，防"审后偷加图"绕过审核直接上公开面。
+    const isPublic = footprint.visibility === PUBLICLY_VISIBLE.visibility;
+    const photo = await app.prisma.$transaction(async (tx) => {
+      const created = await tx.footprintPhoto.create({
+        data: {
+          footprintId: footprint.id,
+          mediaUrl: key,
+          takenAt: takenAt ? new Date(takenAt) : null,
+          lat: lat ? Number(lat) : null,
+          lng: lng ? Number(lng) : null,
+        },
+      });
+      if (isPublic) {
+        await tx.footprint.update({
+          where: { id: footprint.id },
+          data: { reviewStatus: "PENDING", publicRequestedAt: new Date() },
+        });
+      }
+      return created;
     });
     return reply.code(201).send({ id: photo.id, takenAt: photo.takenAt });
   });
