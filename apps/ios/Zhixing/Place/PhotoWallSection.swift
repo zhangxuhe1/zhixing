@@ -70,8 +70,13 @@ struct PhotoWallSection: View {
         Button {
             browseSession = BrowseSession(photos: flat, startIndex: flatIndex)
         } label: {
-            AuthedPhotoView(photoId: photo.photoId)
+            // 方图的尺寸权威必须是外框而非 AuthedPhotoView 自身：其 loaded 分支是 scaledToFill，
+            // 对 W×W 提案上报的是覆盖尺寸（如 4:3 图 → 1.33W×W）；直接 .aspectRatio(1,.fit) 只变换
+            // 提案、上报的仍是子视图的非方尺寸，.clipped() 在已超大的边界上等于没裁（评审修复）。
+            // Color.clear 按格宽上报方形提案，图作 overlay，溢出部分才真正被裁掉。
+            Color.clear
                 .aspectRatio(1, contentMode: .fit)
+                .overlay { AuthedPhotoView(photoId: photo.photoId) }
                 .clipped()
         }
         .buttonStyle(.plain)
@@ -178,6 +183,7 @@ private struct PhotoWallBrowser: View {
                     .frame(width: 36, height: 36)
                     .background(.thinMaterial, in: Circle())
             }
+            .accessibilityLabel("关闭")
             .padding()
         }
         .safeAreaInset(edge: .bottom) {
