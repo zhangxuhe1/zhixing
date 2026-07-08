@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import { createPrisma } from "@zhixing/db";
 import { remoteAppleJwks, type AppleJwks } from "./apple.js";
 import { config } from "./config.js";
+import { adminReviewRoutes } from "./routes/adminReview.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardsRoutes } from "./routes/cards.js";
 import { favoritesRoutes } from "./routes/favorites.js";
@@ -60,6 +61,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.register(favoritesRoutes);
   app.register(reportsRoutes);
   app.register(tripsRoutes);
+  app.register(adminReviewRoutes);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });

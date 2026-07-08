@@ -13,6 +13,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/places">地点库</Link>
           <Link href="/cards">风物卡</Link>
           <Link href="/search-misses">搜索缺失</Link>
+          <Link href="/review">审核队列</Link>
+          <Link href="/reports">卡片报错</Link>
           <TokenBar />
         </nav>
         <main>{children}</main>

@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "ZHIXING_DEV_AUTH=1 PORT=8799 pnpm -C apps/api dev"],
+      "port": 8799
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "NEXT_PUBLIC_API_URL=http://localhost:8799 pnpm -C apps/admin dev"],
+      "port": 3000
+    }
+  ]
+}
