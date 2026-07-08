@@ -6,7 +6,7 @@ struct PlaceDrawer: View {
     @State private var showComposer = false
     @State private var section: DrawerSection = .cards
 
-    /// 三段式 tab：风物卡（现状保留）/ 旅人故事（本任务）/ 旅人镜头（占位，I5 接入）。
+    /// 三段式 tab：风物卡（M1 落地）/ 旅人故事（I4）/ 旅人镜头（本任务，I5）。
     private enum DrawerSection: String, CaseIterable, Hashable {
         case cards = "风物卡"
         case stories = "旅人故事"
@@ -32,7 +32,7 @@ struct PlaceDrawer: View {
                 case .stories:
                     StoriesSection(placeId: pin.id, onComposeFootprint: { showComposer = true })
                 case .photos:
-                    photosPlaceholder
+                    PhotoWallSection(placeId: pin.id)
                 }
             }
             .navigationTitle(pin.name)
@@ -79,17 +79,6 @@ struct PlaceDrawer: View {
                 }
             }
         }
-    }
-
-    /// 旅人镜头照片墙由 I5 接入（PhotoWallSection）；此处占位，避免三段式提前落地时露出空白 tab。
-    private var photosPlaceholder: some View {
-        VStack {
-            Spacer()
-            Text("旅人镜头即将上线")
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
     }
 
     private func loadCards() async {
