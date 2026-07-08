@@ -16,9 +16,45 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { createPrisma, type Place as PlaceRow, type PrismaClient } from "../index.js";
+import { createPrisma, type PrismaClient } from "../index.js";
 import { createRng, type Rng } from "./rng.js";
 import { NICKNAMES, STORY_TEMPLATES, fillStory } from "./corpus.js";
+import {
+  SEED_PREFIX,
+  SIM_PREFIX,
+  VIEW_COUNT_MAX,
+  dateForDayIndex,
+  photoObjectKey,
+  type FootprintPlan,
+  type LikePlan,
+  type PhotoPlan,
+  type PlaceLite,
+  type ReviewStatus,
+  type SeedPlan,
+  type UserPlan,
+} from "./common.js";
+import {
+  DEV_APPLE_SUB,
+  DEV_NICKNAME,
+  planCardOps,
+  planDevAccount,
+  planSeedEngagement,
+  type CardLite,
+  type CardOpsPlan,
+  type DevAccountPlan,
+  type SeedEngagementPlan,
+} from "./extras.js";
+
+// 向后兼容再导出：计划类型与对象键约定历史上从本模块导出（seed.test.ts 等仍这样引用）
+export { photoObjectKey } from "./common.js";
+export type {
+  FootprintPlan,
+  LikePlan,
+  PhotoPlan,
+  PlaceLite,
+  SeedPlan,
+  UserPlan,
+} from "./common.js";
 
 // ---------------------------------------------------------------------------
 // env（与 apps/api、apps/pipeline 同款约定：自动加载仓库根 .env，不存在则跳过）
@@ -111,12 +147,13 @@ export class NoPlacesError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// wipe：按 appleSub startsWith "seed-" 找用户 → 收集足迹照片 → 删 MinIO 对象 →
-// 依序删 Like/CardReport/CardFavorite/Trip/FootprintPhoto/Footprint/User（尊重外键）。
-// 绝不触碰非 seed- 用户；DB 中没有 seed 数据时是安全的 no-op。
+// wipe：两条圈定线索——appleSub startsWith "seed-" 的用户（rich/sparse 档产物）与
+// id startsWith "sim-" 的行（--with-cards / --with-dev-account 扩展产物）。
+// 收集足迹照片 → 删 MinIO 对象 → 依序删 Like/CardReport/CardFavorite/FootprintPhoto/
+// Footprint/Trip/User（尊重外键）→ 全量校正 likeCount。
+// 绝不触碰非 seed 用户本体；dev 用户（simulator-dev）本体保留（模拟器会话还在用），
+// 只清其 sim- 从属数据。卡片状态不回滚（重跑 --with-cards 会得到相同结果，见 extras.ts）。
 // ---------------------------------------------------------------------------
-
-const SEED_PREFIX = "seed-";
 
 export async function wipeSeedData(
   prisma: PrismaClient,
@@ -127,10 +164,9 @@ export async function wipeSeedData(
     select: { id: true },
   });
   const userIds = seedUsers.map((u) => u.id);
-  if (userIds.length === 0) return { users: 0, footprints: 0, photos: 0 };
 
   const footprints = await prisma.footprint.findMany({
-    where: { userId: { in: userIds } },
+    where: { OR: [{ userId: { in: userIds } }, { id: { startsWith: SIM_PREFIX } }] },
     select: { id: true },
   });
   const footprintIds = footprints.map((f) => f.id);
@@ -141,17 +177,42 @@ export async function wipeSeedData(
   });
   await storage.remove(photos.map((p) => p.mediaUrl));
 
-  // 边界假设：seed 点赞只指向 seed 足迹（plan 保证）；dev-auth 环境下若有人以 seed-*
-  // 身份跨界点赞非 seed 足迹，wipe 删行不减其 likeCount——生产 devAuth 恒关，不可达。
   await prisma.like.deleteMany({
-    where: { OR: [{ userId: { in: userIds } }, { footprintId: { in: footprintIds } }] },
+    where: {
+      OR: [
+        { userId: { in: userIds } },
+        { footprintId: { in: footprintIds } },
+        { id: { startsWith: SIM_PREFIX } },
+      ],
+    },
   });
-  await prisma.cardReport.deleteMany({ where: { userId: { in: userIds } } });
-  await prisma.cardFavorite.deleteMany({ where: { userId: { in: userIds } } });
-  await prisma.trip.deleteMany({ where: { userId: { in: userIds } } });
+  await prisma.cardReport.deleteMany({
+    where: { OR: [{ userId: { in: userIds } }, { id: { startsWith: SIM_PREFIX } }] },
+  });
+  await prisma.cardFavorite.deleteMany({
+    where: { OR: [{ userId: { in: userIds } }, { id: { startsWith: SIM_PREFIX } }] },
+  });
   await prisma.footprintPhoto.deleteMany({ where: { footprintId: { in: footprintIds } } });
-  await prisma.footprint.deleteMany({ where: { userId: { in: userIds } } });
+  await prisma.footprint.deleteMany({ where: { id: { in: footprintIds } } });
+  await prisma.trip.deleteMany({
+    where: { OR: [{ userId: { in: userIds } }, { id: { startsWith: SIM_PREFIX } }] },
+  });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+
+  // 点赞行删除后全量校正 likeCount：seed 用户与 dev 账号互相点赞后，任何一侧被删
+  // 都可能在幸存足迹上留下偏差；一条 SQL 全表校正，seed 规模下开销可忽略。
+  // 注意这是"只清 seed 数据"契约的有意例外：可能改写非 seed 足迹的 likeCount，
+  // 但只朝正确值收敛（likeCount := 实际 Like 行数），已一致的行是 no-op。
+  await prisma.$executeRawUnsafe(`
+    UPDATE "Footprint" f SET "likeCount" = sub.n
+    FROM (
+      SELECT f2.id, COALESCE(l.n, 0) AS n
+      FROM "Footprint" f2
+      LEFT JOIN (SELECT "footprintId", count(*)::int AS n FROM "Like" GROUP BY "footprintId") l
+        ON l."footprintId" = f2.id
+    ) sub
+    WHERE f.id = sub.id AND f."likeCount" <> sub.n
+  `);
 
   return { users: userIds.length, footprints: footprintIds.length, photos: photos.length };
 }
@@ -160,70 +221,6 @@ export async function wipeSeedData(
 // 规划阶段（纯函数，不碰 DB/网络）：产出完整的写入计划，写入阶段照单全收即可。
 // 把"决定造什么"和"怎么落库"分离，既方便单测确定性，也让落库阶段能批量 createMany。
 // ---------------------------------------------------------------------------
-
-type Visibility = "PUBLIC" | "PRIVATE";
-type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
-
-export interface UserPlan {
-  id: string;
-  appleSub: string;
-  nickname: string;
-}
-
-export interface FootprintPlan {
-  id: string;
-  userId: string;
-  placeId: string;
-  placeLat: number;
-  placeLng: number;
-  text: string;
-  date: Date;
-  visibility: Visibility;
-  reviewStatus: ReviewStatus;
-  publicRequestedAt: Date | null;
-  viewCount: number;
-  likeCount: number;
-}
-
-export interface PhotoPlan {
-  id: string;
-  footprintId: string;
-  uuid: string;
-  assetIndex: number;
-  takenAt: Date;
-  lat: number;
-  lng: number;
-}
-
-export interface LikePlan {
-  id: string;
-  userId: string;
-  footprintId: string;
-}
-
-export interface SeedPlan {
-  users: UserPlan[];
-  footprints: FootprintPlan[];
-  photos: PhotoPlan[];
-  likes: LikePlan[];
-}
-
-export type PlaceLite = Pick<PlaceRow, "id" | "name" | "lat" | "lng">;
-
-/** photos/{footprintId}/{uuid}.jpg —— 与 apps/api/src/routes/photos.ts 的对象键约定一致。 */
-export function photoObjectKey(footprintId: string, uuid: string): string {
-  return `photos/${footprintId}/${uuid}.jpg`;
-}
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-/** 固定锚点（非当前时间）：保证同一份 Place 数据下，重跑 seed 产出逐字节相同的日期。 */
-const DAY0_UTC_MS = Date.UTC(2025, 0, 1);
-
-/** 第 dayIndex 天（从固定锚点起算）的 CST 10:00 时刻，即 UTC 02:00——契约要求的"旅行簇"日历语义。 */
-function dateForDayIndex(dayIndex: number): Date {
-  const midnightUtc = DAY0_UTC_MS + dayIndex * MS_PER_DAY;
-  return new Date(midnightUtc + 2 * 60 * 60 * 1000);
-}
 
 function storyText(rng: Rng, placeName: string): string {
   return fillStory(rng.pick(STORY_TEMPLATES), placeName);
@@ -288,8 +285,6 @@ function planUserTimeline(
   }
   return events;
 }
-
-const VIEW_COUNT_MAX = 200; // rich/sparse 共用：viewCount 随机上限
 
 const RICH_USER_COUNT = 30;
 const RICH_FOOTPRINT_MIN = 5;
@@ -485,6 +480,7 @@ async function applyPlan(
         publicRequestedAt: f.publicRequestedAt,
         viewCount: f.viewCount,
         likeCount: f.likeCount,
+        tripId: f.tripId ?? null,
       })),
     });
   }
@@ -526,11 +522,28 @@ export interface SeedStats {
   pendingFootprints: number;
   rejectedFootprints: number;
   likes: number;
+  // --with-cards 时填充
+  cardsReviewed?: number;
+  cardsRetired?: number;
+  cardReports?: number;
+  // --with-cards / --with-dev-account 任一开启即填充（两者的收藏合并计数）
+  cardFavorites?: number;
+  // --with-dev-account 时填充
+  devFootprints?: number;
+  devPhotos?: number;
+  devTrips?: number;
+  devLikes?: number;
 }
 
-function computeStats(profile: ProfileName, plan: SeedPlan): SeedStats {
+interface ExtrasPlans {
+  cardOps: CardOpsPlan | null;
+  engagement: SeedEngagementPlan | null;
+  devPlan: DevAccountPlan | null;
+}
+
+function computeStats(profile: ProfileName, plan: SeedPlan, extras: ExtrasPlans): SeedStats {
   const pub = plan.footprints.filter((f) => f.visibility === "PUBLIC");
-  return {
+  const stats: SeedStats = {
     profile,
     users: plan.users.length,
     footprints: plan.footprints.length,
@@ -541,20 +554,58 @@ function computeStats(profile: ProfileName, plan: SeedPlan): SeedStats {
     rejectedFootprints: pub.filter((f) => f.reviewStatus === "REJECTED").length,
     likes: plan.likes.length,
   };
+  if (extras.cardOps) {
+    stats.cardsReviewed = extras.cardOps.reviewedIds.length;
+    stats.cardsRetired = extras.cardOps.retiredIds.length;
+    stats.cardReports = extras.engagement?.reports.length ?? 0;
+  }
+  if (extras.engagement || extras.devPlan) {
+    stats.cardFavorites =
+      (extras.engagement?.favorites.length ?? 0) + (extras.devPlan?.favorites.length ?? 0);
+  }
+  if (extras.devPlan) {
+    stats.devFootprints = extras.devPlan.footprints.length;
+    stats.devPhotos = extras.devPlan.photos.length;
+    stats.devTrips = extras.devPlan.trips.length;
+    stats.devLikes = extras.devPlan.likesIn.length + extras.devPlan.likesOut.length;
+  }
+  return stats;
 }
 
 const SEED_RNG_SEED = 42;
 
+export interface SeedOptions {
+  assetsDir?: string;
+  /** 卡片状态多样化（REVIEWED/RETIRED）+ seed 用户的收藏与举报队列；库中无卡片时为提示性 no-op */
+  withCards?: boolean;
+  /** dev 账号（simulator-dev）个人数据：四种状态足迹、行程、未归组日期簇、照片、双向点赞、收藏 */
+  withDevAccount?: boolean;
+}
+
+/**
+ * 圈定"存活"卡片（收藏/举报只指向它们）：剔除本轮计划下架的，也剔除库中已经
+ * RETIRED 的——单独 --with-dev-account（无 cardOps）时后者是唯一的过滤线索。
+ */
+function aliveCards(
+  cards: (CardLite & { status: string })[],
+  ops: CardOpsPlan | null,
+): CardLite[] {
+  const retired = new Set(ops?.retiredIds ?? []);
+  return cards
+    .filter((c) => c.status !== "RETIRED" && !retired.has(c.id))
+    .map((c) => ({ id: c.id, placeId: c.placeId }));
+}
+
 /**
  * 种一档模拟数据：内部先 wipeSeedData() 再种（幂等，重复跑不累积），
  * 库中没有 Place 时抛 NoPlacesError。规划与落库分离，规划阶段是纯函数，
- * 同一份 Place 输入下逐字节确定（含对象存储 key）。
+ * 同一份 Place/Card 输入下逐字节确定（含对象存储 key）。
  */
 export async function seedProfile(
   prisma: PrismaClient,
   storage: SeedStorage,
   profile: ProfileName,
-  assetsDir: string = DEFAULT_ASSETS_DIR,
+  opts: SeedOptions = {},
 ): Promise<SeedStats> {
   await wipeSeedData(prisma, storage);
 
@@ -564,11 +615,118 @@ export async function seedProfile(
   });
   if (places.length === 0) throw new NoPlacesError();
 
-  const assets = loadSeedAssets(assetsDir);
+  const assets = loadSeedAssets(opts.assetsDir ?? DEFAULT_ASSETS_DIR);
   const rng = createRng(SEED_RNG_SEED);
   const plan = planProfile(profile, rng, places);
+
+  // 卡片按 id 稳定排序读取，且 planCardOps 的输入不过滤状态——它只看顺序与地点分组，
+  // 这样重跑时（部分卡已被上一轮标为 RETIRED）仍会选出同一批 id，保证幂等。
+  const cards: (CardLite & { status: string })[] =
+    opts.withCards || opts.withDevAccount
+      ? await prisma.card.findMany({
+          orderBy: { id: "asc" },
+          select: { id: true, placeId: true, status: true },
+        })
+      : [];
+
+  let cardOps: CardOpsPlan | null = null;
+  let engagement: SeedEngagementPlan | null = null;
+  if (opts.withCards) {
+    if (cards.length === 0) {
+      console.warn(
+        "库中没有 Card，--with-cards 跳过（先运行 pipeline 的 generate/batch 生成卡片）",
+      );
+    } else {
+      cardOps = planCardOps(cards);
+      engagement = planSeedEngagement(
+        rng,
+        aliveCards(cards, cardOps),
+        plan.users.map((u) => u.id),
+      );
+    }
+  }
+
+  let devPlan: DevAccountPlan | null = null;
+  let devUserId: string | null = null;
+  if (opts.withDevAccount) {
+    // dev 用户按 appleSub upsert，与 API 的 POST /auth/dev 同一判据：已存在（登录过）则
+    // 原样复用不重建；wipe 也不删它——模拟器里的会话 token 还指着这行。
+    const devUser = await prisma.user.upsert({
+      where: { appleSub: DEV_APPLE_SUB },
+      create: { id: `${SIM_PREFIX}dev-user`, appleSub: DEV_APPLE_SUB, nickname: DEV_NICKNAME },
+      update: {},
+    });
+    devUserId = devUser.id;
+    devPlan = planDevAccount(rng, {
+      devUserId,
+      places,
+      seedUsers: plan.users,
+      seedFootprints: plan.footprints,
+      cards: aliveCards(cards, cardOps),
+    });
+    // dev 点出的赞落在 seed 足迹上：落库前把目标行的 likeCount +1，
+    // 保持"likeCount 恒等于 Like 行数"的写入不变量（不靠事后 SQL 校正）。
+    const byId = new Map(plan.footprints.map((f) => [f.id, f]));
+    for (const like of devPlan.likesOut) byId.get(like.footprintId)!.likeCount += 1;
+  }
+
   await applyPlan(prisma, storage, plan, assets);
-  return computeStats(profile, plan);
+
+  if (cardOps) {
+    if (cardOps.reviewedIds.length > 0) {
+      await prisma.card.updateMany({
+        where: { id: { in: cardOps.reviewedIds } },
+        data: { status: "REVIEWED" },
+      });
+    }
+    if (cardOps.retiredIds.length > 0) {
+      await prisma.card.updateMany({
+        where: { id: { in: cardOps.retiredIds } },
+        data: { status: "RETIRED" },
+      });
+    }
+  }
+  if (engagement) {
+    if (engagement.favorites.length > 0) {
+      await prisma.cardFavorite.createMany({ data: engagement.favorites, skipDuplicates: true });
+    }
+    if (engagement.reports.length > 0) {
+      await prisma.cardReport.createMany({ data: engagement.reports });
+    }
+  }
+  if (devPlan && devUserId) {
+    // 行程先于足迹落库（Footprint.tripId 外键）
+    if (devPlan.trips.length > 0) {
+      await prisma.trip.createMany({
+        data: devPlan.trips.map((t) => ({
+          id: t.id,
+          userId: devUserId!,
+          title: t.title,
+          startDate: t.startDate,
+          endDate: t.endDate,
+        })),
+      });
+    }
+    await applyPlan(
+      prisma,
+      storage,
+      {
+        users: [], // dev 用户已 upsert，不走 createMany
+        footprints: devPlan.footprints,
+        photos: devPlan.photos,
+        likes: [...devPlan.likesIn, ...devPlan.likesOut],
+      },
+      assets,
+    );
+    // skipDuplicates：dev 在 App 里手动收藏过的行（cuid id，wipe 不删）与计划行撞
+    // (userId, cardId) 唯一约束时静默跳过——收藏状态收敛即可，不苛求行 id 归属。
+    // 注意点赞的 createMany 不能加 skipDuplicates：跳行会让预先 +1 的 likeCount 失真。
+    if (devPlan.favorites.length > 0) {
+      await prisma.cardFavorite.createMany({ data: devPlan.favorites, skipDuplicates: true });
+    }
+  }
+
+  return computeStats(profile, plan, { cardOps, engagement, devPlan });
 }
 
 // ---------------------------------------------------------------------------
@@ -578,32 +736,52 @@ export async function seedProfile(
 interface ParsedArgs {
   profile?: ProfileName;
   wipeOnly: boolean;
+  withCards: boolean;
+  withDevAccount: boolean;
   error?: string;
 }
 
 const USAGE =
-  "用法：pnpm -C packages/db seed --profile rich|sparse [--wipe]；或单独 pnpm -C packages/db seed --wipe 只清不种";
+  "用法：pnpm -C packages/db seed --profile rich|sparse [--with-cards] [--with-dev-account] [--wipe]；" +
+  "或单独 pnpm -C packages/db seed --wipe 只清不种";
 
 function parseCliArgs(argv: string[]): ParsedArgs {
   let profileRaw: string | undefined;
   let wipe = false;
+  let withCards = false;
+  let withDevAccount = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--profile") profileRaw = argv[++i];
     else if (argv[i] === "--wipe") wipe = true;
+    else if (argv[i] === "--with-cards") withCards = true;
+    else if (argv[i] === "--with-dev-account") withDevAccount = true;
   }
-  if (!profileRaw && !wipe) return { wipeOnly: false, error: USAGE };
+  const base = { wipeOnly: false, withCards, withDevAccount };
+  if (!profileRaw && !wipe) return { ...base, error: USAGE };
+  if (!profileRaw && (withCards || withDevAccount)) {
+    return { ...base, error: `--with-cards / --with-dev-account 需要与 --profile 同用\n${USAGE}` };
+  }
   if (profileRaw && profileRaw !== "rich" && profileRaw !== "sparse") {
-    return { wipeOnly: false, error: `未知 profile："${profileRaw}"（仅支持 rich|sparse）\n${USAGE}` };
+    return { ...base, error: `未知 profile："${profileRaw}"（仅支持 rich|sparse）\n${USAGE}` };
   }
-  return { profile: profileRaw as ProfileName | undefined, wipeOnly: !profileRaw };
+  return { ...base, profile: profileRaw as ProfileName | undefined, wipeOnly: !profileRaw };
 }
 
 function formatStats(stats: SeedStats): string {
-  return (
+  let out =
     `seed[${stats.profile}] 用户 ${stats.users}，足迹 ${stats.footprints}，照片 ${stats.photos}，` +
     `公开 ${stats.publicFootprints}（APPROVED ${stats.approvedFootprints} / PENDING ${stats.pendingFootprints} / REJECTED ${stats.rejectedFootprints}），` +
-    `点赞 ${stats.likes}`
-  );
+    `点赞 ${stats.likes}`;
+  if (stats.cardsReviewed !== undefined) {
+    out += `；卡片 REVIEWED ${stats.cardsReviewed} / RETIRED ${stats.cardsRetired}，举报 ${stats.cardReports}`;
+  }
+  if (stats.cardFavorites !== undefined) {
+    out += `，收藏 ${stats.cardFavorites}`;
+  }
+  if (stats.devFootprints !== undefined) {
+    out += `；dev 足迹 ${stats.devFootprints}（照片 ${stats.devPhotos}，行程 ${stats.devTrips}，点赞 ${stats.devLikes}）`;
+  }
+  return out;
 }
 
 export interface CliDeps {
@@ -632,7 +810,11 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
     }
 
     try {
-      const stats = await seedProfile(prisma, storage, parsed.profile!, deps.assetsDir);
+      const stats = await seedProfile(prisma, storage, parsed.profile!, {
+        assetsDir: deps.assetsDir,
+        withCards: parsed.withCards,
+        withDevAccount: parsed.withDevAccount,
+      });
       console.log(formatStats(stats));
       return 0;
     } catch (err) {
