@@ -12,6 +12,7 @@ struct MeScreen: View {
                 Section {
                     statsRow
                     NavigationLink("我的足迹地图") { MyMapScreen() }
+                    NavigationLink("收藏") { FavoritesScreen() }
                 }
                 Section("足迹") {
                     if store.footprints.isEmpty {
