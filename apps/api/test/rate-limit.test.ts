@@ -44,3 +44,29 @@ test("不同 Authorization 头各自独立计数", async () => {
   });
   expect(bFirst.statusCode).toBe(200);
 });
+
+// 全局限流档位调高，避免与 auth 专属的 10/min 档互相干扰——本用例只关心
+// /auth/dev 自己的限流档 + 按 IP 计数是否恒生效。
+const authApp = buildApp({
+  databaseUrl: TEST_DB_URL,
+  appleJwks,
+  devAuth: true,
+  s3Bucket: "zhixing-test",
+  rateLimit: { max: 300 },
+});
+afterAll(async () => authApp.close());
+
+test("auth 路由恒按 IP 计数：伪造不同 Authorization 头无法绕过 10/min 限制", async () => {
+  // 同一 IP（inject 默认 remoteAddress），每次都换一个随机 Authorization 头——
+  // 若 keyGenerator 仍是"头优先"，每次都会开一个新桶，永远不会 429。
+  let last!: Awaited<ReturnType<typeof authApp.inject>>;
+  for (let i = 0; i < 11; i++) {
+    last = await authApp.inject({
+      method: "POST",
+      url: "/auth/dev",
+      headers: { authorization: `Bearer junk-${i}-${Math.random()}` },
+      payload: { appleSub: `probe-${i}` },
+    });
+  }
+  expect(last.statusCode).toBe(429);
+});

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { verifyAppleIdentityToken } from "../apple.js";
 import { requireUser } from "../auth.js";
@@ -17,7 +17,12 @@ async function loginBySub(app: FastifyInstance, appleSub: string, nickname?: str
   return { token: await signSession(user.id), user: { id: user.id, nickname: user.nickname } };
 }
 
-const authRateLimit = { rateLimit: { max: 10, timeWindow: "1 minute" } };
+// auth 路由恒按 IP 计数：全局 keyGenerator 在有 Authorization 头时按头计费，
+// 攻击者可给每次请求都塞一个随机 Bearer 头骗出新桶，绕开限流做凭证/token 爆破。
+// 这里显式覆盖为按 req.ip 计数，与是否携带、携带什么头无关。
+const authRateLimit = {
+  rateLimit: { max: 10, timeWindow: "1 minute", keyGenerator: (req: FastifyRequest) => req.ip },
+};
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/apple", { config: authRateLimit }, async (req, reply) => {
