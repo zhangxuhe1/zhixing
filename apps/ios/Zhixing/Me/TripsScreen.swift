@@ -10,6 +10,7 @@ struct TripsScreen: View {
     @State private var tripsState: LoadState<[Trip]> = .idle
     @State private var creatingSuggestion: TripSuggestion?
     @State private var editingTrip: Trip?
+    @State private var sharingTrip: Trip?
 
     private var isFullyEmpty: Bool {
         guard case let .loaded(suggestions) = suggestionsState, case let .loaded(trips) = tripsState
@@ -56,12 +57,15 @@ struct TripsScreen: View {
         .sheet(item: $editingTrip) { trip in
             TripEditScreen(mode: .edit(trip), onSaved: handleSaved)
         }
+        .sheet(item: $sharingTrip) { trip in
+            TripShareScreen(trip: trip)
+        }
         .task { await reloadAll() }
     }
 
-    /// 已保存旅程行：不整行包 Button——行内还要放一个（当前禁用的）「分享」按钮，两个 Button 嵌套
-    /// 在 List 行里会互相抢手势，改用 StoriesSection.StoryRow 的既有解法：整行只挂 onTapGesture
-    /// 负责“打开编辑”，「分享」用真正独立的 .buttonStyle(.plain) Button 承担二级操作。
+    /// 已保存旅程行：不整行包 Button——行内还要放一个「分享」按钮（打开 I8 的 TripShareScreen），
+    /// 两个 Button 嵌套在 List 行里会互相抢手势，改用 StoriesSection.StoryRow 的既有解法：整行只挂
+    /// onTapGesture 负责“打开编辑”，「分享」用真正独立的 .buttonStyle(.plain) Button 承担二级操作。
     @ViewBuilder
     private func savedTripRow(_ trip: Trip) -> some View {
         HStack {
@@ -71,13 +75,12 @@ struct TripsScreen: View {
                 footprintCount: trip.footprintCount)
             Spacer()
             Button {
-                // I8 占位：分享长图入口尚未实装，本任务先禁用，避免误触发不存在的流程。
+                sharingTrip = trip
             } label: {
                 Image(systemName: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityLabel("分享（即将上线）")
+            .accessibilityLabel("分享")
         }
         .contentShape(Rectangle())
         .onTapGesture { editingTrip = trip }

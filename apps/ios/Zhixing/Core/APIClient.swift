@@ -29,6 +29,12 @@ final class APIClient {
     static let shared = APIClient()
     var token: String?
 
+    /// 预签名照片字节下载专用会话：`.ephemeral` 配置——不落磁盘缓存、不存 Cookie，进程结束即清
+    /// （I10 规格原文：`GET /photos/:id` 换来的 presigned URL 短时有效，落盘缓存既无意义又有
+    /// 信息残留风险）。仅用于下载 presigned URL 本身返回的图片字节；业务 API 请求仍走
+    /// `raw()` 里的 `URLSession.shared`——那些请求不涉及需要防缓存的敏感媒体字节。
+    nonisolated static let photoSession: URLSession = URLSession(configuration: .ephemeral)
+
     nonisolated static let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .custom { decoder in
