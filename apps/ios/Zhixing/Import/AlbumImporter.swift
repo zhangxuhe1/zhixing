@@ -127,8 +127,10 @@ final class AlbumImportModel {
                         continue
                     }
                     do {
+                        // sanitized: true——data 来自 Self.imageData 的 UIImage.jpegData(0.8) 重编码，
+                        // 构造上不含 EXIF（GPS/拍摄时间已随 UIImage 解码丢弃），够格直通免二次压缩。
                         try await store.uploadPhoto(
-                            footprintId: fp.id, imageData: data,
+                            footprintId: fp.id, imageData: data, sanitized: true,
                             takenAt: asset.takenAt, lat: asset.lat, lng: asset.lng)
                         photosUploaded += 1
                     } catch is PhotoTranscodeError {

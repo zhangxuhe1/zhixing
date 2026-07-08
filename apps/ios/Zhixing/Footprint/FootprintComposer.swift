@@ -118,7 +118,10 @@ struct FootprintComposer: View {
                     continue
                 }
                 do {
-                    try await store.uploadPhoto(footprintId: fp.id, imageData: data)
+                    // sanitized: false——loadTransferable 给的是用户相册原始文件字节，JPEG 原图
+                    // 带 GPS/拍摄时间 EXIF，必须经 uploadPhoto 内的重编码剥离后才能上传（评审修复：
+                    // 曾因 isJPEG 直通短暂破坏过这层脱敏）。
+                    try await store.uploadPhoto(footprintId: fp.id, imageData: data, sanitized: false)
                     items.removeFirst()
                 } catch is PhotoTranscodeError {
                     skippedIndices.append(index) // 字节拿到了但解不出图片：同样跳过

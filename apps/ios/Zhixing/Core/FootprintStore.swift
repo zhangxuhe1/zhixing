@@ -13,6 +13,19 @@ extension Data {
     }
 }
 
+/// 上传前的照片字节准备（纯函数，可单测；I10 评审修复）。
+/// - `sanitized: true`：调用方声明这份数据是"我们自产、构造上就不含 EXIF"的——目前仅相册导入
+///   路径（`AlbumImporter.imageData` 经 `UIImage.jpegData(0.8)` 重编码产出，`UIImage` 解码即丢弃
+///   GPS/拍摄时间等元数据）。此时已是 JPEG 就字节直通，避免双重有损压缩（item 2 的修复保留）。
+/// - `sanitized: false`：来源是用户任选的原始文件字节（如 PhotosPicker 的 `loadTransferable`，
+///   JPEG 原图会原封不动带着 GPS/DateTimeOriginal 等 EXIF）。必须无条件经 `UIImage` 解码重编码
+///   剥掉元数据——服务端按设计零图像处理栈、字节原样存储并对全体登录用户 presign，脱敏只能发生
+///   在客户端这一层（§5.1：lat/lng/takenAt 同族数据严禁随公开面外泄）。
+func preparedPhotoUploadData(_ imageData: Data, sanitized: Bool) -> Data? {
+    if sanitized, imageData.isJPEG { return imageData }
+    return UIImage(data: imageData)?.jpegData(compressionQuality: 0.85)
+}
+
 @MainActor
 @Observable
 final class FootprintStore {
@@ -69,18 +82,14 @@ final class FootprintStore {
     }
 
     /// 统一转 JPEG（PhotosPicker/相册可能给 HEIC；顺带压到上传友好的体积）。
-    /// 已是 JPEG 的数据（如相册导入路径已用 0.8 质量产出）直传，不再解码重编码——避免双重压缩
-    /// 累积画质损失（曾经的债：相册路径先压 0.8 又在这里重压 0.85，两次有损编码叠加）。
+    /// `sanitized` 语义与直通/重编码的取舍见 `preparedPhotoUploadData`——刻意不给默认值：
+    /// 这是隐私攸关的决定，每个新调用点都必须显式声明自己的字节来源是否已脱敏（EXIF-free），
+    /// 免得未来路径顺手省参数、又把带 GPS 的原图直通上去。
     func uploadPhoto(
-        footprintId: String, imageData: Data,
+        footprintId: String, imageData: Data, sanitized: Bool,
         takenAt: Date? = nil, lat: Double? = nil, lng: Double? = nil
     ) async throws {
-        let jpeg: Data
-        if imageData.isJPEG {
-            jpeg = imageData
-        } else if let encoded = UIImage(data: imageData)?.jpegData(compressionQuality: 0.85) {
-            jpeg = encoded
-        } else {
+        guard let jpeg = preparedPhotoUploadData(imageData, sanitized: sanitized) else {
             throw PhotoTranscodeError()
         }
         var fields: [String: String] = [:]
