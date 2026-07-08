@@ -4,22 +4,33 @@ struct AlbumImportScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(FootprintStore.self) private var store
     @State private var model = AlbumImportModel()
+    @State private var pinsState: LoadState<[Pin]> = .idle
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("相册导入")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") { dismiss() }.disabled(isImporting)
-                    }
+            LoadStateView(state: pinsState, retry: { Task { await loadPinsAndScan() } }) { _ in
+                content
+            }
+            .navigationTitle("相册导入")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }.disabled(isImporting)
                 }
+            }
         }
         .interactiveDismissDisabled(isImporting)
-        .task {
-            let pins: [Pin] = (try? await APIClient.shared.get("/places/pins")) ?? []
+        .task { await loadPinsAndScan() }
+    }
+
+    private func loadPinsAndScan() async {
+        pinsState = .loading
+        do {
+            let pins: [Pin] = try await APIClient.shared.get("/places/pins")
+            pinsState = .loaded(pins)
             await model.scan(pins: pins)
+        } catch {
+            pinsState = .failed("加载地点数据失败，请重试")
         }
     }
 

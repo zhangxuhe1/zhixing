@@ -57,8 +57,12 @@ struct MapScreen: View {
             controlButton("magnifyingglass") { showSearch = true }
             controlButton("shuffle") {
                 Task {
-                    if let pin: Pin = try? await APIClient.shared.get("/places/random") {
+                    do {
+                        let pin: Pin = try await APIClient.shared.get("/places/random")
+                        loadError = nil
                         goTo(pin)
+                    } catch {
+                        loadError = "随机地点加载失败，请重试"
                     }
                 }
             }
