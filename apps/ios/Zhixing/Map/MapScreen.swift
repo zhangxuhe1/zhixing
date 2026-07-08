@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MapScreen: View {
     @Environment(FootprintStore.self) private var footprints
-    @State private var pins: [Pin] = []
+    @Environment(PinsCache.self) private var pinsCache
     @State private var selected: Pin?
     @State private var flyTo: Pin?
     @State private var showSearch = false
@@ -11,10 +11,11 @@ struct MapScreen: View {
     @State private var composerPin: Pin?
     @State private var showHumanities = true
     @State private var showFootprintLayer = true
+    @State private var flightTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            MapView(pins: pins, litPlaceIds: footprints.litPlaceIds,
+            MapView(pins: pinsCache.pins, litPlaceIds: footprints.litPlaceIds,
                     showHumanities: showHumanities, showFootprints: showFootprintLayer,
                     flyTo: $flyTo, onSelect: { selected = $0 })
                 .ignoresSafeArea()
@@ -42,7 +43,7 @@ struct MapScreen: View {
             }
         }
         .sheet(isPresented: $showPlacePicker) {
-            PlacePickerSheet(pins: pins) { pin in
+            PlacePickerSheet(pins: pinsCache.pins) { pin in
                 showPlacePicker = false
                 composerPin = pin
             }
@@ -88,18 +89,22 @@ struct MapScreen: View {
         }
     }
 
+    /// 连点竞态修复：新的 goTo 先取消上一个还在等待的飞行任务，被取消的任务绝不能在延时结束后
+    /// 还去开抽屉——否则快速点两个不同的搜索结果，最终可能弹出的是第一个（旧）而不是第二个（新）目的地。
     private func goTo(_ pin: Pin) {
+        flightTask?.cancel()
         flyTo = pin
         // 等飞行动画起步再开抽屉，medium 态不遮住目的地
-        Task {
+        flightTask = Task {
             try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
             selected = pin
         }
     }
 
     private func load() async {
         do {
-            pins = try await APIClient.shared.get("/places/pins")
+            try await pinsCache.load()
         } catch {
             loadError = "加载地点失败：\(error.localizedDescription)"
         }

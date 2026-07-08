@@ -6,6 +6,13 @@ struct PhotoTranscodeError: LocalizedError {
     var errorDescription: String? { "无法处理所选照片" }
 }
 
+extension Data {
+    /// 仅看 FF D8 魔数前缀——足够区分"已经是 JPEG"与其他格式，不需要完整解码。
+    var isJPEG: Bool {
+        count >= 2 && self[startIndex] == 0xFF && self[index(after: startIndex)] == 0xD8
+    }
+}
+
 @MainActor
 @Observable
 final class FootprintStore {
@@ -14,11 +21,15 @@ final class FootprintStore {
 
     var litPlaceIds: Set<String> { Set(footprints.map(\.placeId)) }
 
+    /// 足迹列表与 stats 各自独立请求，失败一律保留旧值不清零——网络抖动不该让"已经加载过"的数据
+    /// 在界面上闪回空/零（两路径对称：都用 if let 只在成功时才落地新值）。
     func load() async {
         if let list: [Footprint] = try? await APIClient.shared.get("/me/footprints") {
             footprints = list
         }
-        stats = try? await APIClient.shared.get("/me/stats")
+        if let s: Stats = try? await APIClient.shared.get("/me/stats") {
+            stats = s
+        }
     }
 
     private struct CreateBody: Encodable {
@@ -57,12 +68,19 @@ final class FootprintStore {
         return updated
     }
 
-    /// 统一转 JPEG（PhotosPicker/相册可能给 HEIC；顺带压到上传友好的体积）
+    /// 统一转 JPEG（PhotosPicker/相册可能给 HEIC；顺带压到上传友好的体积）。
+    /// 已是 JPEG 的数据（如相册导入路径已用 0.8 质量产出）直传，不再解码重编码——避免双重压缩
+    /// 累积画质损失（曾经的债：相册路径先压 0.8 又在这里重压 0.85，两次有损编码叠加）。
     func uploadPhoto(
         footprintId: String, imageData: Data,
         takenAt: Date? = nil, lat: Double? = nil, lng: Double? = nil
     ) async throws {
-        guard let jpeg = UIImage(data: imageData)?.jpegData(compressionQuality: 0.85) else {
+        let jpeg: Data
+        if imageData.isJPEG {
+            jpeg = imageData
+        } else if let encoded = UIImage(data: imageData)?.jpegData(compressionQuality: 0.85) {
+            jpeg = encoded
+        } else {
             throw PhotoTranscodeError()
         }
         var fields: [String: String] = [:]
@@ -74,10 +92,14 @@ final class FootprintStore {
             file: jpeg, filename: "photo.jpg", mime: "image/jpeg", fields: fields)
     }
 
-    func delete(_ footprint: Footprint) async {
-        try? await APIClient.shared.delete("/footprints/\(footprint.id)")
+    /// 服务端删除失败就不再假装删了——之前的实现无论成败都本地移除，会让用户以为删除成功、
+    /// 刷新/重启后那条足迹却又"复活"。throws 上抛，由调用界面（MeScreen）展示错误（关闭台账 I7 Minor）。
+    func delete(_ footprint: Footprint) async throws {
+        try await APIClient.shared.delete("/footprints/\(footprint.id)")
         footprints.removeAll { $0.id == footprint.id }
-        stats = try? await APIClient.shared.get("/me/stats")
+        if let s: Stats = try? await APIClient.shared.get("/me/stats") {
+            stats = s
+        }
     }
 
     func reset() {

@@ -34,7 +34,8 @@ struct AuthedPhotoView: View {
                 state = .failed("图片链接无效")
                 return
             }
-            let (data, _) = try await URLSession.shared.data(from: url)
+            // presigned URL 短时有效、字节本身是私密照片：走 ephemeral 会话，不落磁盘缓存（同 TripShareScreen）。
+            let (data, _) = try await APIClient.photoSession.data(from: url)
             guard let image = UIImage(data: data) else {
                 state = .failed("图片解析失败")
                 return

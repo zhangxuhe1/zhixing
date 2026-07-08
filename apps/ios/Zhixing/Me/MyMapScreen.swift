@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MyMapScreen: View {
     @Environment(FootprintStore.self) private var store
+    @Environment(PinsCache.self) private var pinsCache
     @State private var pinsState: LoadState<[Pin]> = .idle
     @State private var flyTo: Pin?
 
@@ -20,8 +21,8 @@ struct MyMapScreen: View {
     private func loadPins() async {
         pinsState = .loading
         do {
-            let pins: [Pin] = try await APIClient.shared.get("/places/pins")
-            pinsState = .loaded(pins)
+            try await pinsCache.load() // 命中缓存（MapScreen 已经拉过）时不重发网络请求
+            pinsState = .loaded(pinsCache.pins)
         } catch {
             pinsState = .failed("加载地图数据失败，请重试")
         }

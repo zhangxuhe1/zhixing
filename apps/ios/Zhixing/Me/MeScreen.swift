@@ -5,6 +5,7 @@ struct MeScreen: View {
     @Environment(FootprintStore.self) private var store
     @State private var showImport = false
     @State private var editingFootprint: Footprint?
+    @State private var deleteError: String?
 
     var body: some View {
         NavigationStack {
@@ -29,7 +30,15 @@ struct MeScreen: View {
                     .onDelete { indexSet in
                         let targets = indexSet.map { store.footprints[$0] } // 删除前按索引快照，避免边删边移位
                         Task {
-                            for footprint in targets { await store.delete(footprint) }
+                            for footprint in targets {
+                                do {
+                                    try await store.delete(footprint)
+                                } catch {
+                                    // 服务端删除失败：该条已不再本地假删（FootprintStore.delete 契约），
+                                    // 这里只需把错误亮给用户；列表因为没被改动，视觉上会"弹回"未删态。
+                                    deleteError = "删除失败：\(error.localizedDescription)"
+                                }
+                            }
                         }
                     }
                 }
@@ -46,6 +55,16 @@ struct MeScreen: View {
             .sheet(isPresented: $showImport) { AlbumImportScreen() }
             .sheet(item: $editingFootprint) { fp in FootprintEditor(footprint: fp) }
             .task { await store.load() }
+            .alert(
+                "删除失败", isPresented: Binding(
+                    get: { deleteError != nil },
+                    set: { if !$0 { deleteError = nil } }
+                ), presenting: deleteError
+            ) { _ in
+                Button("好", role: .cancel) {}
+            } message: { message in
+                Text(message)
+            }
         }
     }
 

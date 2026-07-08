@@ -13,6 +13,7 @@ struct FootprintComposer: View {
     @State private var saving = false
     @State private var error: String?
     @State private var createdFootprint: Footprint?
+    @State private var skipSummary: String?
 
     var body: some View {
         NavigationStack {
@@ -72,6 +73,16 @@ struct FootprintComposer: View {
         } message: {
             Text(PublicityConfirmationCopy.message)
         }
+        // 有照片被跳过时不静默 dismiss——用户需要先看到点名哪几张失败了，点「好」才关闭撰写器
+        // （此时足迹与其余照片其实都已保存成功，跳过的只是坏图本身，不是整体失败）。
+        .alert("部分照片未能上传", isPresented: Binding(
+            get: { skipSummary != nil },
+            set: { if !$0 { skipSummary = nil } }
+        ), presenting: skipSummary) { _ in
+            Button("好") { dismiss() }
+        } message: { message in
+            Text(message)
+        }
     }
 
     /// 足迹一旦创建（createdFootprint 非 nil），后续「保存」只是重试照片上传——不再重复弹隐私确认。
@@ -96,14 +107,32 @@ struct FootprintComposer: View {
                     visibility: isPublic ? "PUBLIC" : "PRIVATE")
                 createdFootprint = fp
             }
+            // 序号按原始选择顺序 1-based 累加，不受中途 removeFirst 影响（items.first 严格按序处理）。
+            var skippedIndices: [Int] = []
+            var index = 0
             while let item = items.first {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    try await store.uploadPhoto(footprintId: fp.id, imageData: data)
+                index += 1
+                guard let data = try? await item.loadTransferable(type: Data.self) else {
+                    skippedIndices.append(index) // 本地读不出字节：跳过，继续下一张，不整队卡死
+                    items.removeFirst()
+                    continue
                 }
-                if !items.isEmpty { items.removeFirst() } // 上传成功或该项不可读才走到这；失败会 throw，项留在队列里供重试
+                do {
+                    try await store.uploadPhoto(footprintId: fp.id, imageData: data)
+                    items.removeFirst()
+                } catch is PhotoTranscodeError {
+                    skippedIndices.append(index) // 字节拿到了但解不出图片：同样跳过
+                    items.removeFirst()
+                }
+                // 其余错误（如网络失败）不在此处捕获，上抛到下面的外层 catch——该项留在队列里供重试。
             }
             await store.load()
-            dismiss()
+            if skippedIndices.isEmpty {
+                dismiss()
+            } else {
+                let list = skippedIndices.map(String.init).joined(separator: "、")
+                skipSummary = "已跳过 \(skippedIndices.count) 张无法读取的照片（第 \(list) 张），其余内容已保存。"
+            }
         } catch {
             self.error = error.localizedDescription
         }

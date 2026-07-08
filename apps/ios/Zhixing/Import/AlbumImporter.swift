@@ -52,7 +52,9 @@ final class AlbumImportModel {
         case denied
         case review
         case importing(done: Int, total: Int)
-        case finished(created: Int, photos: Int)
+        /// skippedIndices：本次导入里因"无法读取/无法解码"被跳过的照片，按跨组全局序号（1-based）记录，
+        /// 供结束页汇总提示点名（item 9）。
+        case finished(created: Int, photos: Int, skippedIndices: [Int])
     }
 
     var phase: Phase = .scanning
@@ -65,51 +67,81 @@ final class AlbumImportModel {
             phase = .denied
             return
         }
-        let assets = Self.fetchAssetMetas()
+        let assets = await Self.fetchAssetMetas()
+        guard !Task.isCancelled else { return } // 扫描中途被取消：不再继续聚类/切换 phase，交由界面退出
         let matched = clusterAssets(assets, pins: pins)
         unmatchedCount = assets.count - matched.reduce(0) { $0 + $1.assets.count }
         groups = matched
         phase = .review
     }
 
-    nonisolated static func fetchAssetMetas() -> [AssetMeta] {
-        let options = PHFetchOptions()
-        options.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
-        let result = PHAsset.fetchAssets(with: options)
-        var metas: [AssetMeta] = []
-        result.enumerateObjects { asset, _, _ in
-            guard let location = asset.location, let date = asset.creationDate else { return }
-            metas.append(AssetMeta(
-                id: asset.localIdentifier, takenAt: date,
-                lat: location.coordinate.latitude, lng: location.coordinate.longitude))
+    /// 后台枚举 + 协作式取消（item 1）：真正的相册枚举放进 `Task.detached`，脱钩到独立执行环境，
+    /// 避免大相册枚举冻结主线程——冻住主线程的话，scanning 阶段的「取消」按钮点了也没法响应，
+    /// 取消能力就是摆设。外层 Task 被取消时，`withTaskCancellationHandler` 把 `.cancel()` 转发给这个
+    /// detached task；其内部在 `enumerateObjects` 的同步回调里查 `Task.isCancelled` 并置位 `stop`
+    /// 指针，做到"发现取消就尽快真正停下来"而不是等全量枚举完才发现结果已经不需要了。
+    static func fetchAssetMetas() async -> [AssetMeta] {
+        let task = Task.detached(priority: .userInitiated) { () -> [AssetMeta] in
+            let options = PHFetchOptions()
+            options.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
+            let result = PHAsset.fetchAssets(with: options)
+            var metas: [AssetMeta] = []
+            result.enumerateObjects { asset, _, stop in
+                if Task.isCancelled {
+                    stop.pointee = true
+                    return
+                }
+                guard let location = asset.location, let date = asset.creationDate else { return }
+                metas.append(AssetMeta(
+                    id: asset.localIdentifier, takenAt: date,
+                    lat: location.coordinate.latitude, lng: location.coordinate.longitude))
+            }
+            return metas
         }
-        return metas
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 
+    /// 逐组导入；单张照片取不到字节（`imageData` 返回 nil，如 iCloud 下载失败/资源已损坏）或字节
+    /// 取到了但解不出图片（`uploadPhoto` 抛 `PhotoTranscodeError`）都跳过、继续队列里的下一张，
+    /// 不再让一张坏图卡死整段甚至整个导入（item 9）；`photosUploaded` 只在上传真正成功后才 +1，
+    /// 跳过的不计入，避免中途失败把计数往高偏（item 8）。序号用跨组全局位置，供结束页点名。
     func runImport(store: FootprintStore) async {
         let chosen = groups.filter(\.include)
         var created = 0
         var photosUploaded = 0
+        var skippedIndices: [Int] = []
+        var globalIndex = 0
         for (index, group) in chosen.enumerated() {
             phase = .importing(done: index, total: chosen.count)
             do {
                 let fp = try await store.create(
                     placeId: group.pin.id, text: nil, date: group.start)
                 for asset in group.assets.prefix(9) { // 每段足迹照片上限 9 张
-                    if let data = await Self.imageData(localIdentifier: asset.id) {
+                    globalIndex += 1
+                    guard let data = await Self.imageData(localIdentifier: asset.id) else {
+                        skippedIndices.append(globalIndex)
+                        continue
+                    }
+                    do {
                         try await store.uploadPhoto(
                             footprintId: fp.id, imageData: data,
                             takenAt: asset.takenAt, lat: asset.lat, lng: asset.lng)
                         photosUploaded += 1
+                    } catch is PhotoTranscodeError {
+                        skippedIndices.append(globalIndex)
                     }
                 }
                 created += 1
             } catch {
-                continue // 单组失败不阻塞整体
+                continue // 单组失败（如建足迹本身失败）不阻塞整体
             }
         }
         await store.load()
-        phase = .finished(created: created, photos: photosUploaded)
+        phase = .finished(created: created, photos: photosUploaded, skippedIndices: skippedIndices)
     }
 
     nonisolated static func imageData(localIdentifier: String) async -> Data? {
