@@ -14,8 +14,10 @@ services:
     restart: unless-stopped
     command: server /data
     environment:
-      MINIO_ROOT_USER: zhixing
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+      # 默认 user=zhixing、password=S3_SECRET_KEY；如需自定义在 .env.production 设
+      # MINIO_ROOT_USER/MINIO_ROOT_PASSWORD，api 侧 S3 凭据会自动跟随（见 api.environment）
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-zhixing}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${S3_SECRET_KEY}}
     volumes:
       - minio-data:/data
 
@@ -30,8 +32,14 @@ services:
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_ENDPOINT: https://s3.${ZHIXING_DOMAIN}
       S3_BUCKET: zhixing
-      S3_ACCESS_KEY: zhixing
-      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      # 与 minio 服务的 root 凭据同源，避免两边改一边导致 api 连不上 MinIO
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-zhixing}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-${S3_SECRET_KEY}}
+      # /app-config 下发给 iOS 的分享落地页；不设时退回 dev 占位地址
+      SHARE_LANDING_URL: ${SHARE_LANDING_URL:-http://localhost:8787/beta}
+      # 本栈 api 恒在 Caddy 反代之后，必须开启（=1）Fastify 才会从 X-Forwarded-For
+      # 解析真实客户端 IP——否则限流按代理 IP 计数，全站共用一个桶
+      TRUST_PROXY: ${TRUST_PROXY:-1}
     depends_on: [db, minio]
 
   admin:

@@ -43,3 +43,22 @@
 - [ ] 启动断言：SESSION_SECRET / ADMIN_TOKEN / S3_SECRET_KEY 为 change-me、空串或 dev 默认值时 api 拒绝启动（compose 缺变量会替换成空串，`??` 捕不到）
 - [ ] compose 健康检查：db/minio 加 healthcheck，api `depends_on.condition: service_healthy`，避免首启 migrate 竞态
 - [ ] 统一错误形状：Fastify setErrorHandler 把框架级 404/413/500 也收敛到 `{error:"..."}`（现仅应用级错误统一）
+
+## 部署前清单追加（M2 服务端验收）
+
+- [ ] 限流参数确认：`TRUST_PROXY=1` 必须开启——api 在 Caddy/Nginx 反代之后，不开则所有请求
+      按代理 IP 落进同一个限流桶，任何一个用户都能把全站打进 429（直连部署则必须保持 0，
+      防伪造 X-Forwarded-For 绕过按 IP 限流）。当前档位：全局 300/min（按 Authorization 头，
+      无头按 IP）、`/search` 30/min·IP、`/auth/*` 10/min·IP、点赞/浏览 60/min；档位在代码里
+      （apps/api/src/app.ts 与各路由），动态配置化在 M2 范围外，放量前按需改码调档
+- [ ] `SHARE_LANDING_URL` 换成正式落地页地址（`GET /app-config` 下发给 iOS 作分享链接；
+      example 里是占位符 `https://zhixing.example.com/beta`）
+- [ ] 设计备案——账号删除与 likeCount：Like 对 User 是 onDelete: Cascade，将来上线"账号删除"
+      功能时，其点赞记录会被级联删除而足迹上去规范化的 likeCount 计数器不会随之扣减，导致
+      计数漂移。删除流程必须同步重算受影响足迹的 likeCount（按 Like 表实数回填）
+
+## 已知限制（M2 备案，非缺陷）
+
+- 昵称变更不过审核：登录（`POST /auth/apple` / dev 旁路）携带 nickname 即直接生效，公开故事
+  的作者昵称随之变化——内容安全（含昵称机审）由 M3 统一处理
+- 照片无单张 DELETE 端点：M2 范围外；删除照片目前只能删除整条足迹（级联清理照片与对象存储）
