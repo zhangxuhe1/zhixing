@@ -22,7 +22,13 @@ export async function fakeAppleToken(sub: string, audience = "app.zhixing.ios") 
 }
 
 export function testApp() {
-  return buildApp({ databaseUrl: TEST_DB_URL, appleJwks, devAuth: true, s3Bucket: "zhixing-test" });
+  return buildApp({
+    databaseUrl: TEST_DB_URL,
+    appleJwks,
+    devAuth: true,
+    s3Bucket: "zhixing-test",
+    rateLimit: false,
+  });
 }
 
 export async function resetDb(app: ReturnType<typeof buildApp>) {

@@ -28,3 +28,11 @@ test("空 q 400；admin 未鉴权 401", async () => {
   expect((await app.inject({ method: "GET", url: "/search?q=" })).statusCode).toBe(400);
   expect((await app.inject({ method: "GET", url: "/admin/search-misses" })).statusCode).toBe(401);
 });
+
+test("q 超长（trim 后 > 64）400 query_too_long，且不写 SearchMiss", async () => {
+  const longQuery = "长".repeat(65);
+  const res = await app.inject({ method: "GET", url: `/search?q=${encodeURIComponent(longQuery)}` });
+  expect(res.statusCode).toBe(400);
+  expect(res.json()).toEqual({ error: "query_too_long" });
+  expect(await app.prisma.searchMiss.count()).toBe(0);
+});

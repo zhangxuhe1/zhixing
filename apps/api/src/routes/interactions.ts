@@ -7,8 +7,10 @@ async function findVisibleFootprint(app: FastifyInstance, id: string) {
   return app.prisma.footprint.findFirst({ where: { id, ...PUBLICLY_VISIBLE }, select: { id: true } });
 }
 
+const strictRateLimit = { rateLimit: { max: 60, timeWindow: "1 minute" } };
+
 export async function interactionsRoutes(app: FastifyInstance) {
-  app.put("/footprints/:id/like", { preHandler: requireUser }, async (req, reply) => {
+  app.put("/footprints/:id/like", { preHandler: requireUser, config: strictRateLimit }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const footprint = await findVisibleFootprint(app, id);
     if (!footprint) return reply.code(404).send({ error: "not_found" });
@@ -41,7 +43,7 @@ export async function interactionsRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.post("/footprints/:id/view", { preHandler: requireUser }, async (req, reply) => {
+  app.post("/footprints/:id/view", { preHandler: requireUser, config: strictRateLimit }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const footprint = await findVisibleFootprint(app, id);
     if (!footprint) return reply.code(404).send({ error: "not_found" });

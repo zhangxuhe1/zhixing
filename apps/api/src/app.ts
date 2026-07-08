@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
+import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { createPrisma } from "@zhixing/db";
 import { remoteAppleJwks, type AppleJwks } from "./apple.js";
@@ -33,6 +34,7 @@ export interface BuildAppOpts {
   devAuth?: boolean;
   s3Bucket?: string;
   logger?: boolean;
+  rateLimit?: false | { max?: number };
 }
 
 export function buildApp(opts: BuildAppOpts = {}) {
@@ -46,10 +48,22 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.addHook("onReady", async () => {
     await storage.ensureBucket();
   });
+  if (opts.rateLimit !== false) {
+    app.register(rateLimit, {
+      max: opts.rateLimit?.max ?? 300,
+      timeWindow: "1 minute",
+      keyGenerator: (req) => req.headers.authorization ?? req.ip,
+    });
+  }
   app.register(cors, { origin: true });
   app.register(multipart, { limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
-  app.get("/health", async () => ({ ok: true }));
-  app.get("/app-config", async () => ({ shareLandingUrl: config.shareLandingUrl }));
+  // 用 .after() 而非裸 app.get，确保限流插件的 onRequest 钩子（异步挂载）
+  // 已完成注册后，这两个路由才被绑定——否则限流插件注册顺序虽在前，
+  // 但同步声明的裸路由会先于其钩子挂载完成，导致不限流。
+  app.after(() => {
+    app.get("/health", async () => ({ ok: true }));
+    app.get("/app-config", async () => ({ shareLandingUrl: config.shareLandingUrl }));
+  });
   app.register(placesRoutes);
   app.register(cardsRoutes);
   app.register(authRoutes);
