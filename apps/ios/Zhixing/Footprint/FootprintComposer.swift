@@ -34,7 +34,10 @@ struct FootprintComposer: View {
                     DatePicker("日期", selection: $date, displayedComponents: .date)
                 }
                 Section("公开") {
+                    // 足迹已创建（照片重试阶段）后锁定开关：此时「保存」只重试上传、不会再改可见性，
+                    // 放任可改会静默吞掉用户意图；创建后的公开状态变更走 FootprintEditor。
                     Toggle("公开这条足迹", isOn: $isPublic)
+                        .disabled(createdFootprint != nil)
                     if isPublic {
                         Text("提交前会再次确认；审核通过前，其他旅人暂时还看不到它。")
                             .font(.footnote).foregroundStyle(.secondary)
