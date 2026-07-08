@@ -5,8 +5,15 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "test": "vitest run",
-    "push:test": "DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing_test prisma db push --skip-generate"
+    "push:test": "DATABASE_URL=postgresql://zhixing:zhixing@localhost:5433/zhixing_test prisma db push --skip-generate",
+    "seed": "tsx src/seed/index.ts"
   },
   "dependencies": { "@prisma/client": "^6" },
-  "devDependencies": { "prisma": "^6", "typescript": "^5", "vitest": "^3" }
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1080.0",
+    "prisma": "^6",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
 }
