@@ -8,6 +8,11 @@ services:
       POSTGRES_DB: zhixing
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhixing -d zhixing"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
   minio:
     image: minio/minio:latest
@@ -40,7 +45,10 @@ services:
       # 本栈 api 恒在 Caddy 反代之后，必须开启（=1）Fastify 才会从 X-Forwarded-For
       # 解析真实客户端 IP——否则限流按代理 IP 计数，全站共用一个桶
       TRUST_PROXY: ${TRUST_PROXY:-1}
-    depends_on: [db, minio]
+    # 首启需等 db 就绪再跑 prisma migrate，否则迁移竞态失败（deploy.md 硬化清单）
+    depends_on:
+      db: { condition: service_healthy }
+      minio: { condition: service_started }
 
   admin:
     build:

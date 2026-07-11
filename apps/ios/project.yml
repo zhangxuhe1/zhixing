@@ -13,7 +13,7 @@ settings:
     debug:
       APP_API_BASE: http://localhost:8787
     release:
-      APP_API_BASE: https://api.zhixing.example.com  # 服务端部署后改真实域名
+      APP_API_BASE: https://api.example.com
 targets:
   Zhixing:
     type: application
