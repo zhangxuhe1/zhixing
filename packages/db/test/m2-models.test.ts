@@ -14,7 +14,7 @@ afterAll(async () => prisma.$disconnect());
 
 async function createUser() {
   return prisma.user.create({
-    data: { appleSub: `sub-${Math.random()}`, nickname: "阿彪" },
+    data: { nickname: "阿彪" },
   });
 }
 

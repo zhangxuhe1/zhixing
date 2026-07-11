@@ -105,7 +105,6 @@ model CardBlock {
 
 model User {
   id         String         @id @default(cuid())
-  appleSub   String?        @unique // Sign in with Apple 的 subject（S3 起废弃，改由 Identity 承载）
   nickname   String
   createdAt  DateTime       @default(now())
   footprints Footprint[]

@@ -20,7 +20,6 @@ test("建 User 时嵌套建 APPLE Identity，按 (provider, subject) 复合唯�
   const sub = uniqueSub();
   const user = await prisma.user.create({
     data: {
-      appleSub: sub,
       nickname: "阿彪",
       identities: { create: { provider: "APPLE", subject: sub } },
     },
@@ -34,7 +33,7 @@ test("建 User 时嵌套建 APPLE Identity，按 (provider, subject) 复合唯�
 
 test("同一 (provider, subject) 二次插入触发唯一约束错误 P2002", async () => {
   const sub = uniqueSub();
-  const user = await prisma.user.create({ data: { appleSub: sub, nickname: "阿彪" } });
+  const user = await prisma.user.create({ data: { nickname: "阿彪" } });
   await prisma.identity.create({ data: { userId: user.id, provider: "APPLE", subject: sub } });
 
   await expect(
@@ -46,7 +45,6 @@ test("删除 User 级联删除其 Identity", async () => {
   const sub = uniqueSub();
   const user = await prisma.user.create({
     data: {
-      appleSub: sub,
       nickname: "阿彪",
       identities: { create: { provider: "APPLE", subject: sub } },
     },
@@ -65,7 +63,6 @@ test("同一 User 可同时挂 APPLE 与 EMAIL 两条身份", async () => {
   const email = "user@example.com";
   const user = await prisma.user.create({
     data: {
-      appleSub: sub,
       nickname: "阿彪",
       identities: {
         create: [
