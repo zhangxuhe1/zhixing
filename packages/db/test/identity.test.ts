@@ -7,13 +7,17 @@ const prisma = createPrisma(
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","Place","User","Identity","SearchMiss" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
   );
 });
 afterAll(async () => prisma.$disconnect());
 
 function uniqueSub() {
   return `sub-${Math.random()}`;
+}
+
+function uniqueEmail() {
+  return `code-${Math.random()}@example.com`;
 }
 
 test("建 User 时嵌套建 APPLE Identity，按 (provider, subject) 复合唯一键查回", async () => {
@@ -79,4 +83,16 @@ test("同一 User 可同时挂 APPLE 与 EMAIL 两条身份", async () => {
   });
   expect(identities.map((i) => i.provider)).toEqual(["APPLE", "EMAIL"]);
   expect(identities.map((i) => i.subject)).toEqual([sub, email]);
+});
+
+test("EmailCode 建行、按 email 查回、attempts 默认 0", async () => {
+  const email = uniqueEmail();
+  await prisma.emailCode.create({
+    data: { email, code: "123456", expiresAt: new Date(Date.now() + 10 * 60_000) },
+  });
+
+  const rows = await prisma.emailCode.findMany({ where: { email } });
+  expect(rows).toHaveLength(1);
+  expect(rows[0].code).toBe("123456");
+  expect(rows[0].attempts).toBe(0);
 });

@@ -15,9 +15,11 @@
     "@zhixing/db": "workspace:*",
     "fastify": "^5",
     "jose": "^6.2.3",
+    "nodemailer": "^9.0.3",
     "zod": "^3.25"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4",
     "typescript": "^5",
     "vitest": "^3"

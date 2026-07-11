@@ -127,6 +127,17 @@ model Identity {
   @@index([userId])
 }
 
+model EmailCode {
+  id        String   @id @default(cuid())
+  email     String // normalizeEmail 后的地址
+  code      String // 6 位数字
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
 model Footprint {
   id                String           @id @default(cuid())
   userId            String

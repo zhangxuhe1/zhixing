@@ -19,4 +19,9 @@ export const config = {
     accessKey: process.env.S3_ACCESS_KEY ?? "zhixing",
     secretKey: process.env.S3_SECRET_KEY ?? "zhixing-secret",
   },
+  smtp: {
+    // 空字符串 = dev/test 默认：sendMail 走控制台打印分支，绝无网络副作用
+    url: process.env.SMTP_URL ?? "",
+    from: process.env.MAIL_FROM ?? "知行 <noreply@example.com>",
+  },
 };

@@ -7,7 +7,7 @@ const prisma = createPrisma(
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","Place","User","Identity","SearchMiss" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
   );
 });
 afterAll(async () => prisma.$disconnect());
