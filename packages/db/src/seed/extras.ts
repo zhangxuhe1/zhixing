@@ -2,7 +2,7 @@
  * seed CLI 扩展规划（纯函数，不碰 DB/网络）：
  * - planCardOps：卡片状态多样化（REVIEWED / RETIRED），只依赖卡片顺序与地点分组，天然幂等；
  * - planSeedEngagement：seed 用户的卡片收藏 + 举报队列（管理端有东西可处理）；
- * - planDevAccount：dev 账号（appleSub=simulator-dev）的个人数据——四种状态混合的足迹、
+ * - planDevAccount：dev 账号（APPLE 身份 subject=simulator-dev）的个人数据——四种状态混合的足迹、
  *   2 段行程、1 个未归组连续日期簇（供 /me/trip-suggestions 演示）、照片、双向点赞、卡片收藏。
  *
  * 所有新建行 id 以 SIM_PREFIX（"sim-"）开头，供 wipe 精确圈定；所有随机决策经由注入的 Rng，
@@ -23,9 +23,10 @@ import {
 } from "./common.js";
 import { STORY_TEMPLATES, fillStory } from "./corpus.js";
 
-/** 与 apps/api 的 dev 登录（POST /auth/dev，按 appleSub upsert）保持一致，seed 先建后登录会复用同一行。 */
+/** dev 账号的 APPLE 身份 subject——与 apps/api 的 dev 登录（POST /auth/dev，按 (APPLE, subject)
+ *  查 Identity）保持一致，seed 先建后登录、或先登录后 seed 都复用同一 Identity 行。 */
 export const DEV_APPLE_SUB = "simulator-dev";
-/** 与 dev 登录的缺省昵称规则（旅人 + appleSub 后 4 位）产出一致。 */
+/** 与 dev 登录的缺省昵称规则（旅人 + subject 后 4 位）产出一致："simulator-dev" 后 4 位即 "-dev"。 */
 export const DEV_NICKNAME = "旅人-dev";
 
 export interface CardLite {

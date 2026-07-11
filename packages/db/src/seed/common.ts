@@ -9,6 +9,7 @@ export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface UserPlan {
   id: string;
+  /** APPLE 身份的 subject（历史字段名保留）：落库时写入 Identity.subject，不再写 user.appleSub。 */
   appleSub: string;
   nickname: string;
 }
@@ -55,7 +56,7 @@ export interface SeedPlan {
 
 export type PlaceLite = Pick<PlaceRow, "id" | "name" | "lat" | "lng">;
 
-/** rich/sparse 档的用户 appleSub 前缀，wipe 以此圈定 seed 用户。 */
+/** rich/sparse 档 seed 用户的 APPLE 身份 subject 前缀，wipe 经 (APPLE, subject 前缀) 的 Identity 圈定。 */
 export const SEED_PREFIX = "seed-";
 /** 扩展数据（dev 账号个人数据、卡片收藏/举报）的行 id 前缀，wipe 以此圈定扩展行。 */
 export const SIM_PREFIX = "sim-";

@@ -29,6 +29,27 @@ test("apple 登录：首次创建用户，二次登录复用", async () => {
   expect(await app.prisma.user.count()).toBe(1);
 });
 
+test("apple 登录产生一条 (APPLE, sub) Identity；同 sub 二登不增行", async () => {
+  const token = await fakeAppleToken("apple-sub-identity");
+  const first = await app.inject({
+    method: "POST", url: "/auth/apple", payload: { identityToken: token },
+  });
+  expect(first.statusCode).toBe(200);
+
+  // 首登：恰有一条 (APPLE, sub) 的 Identity，指向登录用户；登录不再写 user.appleSub
+  const identities = await app.prisma.identity.findMany({
+    where: { provider: "APPLE", subject: "apple-sub-identity" },
+  });
+  expect(identities).toHaveLength(1);
+  expect(identities[0].userId).toBe(first.json().user.id);
+
+  // 同 sub 二登：命中既有身份，不新增行
+  await app.inject({ method: "POST", url: "/auth/apple", payload: { identityToken: token } });
+  expect(
+    await app.prisma.identity.count({ where: { provider: "APPLE", subject: "apple-sub-identity" } }),
+  ).toBe(1);
+});
+
 test("audience 不匹配的 identityToken 被拒", async () => {
   const bad = await fakeAppleToken("apple-sub-9", "com.evil.app");
   const res = await app.inject({ method: "POST", url: "/auth/apple", payload: { identityToken: bad } });

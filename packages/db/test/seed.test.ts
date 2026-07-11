@@ -63,6 +63,15 @@ async function seedPlaces() {
   return [beijing, jinan, shichahai, wudaokou, daminghu, baotuquan];
 }
 
+/** seed 用户经 (APPLE, subject 前缀 "seed-") 的 Identity 反查——登录/seed 已停止读写 user.appleSub。 */
+async function seedUserIds(): Promise<string[]> {
+  const rows = await prisma.identity.findMany({
+    where: { provider: "APPLE", subject: { startsWith: "seed-" } },
+    select: { userId: true },
+  });
+  return rows.map((r) => r.userId);
+}
+
 // ---------------------------------------------------------------------------
 // 纯规划函数单测：不碰 DB/网络，验证契约中最容易出错的部分——数量区间、
 // likeCount 一致性、点赞判据、对象键形状，以及"同 seed 同输入 → 逐字节相同"。
@@ -147,10 +156,10 @@ test("sparse：3 用户 + 10 条 PUBLIC+APPROVED 足迹集中在 2 个地点，�
   expect(stats.users).toBe(3);
   expect(stats.footprints).toBe(10);
 
-  const users = await prisma.user.findMany({ where: { appleSub: { startsWith: "seed-" } } });
-  expect(users).toHaveLength(3);
+  const userIds = await seedUserIds();
+  expect(userIds).toHaveLength(3);
 
-  const footprints = await prisma.footprint.findMany({ where: { userId: { in: users.map((u) => u.id) } } });
+  const footprints = await prisma.footprint.findMany({ where: { userId: { in: userIds } } });
   expect(footprints).toHaveLength(10);
   expect(footprints.every((f) => f.visibility === "PUBLIC" && f.reviewStatus === "APPROVED")).toBe(true);
   expect(new Set(footprints.map((f) => f.placeId)).size).toBe(2);
@@ -168,7 +177,10 @@ test("sparse：3 用户 + 10 条 PUBLIC+APPROVED 足迹集中在 2 个地点，�
 
 test("wipe：只清 seed- 前缀数据，非 seed 用户及其足迹/照片安然无恙", async () => {
   const places = await seedPlaces();
-  const real = await prisma.user.create({ data: { appleSub: "real-user-1", nickname: "真实用户" } });
+  // 非 seed 的真实 Apple 用户：subject 不带 "seed-" 前缀，wipe 经 Identity 圈定时不应被牵连。
+  const real = await prisma.user.create({
+    data: { nickname: "真实用户", identities: { create: { provider: "APPLE", subject: "real-user-1" } } },
+  });
   const realFootprint = await prisma.footprint.create({
     data: {
       userId: real.id,
@@ -188,7 +200,7 @@ test("wipe：只清 seed- 前缀数据，非 seed 用户及其足迹/照片安�
 
   const wiped = await wipeSeedData(prisma, storage);
   expect(wiped.users).toBe(3);
-  expect(await prisma.user.count({ where: { appleSub: { startsWith: "seed-" } } })).toBe(0);
+  expect(await seedUserIds()).toHaveLength(0);
 
   expect(await prisma.user.findUnique({ where: { id: real.id } })).not.toBeNull();
   expect(await prisma.footprint.findUnique({ where: { id: realFootprint.id } })).not.toBeNull();
@@ -213,7 +225,7 @@ test("幂等且确定性：重复 seed 同一 profile 数量不翻倍，footprin
 
   await seedProfile(prisma, storage, "sparse"); // 二次运行：不显式 wipe，内部隐式先清后种
 
-  expect(await prisma.user.count({ where: { appleSub: { startsWith: "seed-" } } })).toBe(3);
+  expect(await seedUserIds()).toHaveLength(3);
   const secondFootprintIds = (await prisma.footprint.findMany({ orderBy: { id: "asc" }, select: { id: true } })).map(
     (f) => f.id,
   );
@@ -250,13 +262,13 @@ test(
     const stats = await seedProfile(prisma, storage, "rich");
     expect(stats.users).toBe(30);
 
-    const [userCount, footprintCount, photoCount, likeCount] = await Promise.all([
-      prisma.user.count({ where: { appleSub: { startsWith: "seed-" } } }),
+    const [userIds, footprintCount, photoCount, likeCount] = await Promise.all([
+      seedUserIds(),
       prisma.footprint.count(),
       prisma.footprintPhoto.count(),
       prisma.like.count(),
     ]);
-    expect(userCount).toBe(stats.users);
+    expect(userIds).toHaveLength(stats.users);
     expect(footprintCount).toBe(stats.footprints);
     expect(photoCount).toBe(stats.photos);
     expect(likeCount).toBe(stats.likes);

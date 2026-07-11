@@ -5,7 +5,7 @@
  * - 不联网、不调 LLM；全部随机决策经由 rng.ts 的确定性 PRNG（固定种子 42），
  *   同一份 Place 数据下重复运行产出逐字节相同的结果（含对象存储 key）。
  * - 幂等：seedProfile() 内部先 wipeSeedData() 再种，重复跑不累积。
- * - wipe 只清 appleSub 以 "seed-" 开头的用户及其从属数据，绝不触碰其余用户。
+ * - wipe 只清 (APPLE, subject 以 "seed-" 开头) 身份反查出的用户及其从属数据，绝不触碰其余用户。
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -147,8 +147,8 @@ export class NoPlacesError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// wipe：两条圈定线索——appleSub startsWith "seed-" 的用户（rich/sparse 档产物）与
-// id startsWith "sim-" 的行（--with-cards / --with-dev-account 扩展产物）。
+// wipe：两条圈定线索——(APPLE, subject 前缀 "seed-") 的 Identity 反查出的用户（rich/sparse 档
+// 产物）与 id startsWith "sim-" 的行（--with-cards / --with-dev-account 扩展产物）。
 // 收集足迹照片 → 删 MinIO 对象 → 依序删 Like/CardReport/CardFavorite/FootprintPhoto/
 // Footprint/Trip/User（尊重外键）→ 全量校正 likeCount。
 // 绝不触碰非 seed 用户本体；dev 用户（simulator-dev）本体保留（模拟器会话还在用），
@@ -159,11 +159,14 @@ export async function wipeSeedData(
   prisma: PrismaClient,
   storage: SeedStorage,
 ): Promise<{ users: number; footprints: number; photos: number }> {
-  const seedUsers = await prisma.user.findMany({
-    where: { appleSub: { startsWith: SEED_PREFIX } },
-    select: { id: true },
+  // seed 用户经 (APPLE, subject 前缀 SEED_PREFIX) 的 Identity 反查——user.appleSub 已停止读写。
+  // S1 迁移已为既有 seed 用户回填 APPLE Identity，改走 Identity 圈定不丢任何行；删 User 时
+  // 其 Identity 随 onDelete: Cascade 一并清除。
+  const seedIdentities = await prisma.identity.findMany({
+    where: { provider: "APPLE", subject: { startsWith: SEED_PREFIX } },
+    select: { userId: true },
   });
-  const userIds = seedUsers.map((u) => u.id);
+  const userIds = seedIdentities.map((i) => i.userId);
 
   const footprints = await prisma.footprint.findMany({
     where: { OR: [{ userId: { in: userIds } }, { id: { startsWith: SIM_PREFIX } }] },
@@ -464,7 +467,13 @@ async function applyPlan(
 ): Promise<void> {
   if (plan.users.length > 0) {
     await prisma.user.createMany({
-      data: plan.users.map((u) => ({ id: u.id, appleSub: u.appleSub, nickname: u.nickname })),
+      data: plan.users.map((u) => ({ id: u.id, nickname: u.nickname })),
+    });
+    // 每个 seed 用户配一条 APPLE Identity（subject = 计划里的 appleSub 字段）——与登录首登产物
+    // 同构，wipe 经此圈定；user.appleSub 不再写入（S3 删列）。Identity.id 走默认 cuid，不参与
+    // 确定性断言（footprintId / 对象键才需逐次相同）。
+    await prisma.identity.createMany({
+      data: plan.users.map((u) => ({ provider: "APPLE", subject: u.appleSub, userId: u.id })),
     });
   }
   if (plan.footprints.length > 0) {
@@ -649,14 +658,26 @@ export async function seedProfile(
   let devPlan: DevAccountPlan | null = null;
   let devUserId: string | null = null;
   if (opts.withDevAccount) {
-    // dev 用户按 appleSub upsert，与 API 的 POST /auth/dev 同一判据：已存在（登录过）则
-    // 原样复用不重建；wipe 也不删它——模拟器里的会话 token 还指着这行。
-    const devUser = await prisma.user.upsert({
-      where: { appleSub: DEV_APPLE_SUB },
-      create: { id: `${SIM_PREFIX}dev-user`, appleSub: DEV_APPLE_SUB, nickname: DEV_NICKNAME },
-      update: {},
+    // dev 用户按 (APPLE, simulator-dev) 身份查 Identity，与 API 的 POST /auth/dev 首登产物同构：
+    // 命中（登录过或上轮 seed 建过）则原样复用不重建；未命中则显式 id 建 User + APPLE Identity。
+    // 先 seed 后登录、或先登录后 seed，都复用同一 Identity 行；wipe 也不删它（subject 非 seed- 前缀）——
+    // 模拟器里的会话 token 还指着这行。
+    const existingDev = await prisma.identity.findUnique({
+      where: { provider_subject: { provider: "APPLE", subject: DEV_APPLE_SUB } },
+      select: { userId: true },
     });
-    devUserId = devUser.id;
+    if (existingDev) {
+      devUserId = existingDev.userId;
+    } else {
+      const devUser = await prisma.user.create({
+        data: {
+          id: `${SIM_PREFIX}dev-user`,
+          nickname: DEV_NICKNAME,
+          identities: { create: { provider: "APPLE", subject: DEV_APPLE_SUB } },
+        },
+      });
+      devUserId = devUser.id;
+    }
     devPlan = planDevAccount(rng, {
       devUserId,
       places,

@@ -54,6 +54,15 @@ async function resetDb() {
 }
 beforeEach(resetDb);
 
+/** dev 账号经 (APPLE, simulator-dev) 身份反查——seed/登录已停止读写 user.appleSub。 */
+async function findDevUser() {
+  const identity = await prisma.identity.findUnique({
+    where: { provider_subject: { provider: "APPLE", subject: DEV_APPLE_SUB } },
+    include: { user: true },
+  });
+  return identity?.user ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // 纯规划函数：fixtures
 // ---------------------------------------------------------------------------
@@ -320,8 +329,8 @@ test("端到端：--with-cards + --with-dev-account 一次种出卡片状态、�
   });
   expect(stats.users).toBe(3);
 
-  // dev 用户被自动创建（appleSub 与 API dev 登录一致，后续模拟器登录会复用）
-  const dev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  // dev 用户被自动创建（(APPLE, simulator-dev) 身份与 API dev 登录一致，后续模拟器登录会复用）
+  const dev = await findDevUser();
   expect(dev).not.toBeNull();
 
   // 卡片状态多样化
@@ -366,7 +375,7 @@ test("端到端：幂等——带扩展的 seed 重复运行数量不累积、si
   await seedPlacesAndCards();
   const opts = { withCards: true, withDevAccount: true } as const;
   await seedProfile(prisma, storage, "sparse", opts);
-  const firstDev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  const firstDev = await findDevUser();
   const firstSimFps = (
     await prisma.footprint.findMany({ where: { id: { startsWith: "sim-" } }, orderBy: { id: "asc" } })
   ).map((f) => f.id);
@@ -380,7 +389,7 @@ test("端到端：幂等——带扩展的 seed 重复运行数量不累积、si
 
   await seedProfile(prisma, storage, "sparse", opts);
 
-  const secondDev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  const secondDev = await findDevUser();
   expect(secondDev!.id).toBe(firstDev!.id); // upsert 复用，不删不重建
   const secondSimFps = (
     await prisma.footprint.findMany({ where: { id: { startsWith: "sim-" } }, orderBy: { id: "asc" } })
@@ -396,7 +405,10 @@ test("端到端：幂等——带扩展的 seed 重复运行数量不累积、si
 
 test("端到端：wipe 清掉全部 sim- 行但保留 dev 用户本体；真实用户数据安然无恙", async () => {
   const places = await seedPlacesAndCards();
-  const real = await prisma.user.create({ data: { appleSub: "real-user-1", nickname: "真实用户" } });
+  // 非 seed 的真实 Apple 用户：subject 不带 "seed-" 前缀且非 dev，wipe 不应牵连。
+  const real = await prisma.user.create({
+    data: { nickname: "真实用户", identities: { create: { provider: "APPLE", subject: "real-user-1" } } },
+  });
   const realFp = await prisma.footprint.create({
     data: {
       userId: real.id,
@@ -408,7 +420,7 @@ test("端到端：wipe 清掉全部 sim- 行但保留 dev 用户本体；真实�
   });
 
   await seedProfile(prisma, storage, "sparse", { withCards: true, withDevAccount: true });
-  const dev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  const dev = await findDevUser();
 
   await wipeSeedData(prisma, storage);
 
@@ -427,7 +439,7 @@ test("端到端：dev 在 App 里手动收藏过的卡片不撞唯一约束—�
   await seedPlacesAndCards();
   const opts = { withCards: true, withDevAccount: true } as const;
   await seedProfile(prisma, storage, "sparse", opts);
-  const dev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  const dev = await findDevUser();
 
   // 模拟真实使用：dev 在模拟器里把所有卡都收藏了一遍（cuid 形状的 id，wipe 不会删）
   await prisma.cardFavorite.deleteMany({ where: { userId: dev!.id } }); // 先清计划行，只留"手动"行
@@ -452,7 +464,7 @@ test("端到端：单独 --with-dev-account 时，dev 收藏也不指向库中�
 
   await seedProfile(prisma, storage, "sparse", { withDevAccount: true });
 
-  const dev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  const dev = await findDevUser();
   const favs = await prisma.cardFavorite.findMany({ where: { userId: dev!.id } });
   expect(favs.length).toBeGreaterThan(0);
   expect(favs.every((f) => f.cardId === "card-4-3")).toBe(true);
@@ -477,6 +489,6 @@ test("端到端：库中没有卡片时 --with-cards 优雅降级为 no-op（不
   expect(await prisma.cardReport.count()).toBe(0);
   expect(await prisma.cardFavorite.count()).toBe(0);
   // dev 账号数据不依赖卡片，照常生成
-  const dev = await prisma.user.findUnique({ where: { appleSub: DEV_APPLE_SUB } });
+  const dev = await findDevUser();
   expect(await prisma.footprint.count({ where: { userId: dev!.id } })).toBeGreaterThan(0);
 }, 30000);
