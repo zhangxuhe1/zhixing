@@ -51,6 +51,11 @@ enum ReportStatus {
   RESOLVED
 }
 
+enum IdentityProvider {
+  APPLE
+  EMAIL
+}
+
 model Place {
   id         String      @id @default(cuid())
   name       String
@@ -100,7 +105,7 @@ model CardBlock {
 
 model User {
   id         String         @id @default(cuid())
-  appleSub   String         @unique // Sign in with Apple 的 subject
+  appleSub   String?        @unique // Sign in with Apple 的 subject（S3 起废弃，改由 Identity 承载）
   nickname   String
   createdAt  DateTime       @default(now())
   footprints Footprint[]
@@ -108,6 +113,19 @@ model User {
   favorites  CardFavorite[]
   reports    CardReport[]
   trips      Trip[]
+  identities Identity[]
+}
+
+model Identity {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  IdentityProvider
+  subject   String           // APPLE = identityToken 的 sub；EMAIL = normalizeEmail 后的邮箱
+  createdAt DateTime         @default(now())
+
+  @@unique([provider, subject])
+  @@index([userId])
 }
 
 model Footprint {
