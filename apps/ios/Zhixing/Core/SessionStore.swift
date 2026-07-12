@@ -28,6 +28,23 @@ final class SessionStore {
             "/auth/apple", json: AppleBody(identityToken: identityToken, nickname: nickname)))
     }
 
+    // 邮箱验证码登录（服务端契约见 apps/api/src/routes/auth.ts）。verify 成功后与 SIWA
+    // 汇合于同一 apply()/Keychain 存储路径，后续请求无差别。失败一律上抛 APIError.status，
+    // 中文文案映射在 EmailAuthRules（按 HTTP status，不解析 body）。
+    private struct EmailSendBody: Encodable { let email: String }
+    private struct EmailSendOk: Decodable { let ok: Bool }
+    /// send 成功仅返回 {ok:true}、不下发冷却秒数——倒计时由客户端常量驱动（EmailAuthRules.cooldownSeconds）
+    func sendEmailCode(email: String) async throws {
+        let _: EmailSendOk = try await APIClient.shared.post(
+            "/auth/email/send", json: EmailSendBody(email: email))
+    }
+
+    private struct EmailVerifyBody: Encodable { let email: String; let code: String }
+    func signInWithEmail(email: String, code: String) async throws {
+        apply(try await APIClient.shared.post(
+            "/auth/email/verify", json: EmailVerifyBody(email: email, code: code)))
+    }
+
     private struct DevBody: Encodable { let appleSub: String }
     func devLogin(sub: String) async throws {
         apply(try await APIClient.shared.post("/auth/dev", json: DevBody(appleSub: sub)))

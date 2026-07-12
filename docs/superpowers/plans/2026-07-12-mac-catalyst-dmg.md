@@ -208,12 +208,12 @@ func signInWithEmail(email: String, code: String) async throws
 
 **Steps:**
 
-- [ ] 写失败测试 `Tests/EmailAuthTests.swift`（上表 3 用例）
-- [ ] 内环跑 `-only-testing:ZhixingTests/EmailAuthTests`，预期 FAIL（方法不存在 → 编译失败即红）
-- [ ] 在 SessionStore 按契约实现两方法
-- [ ] 内环重跑，预期 PASS
-- [ ] 整套 `scripts/ios-test.sh` 全绿
-- [ ] Commit: `feat(ios): SessionStore 邮箱验证码登录端点（与 SIWA 同一 Keychain 通道）`
+- [x] 写失败测试 `Tests/EmailAuthTests.swift`（上表 3 用例）
+- [x] 内环跑 `-only-testing:ZhixingTests/EmailAuthTests`，预期 FAIL（方法不存在 → 编译失败即红）
+- [x] 在 SessionStore 按契约实现两方法
+- [x] 内环重跑，预期 PASS
+- [x] 整套 `scripts/ios-test.sh` 全绿
+- [x] Commit: `feat(ios): SessionStore 邮箱验证码登录端点（与 SIWA 同一 Keychain 通道）`
 
 ---
 
