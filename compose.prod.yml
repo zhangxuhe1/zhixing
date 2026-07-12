@@ -30,6 +30,8 @@ services:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: unless-stopped
     environment:
+      # 触发 server.ts 的生产启动断言（src/prodGuard.ts）：弱密钥拒绝启动
+      NODE_ENV: production
       DATABASE_URL: postgresql://zhixing:${POSTGRES_PASSWORD}@db:5432/zhixing
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       SESSION_SECRET: ${SESSION_SECRET}

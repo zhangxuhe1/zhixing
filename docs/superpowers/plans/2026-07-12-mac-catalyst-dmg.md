@@ -84,14 +84,14 @@ export function findWeakSecrets(secrets: {
 
 **Steps:**
 
-- [ ] 写失败测试 `apps/api/test/prod-guard.test.ts`（上表 7 用例）
-- [ ] 跑 `pnpm -C apps/api exec vitest run test/prod-guard.test.ts`，预期 FAIL（模块不存在）
-- [ ] 实现 `src/prodGuard.ts` 并接入 `src/server.ts`（NODE_ENV 门 + exit(1) 契约）
-- [ ] 跑 `pnpm -C apps/api exec vitest run test/prod-guard.test.ts`，预期 PASS
-- [ ] compose.prod.yml api.environment 增 `NODE_ENV: production`；`docker compose -f compose.prod.yml --env-file .env.production config >/dev/null` 退出码 0
-- [ ] docs/deploy.md 硬化清单"启动断言"项标为已完成（注明 src/prodGuard.ts + server.ts）
-- [ ] 全量回归 `pnpm -C apps/api exec vitest run` 全绿
-- [ ] Commit: `feat(api,ops): 生产启动断言——弱密钥拒绝启动（部署前硬化 1/3）`
+- [x] 写失败测试 `apps/api/test/prod-guard.test.ts`（上表 7 用例）
+- [x] 跑 `pnpm -C apps/api exec vitest run test/prod-guard.test.ts`，预期 FAIL（模块不存在）
+- [x] 实现 `src/prodGuard.ts` 并接入 `src/server.ts`（NODE_ENV 门 + exit(1) 契约）
+- [x] 跑 `pnpm -C apps/api exec vitest run test/prod-guard.test.ts`，预期 PASS
+- [x] compose.prod.yml api.environment 增 `NODE_ENV: production`；`docker compose -f compose.prod.yml --env-file .env.production config >/dev/null` 退出码 0
+- [x] docs/deploy.md 硬化清单"启动断言"项标为已完成（注明 src/prodGuard.ts + server.ts）
+- [x] 全量回归 `pnpm -C apps/api exec vitest run` 全绿
+- [x] Commit: `feat(api,ops): 生产启动断言——弱密钥拒绝启动（部署前硬化 1/3）`
 
 ---
 
