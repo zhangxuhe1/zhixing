@@ -161,13 +161,13 @@ db 的 healthcheck 与 api 对 db 的 `service_healthy` 依赖已存在，本任
 
 **Steps:**
 
-- [ ] 写失败测试 `apps/api/test/error-shape.test.ts`（上表 3 用例；用例 3 记得 finally close 临时 app）
-- [ ] 跑 `pnpm -C apps/api exec vitest run test/error-shape.test.ts`，预期 FAIL（404 是 fastify 默认体形）
-- [ ] 在 app.ts 按契约实现两个 handler
-- [ ] 跑 `pnpm -C apps/api exec vitest run test/error-shape.test.ts`，预期 PASS
-- [ ] 全量回归 `pnpm -C apps/api exec vitest run` 全绿（重点：photos.test.ts 的 413 用例、rate-limit.test.ts 均不应受影响）
-- [ ] docs/deploy.md 硬化清单"统一错误形状"项标为已完成
-- [ ] Commit: `feat(api): 统一错误形状——框架级 404/413/500 收敛（部署前硬化 3/3）`
+- [x] 写失败测试 `apps/api/test/error-shape.test.ts`（上表 3 用例；用例 3 记得 finally close 临时 app）
+- [x] 跑 `pnpm -C apps/api exec vitest run test/error-shape.test.ts`，预期 FAIL（404 是 fastify 默认体形）
+- [x] 在 app.ts 按契约实现两个 handler
+- [x] 跑 `pnpm -C apps/api exec vitest run test/error-shape.test.ts`，预期 PASS
+- [x] 全量回归 `pnpm -C apps/api exec vitest run` 全绿（重点：photos.test.ts 的 413 用例、rate-limit.test.ts 均不应受影响）
+- [x] docs/deploy.md 硬化清单"统一错误形状"项标为已完成
+- [x] Commit: `feat(api): 统一错误形状——框架级 404/413/500 收敛（部署前硬化 3/3）`
 
 > 硬化清单第 4 项"备份含 MinIO 卷"是 VPS 上的 crontab 操作，deploy.md 已有带命令的核对项，无代码改动，归 A1 用户侧执行。
 

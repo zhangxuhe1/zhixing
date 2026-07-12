@@ -46,6 +46,21 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.decorate("devAuth", opts.devAuth ?? config.devAuth);
   const storage = createStorage({ ...config.s3, bucket: opts.s3Bucket ?? config.s3.bucket });
   app.decorate("storage", storage);
+  // 统一错误形状（deploy.md 部署前硬化清单第 3 项）：框架级 404/413/500 收敛为 { error }。
+  // 路由内手写的 reply.code().send({ error }) 不经过这里，零波及；@fastify/rate-limit 的
+  // 429 由插件自答、不经 errorHandler，体形保持现状——客户端按 HTTP status 判别（见规格
+  // 与 iOS EmailAuthRules 注释）。5xx 绝不回显 err.message（防内部信息/堆栈泄漏），细节只进日志。
+  app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
+  app.setErrorHandler((err, req, reply) => {
+    const status = err.statusCode ?? 500;
+    if (status >= 500) {
+      req.log.error(err);
+      return reply.code(500).send({ error: "internal_error" });
+    }
+    if (status === 413) return reply.code(413).send({ error: "payload_too_large" });
+    if (status === 400) return reply.code(400).send({ error: "invalid_body" });
+    return reply.code(status).send({ error: "request_error" });
+  });
   app.addHook("onReady", async () => {
     await storage.ensureBucket();
   });
