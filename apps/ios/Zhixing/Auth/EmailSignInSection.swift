@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 邮箱验证码登录的纯逻辑（与视图同文件，便于 @testable 单测；视图见下方 EmailSignInSection）。
 /// 服务端契约与安全参数见 apps/api/src/emailAuth.ts（EMAIL_CODE）与 apps/api/src/routes/auth.ts。
@@ -51,4 +52,80 @@ struct SendCooldown {
     }
 
     func isCoolingDown(now: Date) -> Bool { remaining(now: now) > 0 }
+}
+
+/// 邮箱验证码登录区块（SignInScreen 只负责组装）。iOS 与 SIWA 并存；
+/// Mac（Catalyst）上是唯一登录入口（ad-hoc 签不进 applesignin entitlement，SIWA 编译期裁掉）。
+struct EmailSignInSection: View {
+    @Environment(SessionStore.self) private var session
+    @State private var email = ""
+    @State private var code = ""
+    @State private var cooldown = SendCooldown()
+    @State private var now = Date()
+    @State private var sending = false
+    @State private var verifying = false
+    @State private var error: String?
+
+    /// 每秒推一次 now，驱动倒计时刷新（SendCooldown 自身不读隐式时间）
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                TextField("邮箱", text: $email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button(sendTitle) { Task { await send() } }
+                    .disabled(sending || cooldown.isCoolingDown(now: now)
+                        || !EmailAuthRules.isValidEmail(email))
+            }
+            HStack(spacing: 8) {
+                TextField("6 位验证码", text: $code)
+                    .keyboardType(.numberPad)
+                Button("登录") { Task { await verify() } }
+                    .disabled(verifying || !EmailAuthRules.isValidCode(code))
+            }
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(.red)
+            }
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(.horizontal, 40)
+        .onReceive(ticker) { now = $0 }
+    }
+
+    private var sendTitle: String {
+        let remaining = cooldown.remaining(now: now)
+        return remaining > 0 ? "重新发送(\(remaining)秒)" : "发送验证码"
+    }
+
+    private var trimmedEmail: String {
+        email.trimmingCharacters(in: .whitespaces)
+    }
+
+    private func send() async {
+        sending = true
+        defer { sending = false }
+        do {
+            try await session.sendEmailCode(email: trimmedEmail)
+            error = nil
+            cooldown.start(now: Date())
+        } catch {
+            self.error = EmailAuthRules.message(for: error)
+        }
+    }
+
+    private func verify() async {
+        verifying = true
+        defer { verifying = false }
+        do {
+            // 成功后无需任何导航：session.isSignedIn 翻转由 RootView 自动切主界面
+            try await session.signInWithEmail(email: trimmedEmail, code: code)
+            error = nil
+        } catch {
+            self.error = EmailAuthRules.message(for: error)
+        }
+    }
 }

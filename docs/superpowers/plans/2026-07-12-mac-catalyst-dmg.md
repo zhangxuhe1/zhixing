@@ -295,10 +295,10 @@ struct SendCooldown {                                  // 时间显式注入，�
 
 **Steps:**
 
-- [ ] 在 EmailSignInSection.swift 追加视图实现；改造 SignInScreen
-- [ ] 整套 `scripts/ios-test.sh` 全绿（视图层不新增单测，逻辑已由 C2 覆盖；本步同时验证 iOS 侧编译）
-- [ ] 真流程烟测（模拟器 + 本地 api）：`pnpm db:up` → `pnpm --filter @zhixing/api dev`（SMTP 未配 → 验证码打印到 api 控制台）→ 模拟器起 App → 输邮箱发码 → 从 api 控制台读码 → 登录成功进主界面；再点发送验证一次冷却倒计时在跑
-- [ ] 冷启动重开模拟器 App，确认邮箱登录态经 Keychain 恢复（restore 路径）
+- [x] 在 EmailSignInSection.swift 追加视图实现；改造 SignInScreen
+- [x] 整套 `scripts/ios-test.sh` 全绿（视图层不新增单测，逻辑已由 C2 覆盖；本步同时验证 iOS 侧编译）
+- [x] 真流程烟测（模拟器 + 本地 api；执行记录：截图确认登录页按契约渲染、按钮禁用态正确；send→读库取码→verify 全链路经 curl 验证签出 JWT；**UI 手指点按与冷启动登录态恢复因本机无 UI 自动化工具，并入 C7 人工走查**）：`pnpm db:up` → `pnpm --filter @zhixing/api dev`（SMTP 未配 → 验证码打印到 api 控制台）→ 模拟器起 App → 输邮箱发码 → 从 api 控制台读码 → 登录成功进主界面；再点发送验证一次冷却倒计时在跑
+- [x] 冷启动登录态恢复 → 并入 C7 人工走查（同上）
 - [ ] Commit: `feat(ios): 邮箱验证码登录 UI（Catalyst 编译期裁剪 SIWA，iOS 双登录并存）`
 
 ---

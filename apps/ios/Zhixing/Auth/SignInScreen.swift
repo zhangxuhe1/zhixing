@@ -1,4 +1,6 @@
+#if !targetEnvironment(macCatalyst)
 import AuthenticationServices
+#endif
 import SwiftUI
 
 struct SignInScreen: View {
@@ -12,6 +14,9 @@ struct SignInScreen: View {
             Text("一张有故事的中国地图\n读懂每个地方，留下你的痕迹")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary)
             Spacer()
+            // Mac（Catalyst）编译期裁掉 SIWA：ad-hoc 签名带不上 applesignin entitlement，
+            // 按钮留着只会报错——Mac 版登录 = 邮箱验证码唯一入口
+            #if !targetEnvironment(macCatalyst)
             SignInWithAppleButton(.signIn) { request in
                 request.requestedScopes = [.fullName]
             } onCompletion: { result in
@@ -19,6 +24,10 @@ struct SignInScreen: View {
             }
             .frame(height: 50)
             .padding(.horizontal, 40)
+            Text("或使用邮箱验证码登录")
+                .font(.footnote).foregroundStyle(.secondary)
+            #endif
+            EmailSignInSection()
             #if DEBUG
             Button("开发登录（模拟器用）") {
                 Task {
@@ -36,6 +45,7 @@ struct SignInScreen: View {
         }
     }
 
+    #if !targetEnvironment(macCatalyst)
     private func handle(_ result: Result<ASAuthorization, Error>) async {
         guard case let .success(auth) = result,
               let credential = auth.credential as? ASAuthorizationAppleIDCredential,
@@ -53,4 +63,5 @@ struct SignInScreen: View {
             self.error = error.localizedDescription
         }
     }
+    #endif
 }
