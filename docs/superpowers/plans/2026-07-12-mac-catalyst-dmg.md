@@ -408,9 +408,9 @@ private static func applyWindowSizeRestrictions()
 
 **Steps:**
 
-- [ ] 按内容契约撰写 docs/mac-install.md
-- [ ] 自查：文中 App 路径/名称与 C5 脚本产物一致（`/Applications/知行.app`、`Zhixing-0.1.0.dmg`）；xattr 命令可整行复制执行
-- [ ] Commit: `docs: Mac 版安装说明（放行文案待验收实测定稿）`
+- [x] 按内容契约撰写 docs/mac-install.md
+- [x] 自查：文中 App 路径/名称与 C5 脚本产物一致（`/Applications/知行.app`、`Zhixing-0.1.0.dmg`）；xattr 命令可整行复制执行
+- [x] Commit: `docs: Mac 版安装说明（放行文案待验收实测定稿）`
 
 ---
 
