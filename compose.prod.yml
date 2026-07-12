@@ -25,6 +25,12 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${S3_SECRET_KEY}}
     volumes:
       - minio-data:/data
+    healthcheck:
+      # minio/minio 镜像内置 mc；`mc ready local` 为官方推荐探活方式
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
@@ -55,7 +61,7 @@ services:
     # 首启需等 db 就绪再跑 prisma migrate，否则迁移竞态失败（deploy.md 硬化清单）
     depends_on:
       db: { condition: service_healthy }
-      minio: { condition: service_started }
+      minio: { condition: service_healthy }
 
   admin:
     build:

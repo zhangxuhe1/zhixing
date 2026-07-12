@@ -121,10 +121,10 @@ db 的 healthcheck 与 api 对 db 的 `service_healthy` 依赖已存在，本任
 
 **Steps:**
 
-- [ ] 按契约修改 compose.prod.yml（minio 增 healthcheck；api.depends_on.minio 改 `service_healthy`）
-- [ ] 验证：`docker compose -f compose.prod.yml --env-file .env.production config` 退出码 0，渲染输出含 db/minio 两处 healthcheck 且 api 两个依赖均为 service_healthy
-- [ ] docs/deploy.md 硬化清单"compose 健康检查"项标为已完成
-- [ ] Commit: `fix(ops): compose 健康检查补全（部署前硬化 2/3）`
+- [x] 按契约修改 compose.prod.yml（minio 增 healthcheck；api.depends_on.minio 改 `service_healthy`）
+- [x] 验证：`docker compose -f compose.prod.yml --env-file .env.production config` 退出码 0，渲染输出含 db/minio 两处 healthcheck 且 api 两个依赖均为 service_healthy
+- [x] docs/deploy.md 硬化清单"compose 健康检查"项标为已完成
+- [x] Commit: `fix(ops): compose 健康检查补全（部署前硬化 2/3）`
 
 ---
 
