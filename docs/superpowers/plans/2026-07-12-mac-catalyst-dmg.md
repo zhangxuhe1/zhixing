@@ -260,13 +260,13 @@ struct SendCooldown {                                  // 时间显式注入，�
 
 **Steps:**
 
-- [ ] 写失败测试 `Tests/EmailSignInLogicTests.swift`（上表 4 组）
-- [ ] 内环跑 `-only-testing:ZhixingTests/EmailSignInLogicTests`，预期 FAIL（类型不存在）
-- [ ] 创建 `Auth/EmailSignInSection.swift` 实现 EmailAuthRules 与 SendCooldown（含互指注释）
-- [ ] 内环重跑，预期 PASS
-- [ ] apps/api/src/emailAuth.ts `cooldownMs` 注释补客户端回指（跑 `pnpm -C apps/api exec vitest run` 确认注释改动无碍）
-- [ ] 整套 `scripts/ios-test.sh` 全绿
-- [ ] Commit: `feat(ios): 邮箱登录纯逻辑——校验/倒计时/错误映射（与服务端参数注释互指）`
+- [x] 写失败测试 `Tests/EmailSignInLogicTests.swift`（上表 4 组）
+- [x] 内环跑 `-only-testing:ZhixingTests/EmailSignInLogicTests`，预期 FAIL（类型不存在）
+- [x] 创建 `Auth/EmailSignInSection.swift` 实现 EmailAuthRules 与 SendCooldown（含互指注释）
+- [x] 内环重跑，预期 PASS
+- [x] apps/api/src/emailAuth.ts `cooldownMs` 注释补客户端回指（跑 `pnpm -C apps/api exec vitest run` 确认注释改动无碍）
+- [x] 整套 `scripts/ios-test.sh` 全绿
+- [x] Commit: `feat(ios): 邮箱登录纯逻辑——校验/倒计时/错误映射（与服务端参数注释互指）`
 
 ---
 

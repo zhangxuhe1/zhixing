@@ -6,7 +6,8 @@ import { renderCodeEmail, sendMail } from "./mailer.js";
  * 邮箱验证码登录的三重加固常量。全部行为参数收敛在此，路由/服务层禁止再散落魔法数。
  * - length：验证码位数（补零到 6 位数字串）
  * - ttlMs：有效期 10min（落库 expiresAt = now + ttlMs）
- * - cooldownMs：同邮箱两次发码最小间隔 60s（冷却）
+ * - cooldownMs：同邮箱两次发码最小间隔 60s（冷却）——send 成功不下发冷却秒数，客户端倒计时
+ *   常量与此同步：apps/ios/Zhixing/Auth/EmailSignInSection.swift（EmailAuthRules.cooldownSeconds）
  * - dailyMax：同邮箱滚动 24h 窗口内发码上限 10 次（日限）
  * - maxAttempts：同一验证码最多错试 5 次，到顶即锁死（爆破防护）
  */
