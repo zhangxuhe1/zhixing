@@ -424,6 +424,8 @@ private static func applyWindowSizeRestrictions()
 
 **环境**：`pnpm db:up` → `pnpm --filter @zhixing/api dev`（Debug 构建指向 localhost:8787，Mac 直连本机）→ Catalyst Debug 构建（C4 验证命令）→ `open DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app`。
 
+> 2026-07-12 执行者预检：环境已就绪（db/minio 在跑、api dev 起于 :8787、Catalyst Debug 构建产物存在）；App 已实际 open，进程稳定运行无启动崩溃。终端无屏幕录制/辅助访问权限，无法代按代看——以下清单待真人走查。
+
 **走查清单**（按序，覆盖规格"最小桌面适配"第 2、3 条）：
 
 - [ ] 窗口：尝试把窗口拖小，最小停在 1000×700
