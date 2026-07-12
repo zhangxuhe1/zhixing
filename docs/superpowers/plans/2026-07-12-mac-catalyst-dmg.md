@@ -381,11 +381,11 @@ private static func applyWindowSizeRestrictions()
 
 **Steps:**
 
-- [ ] 按契约实现脚本，`chmod +x scripts/mac-dmg.sh`
-- [ ] 运行 `scripts/mac-dmg.sh`（不设 MAC_SIGN_IDENTITY），预期生成 `dist/Zhixing-0.1.0.dmg`
-- [ ] 验证 dmg：`hdiutil attach dist/Zhixing-0.1.0.dmg` → 卷内含 `知行.app` 与 `Applications` 符号链接 → `codesign -dv "/Volumes/知行/知行.app" 2>&1` 输出含 `Signature=adhoc` → `hdiutil detach`
-- [ ] `git status` 确认 dist/ 与 DerivedData/ 未被跟踪
-- [ ] Commit: `feat(ios): Mac dmg 打包脚本（ad-hoc 默认，Developer ID+公证钩子）`
+- [x] 按契约实现脚本，`chmod +x scripts/mac-dmg.sh`
+- [x] 运行 `scripts/mac-dmg.sh`（不设 MAC_SIGN_IDENTITY），预期生成 `dist/Zhixing-0.1.0.dmg`
+- [x] 验证 dmg：`hdiutil attach dist/Zhixing-0.1.0.dmg` → 卷内含 `知行.app` 与 `Applications` 符号链接 → `codesign -dv "/Volumes/知行/知行.app" 2>&1` 输出含 `Signature=adhoc` → `hdiutil detach`
+- [x] `git status` 确认 dist/ 与 DerivedData/ 未被跟踪
+- [x] Commit: `feat(ios): Mac dmg 打包脚本（ad-hoc 默认，Developer ID+公证钩子）`
 
 ---
 
