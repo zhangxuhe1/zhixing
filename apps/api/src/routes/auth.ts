@@ -10,8 +10,8 @@ import { signSession } from "../session.js";
 const appleSchema = z.object({ identityToken: z.string().min(10), nickname: z.string().min(1).max(20).optional() });
 const devSchema = z.object({ appleSub: z.string().min(1), nickname: z.string().min(1).max(20).optional() });
 // 校验的是**规范化之后**的邮箱：路由入口先 normalizeEmail（trim + 小写），再喂给这里做格式校验。
-const emailSendSchema = z.object({ email: z.string().email() });
-const emailVerifySchema = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) });
+const emailSendSchema = z.object({ email: z.string().email().max(254) });
+const emailVerifySchema = z.object({ email: z.string().email().max(254), code: z.string().regex(/^\d{6}$/) });
 
 /** 缺省昵称：APPLE = 旅人 + subject 后 4 位（与迁移前逐字节一致，保 seed/dev 既有数据兼容）；
  *  EMAIL = 邮箱本地部分（@ 前）截前 20 字（昵称约束 1–20 字，S5 邮箱登录复用）。 */

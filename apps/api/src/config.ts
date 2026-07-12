@@ -21,7 +21,7 @@ export const config = {
   },
   smtp: {
     // 空字符串 = dev/test 默认：sendMail 走控制台打印分支，绝无网络副作用
-    url: process.env.SMTP_URL ?? "",
+    url: (process.env.SMTP_URL ?? "").trim(),
     from: process.env.MAIL_FROM ?? "知行 <noreply@example.com>",
   },
 };

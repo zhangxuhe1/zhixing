@@ -15,6 +15,7 @@ export const EMAIL_CODE = {
   ttlMs: 10 * 60_000,
   cooldownMs: 60_000,
   dailyMax: 10, // 滚动 24h 窗口
+  dailyWindowMs: 24 * 60 * 60_000, // 滚动窗口时长
   maxAttempts: 5,
 } as const;
 
@@ -56,7 +57,7 @@ export async function issueEmailCode(prisma: PrismaClient, email: string): Promi
   }
 
   const dailyCount = await prisma.emailCode.count({
-    where: { email, createdAt: { gte: new Date(now - 24 * 60 * 60_000) } },
+    where: { email, createdAt: { gte: new Date(now - EMAIL_CODE.dailyWindowMs) } },
   });
   if (dailyCount >= EMAIL_CODE.dailyMax) {
     throw new EmailCooldownError("daily_limit");

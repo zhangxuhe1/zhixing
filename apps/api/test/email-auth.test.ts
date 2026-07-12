@@ -187,6 +187,10 @@ test("用例11 参数校验：非法邮箱 / code 长度非 6 或非数字 → 4
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("invalid_body");
   }
+  // 超长邮箱（形状合法但超 254 字 RFC 上限）→ 400，而非撑到 Prisma/索引层炸成 500
+  const overlong = await send(`${"a".repeat(250)}@test.dev`);
+  expect(overlong.statusCode).toBe(400);
+  expect(overlong.json().error).toBe("invalid_body");
   // 缺字段
   const missing = await app.inject({ method: "POST", url: "/auth/email/send", payload: {} });
   expect(missing.statusCode).toBe(400);
