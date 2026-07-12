@@ -344,13 +344,13 @@ private static func applyWindowSizeRestrictions()
 
 **Steps:**
 
-- [ ] 按契约修改 project.yml、新建 ZhixingMac.entitlements、改 ZhixingApp.swift
-- [ ] `xcodegen generate` 成功
-- [ ] Catalyst Debug 构建成功（Global Constraints 里的验证命令）
-- [ ] 版本号断言：`/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app/Contents/Info.plist` 输出 `0.1.0`
-- [ ] entitlements 断言：`codesign -d --entitlements - DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app` 输出**不含** `applesignin`
-- [ ] iOS 回归：整套 `scripts/ios-test.sh` 全绿
-- [ ] Commit: `feat(ios): Mac Catalyst 目标——entitlements 按 SDK 分叉 + 版本号 0.1.0 + 窗口最小 1000×700`
+- [x] 按契约修改 project.yml、新建 ZhixingMac.entitlements、改 ZhixingApp.swift
+- [x] `xcodegen generate` 成功
+- [x] Catalyst Debug 构建成功（Global Constraints 里的验证命令）
+- [x] 版本号断言：`/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app/Contents/Info.plist` 输出 `0.1.0`
+- [x] entitlements 断言：`codesign -d --entitlements - DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app` 输出**不含** `applesignin`
+- [x] iOS 回归：整套 `scripts/ios-test.sh` 全绿
+- [x] Commit: `feat(ios): Mac Catalyst 目标——entitlements 按 SDK 分叉 + 版本号 0.1.0 + 窗口最小 1000×700`
 
 ---
 

@@ -17,16 +17,24 @@ settings:
 targets:
   Zhixing:
     type: application
-    platform: iOS
+    # iOS + Mac Catalyst 双目标（与 platform 键互斥）；测试 target 仍只跑 iOS 模拟器
+    supportedDestinations: [iOS, macCatalyst]
     sources: [Zhixing]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.zhixing.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: 0.1.0
+        # Catalyst 走 macosx SDK，条件精确命中：Mac 构建用无 SIWA 的 entitlements
+        # （ad-hoc 签名带 applesignin 直接失败），iOS 构建不受影响
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Zhixing/ZhixingMac.entitlements
     info:
       path: Zhixing/Info.plist
       properties:
         CFBundleDisplayName: 知行
+        # XcodeGen 会把版本号硬编码为 1.0，只加 MARKETING_VERSION 构建设置流不进产物
+        # （探针已实证）——必须在此显式引用；dmg 产物命名依赖真实版本号
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         UILaunchScreen: {}
         APIBase: $(APP_API_BASE)
         ITSAppUsesNonExemptEncryption: false
