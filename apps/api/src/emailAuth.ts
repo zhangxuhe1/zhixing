@@ -76,9 +76,13 @@ export async function issueEmailCode(prisma: PrismaClient, email: string): Promi
  * 判定顺序（顺序即安全语义，勿调整）：
  * 1. 取该邮箱**最新一条未过期**记录（expiresAt > now，按 createdAt 倒序）；旧码/过期码隐式作废；
  * 2. 无记录 → false；
- * 3. attempts ≥ maxAttempts → false（**先于比码**：锁死后即便递交正确码也救不回，且不再自增）；
- * 4. 码不等 → attempts 自增后 false；
- * 5. 码相等 → deleteMany 该邮箱全部码（单次使用，杜绝重放）后 true。
+ * 3. 原子占坑：`updateMany({ where: { id, attempts: { lt: maxAttempts } }, data: { attempts: { increment: 1 } } })`
+ *    **先于比码**抢占一次试错名额——count === 0 说明名额已被抢空（锁死），直接 false，不再比码；
+ *    数据库把这一步的 where 过滤 + increment 绑在同一条原子语句里执行，
+ *    并发下无论请求如何交错，单码成功抢到的名额数恒不超过 maxAttempts（硬上限，不可被击穿）；
+ * 4. 占坑成功后再比码：码不等 → false（自增已在第 3 步完成，此处不再二次自增）；
+ * 5. 码相等 → deleteMany 该邮箱全部码（单次使用，杜绝重放）后 true
+ *    （成功这次也占用了一个名额再删表，无副作用——行都没了，谁也观察不到）。
  *
  * 返回值只有 true/false——"错/过期/超试"对调用方不可区分，不给攻击者反馈面。
  */
@@ -92,14 +96,14 @@ export async function verifyEmailCode(
     orderBy: { createdAt: "desc" },
   });
   if (!record) return false;
-  if (record.attempts >= EMAIL_CODE.maxAttempts) return false;
-  if (record.code !== code) {
-    await prisma.emailCode.update({
-      where: { id: record.id },
-      data: { attempts: { increment: 1 } },
-    });
-    return false;
-  }
+
+  const claim = await prisma.emailCode.updateMany({
+    where: { id: record.id, attempts: { lt: EMAIL_CODE.maxAttempts } },
+    data: { attempts: { increment: 1 } },
+  });
+  if (claim.count === 0) return false; // 名额已抢空：锁死，正确码也救不回
+
+  if (record.code !== code) return false;
   await prisma.emailCode.deleteMany({ where: { email } });
   return true;
 }

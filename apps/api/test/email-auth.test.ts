@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { EMAIL_CODE } from "../src/emailAuth.js";
 import { resetDb, testApp } from "./helpers.js";
 
 // 邮箱验证码登录（S5）：真实测试库直查 EmailCode 取码，绝不 mock；
@@ -201,4 +202,21 @@ test("用例11 参数校验：非法邮箱 / code 长度非 6 或非数字 → 4
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("invalid_body");
   }
+});
+
+test("用例12 并发爆破硬上限：同码 20 个并发错码 verify → 全部 401，attempts 恰好停在 maxAttempts（读改比码不会被并发击穿）", async () => {
+  await send(EMAIL);
+  const record = await latestRecord();
+  const bad = wrongCode(record!.code);
+
+  const results = await Promise.all(
+    Array.from({ length: 20 }, () => verify(EMAIL, bad)),
+  );
+  for (const res of results) {
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe("invalid_code");
+  }
+
+  const after = await app.prisma.emailCode.findUnique({ where: { id: record!.id } });
+  expect(after!.attempts).toBe(EMAIL_CODE.maxAttempts);
 });
