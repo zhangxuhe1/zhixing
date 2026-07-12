@@ -95,3 +95,31 @@ test("/search 恒按 IP 计数：伪造不同 Authorization 头无法绕过 30/m
   }
   expect(last.statusCode).toBe(429);
 });
+
+// 同上：全局档位调高，只测 /auth/email/send 自己的 10/min 档 + 按 IP 计数是否恒生效（S5）。
+const emailApp = buildApp({
+  databaseUrl: TEST_DB_URL,
+  appleJwks,
+  devAuth: true,
+  s3Bucket: "zhixing-test",
+  rateLimit: { max: 300 },
+});
+afterAll(async () => emailApp.close());
+
+test("/auth/email/send 恒按 IP 计数：伪造不同 Authorization 头无法绕过 10/min 限制", async () => {
+  // 每次都换一个全新邮箱（时间戳保证跨次运行也不复用，避开同邮箱 60s 冷却/日限干扰）
+  // + 随机假 Authorization 头——前 10 次应 200，第 11 次唯一可能的拦截者只剩 per-IP 桶；
+  // 若 keyGenerator 仍是"头优先"，每次都会开一个新桶，永远不会 429。
+  const run = Date.now();
+  let last!: Awaited<ReturnType<typeof emailApp.inject>>;
+  for (let i = 0; i < 11; i++) {
+    last = await emailApp.inject({
+      method: "POST",
+      url: "/auth/email/send",
+      headers: { authorization: `Bearer junk-${i}-${Math.random()}` },
+      payload: { email: `probe-${run}-${i}@rl.test` },
+    });
+    if (i < 10) expect(last.statusCode).toBe(200);
+  }
+  expect(last.statusCode).toBe(429);
+});

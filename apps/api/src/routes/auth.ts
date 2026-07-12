@@ -4,10 +4,14 @@ import { z } from "zod";
 import { verifyAppleIdentityToken } from "../apple.js";
 import { requireUser } from "../auth.js";
 import { config } from "../config.js";
+import { EmailCooldownError, issueEmailCode, normalizeEmail, verifyEmailCode } from "../emailAuth.js";
 import { signSession } from "../session.js";
 
 const appleSchema = z.object({ identityToken: z.string().min(10), nickname: z.string().min(1).max(20).optional() });
 const devSchema = z.object({ appleSub: z.string().min(1), nickname: z.string().min(1).max(20).optional() });
+// 校验的是**规范化之后**的邮箱：路由入口先 normalizeEmail（trim + 小写），再喂给这里做格式校验。
+const emailSendSchema = z.object({ email: z.string().email() });
+const emailVerifySchema = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) });
 
 /** 缺省昵称：APPLE = 旅人 + subject 后 4 位（与迁移前逐字节一致，保 seed/dev 既有数据兼容）；
  *  EMAIL = 邮箱本地部分（@ 前）截前 20 字（昵称约束 1–20 字，S5 邮箱登录复用）。 */
@@ -89,6 +93,37 @@ export async function authRoutes(app: FastifyInstance) {
       return loginByIdentity(app, "APPLE", body.data.appleSub, body.data.nickname);
     });
   }
+
+  // 邮箱验证码登录（S5）。两端点同挂 authRateLimit（按 req.ip 计数，防伪造 Bearer 头绕桶），
+  // 入口一律先 normalizeEmail 再 zod 校验规范化后的值——空白/大小写差异不得漏进业务层。
+  app.post("/auth/email/send", { config: authRateLimit }, async (req, reply) => {
+    const raw = z.object({ email: z.string() }).safeParse(req.body);
+    if (!raw.success) return reply.code(400).send({ error: "invalid_body" });
+    const email = normalizeEmail(raw.data.email);
+    const body = emailSendSchema.safeParse({ email });
+    if (!body.success) return reply.code(400).send({ error: "invalid_body" });
+    try {
+      await issueEmailCode(app.prisma, body.data.email);
+    } catch (err) {
+      // 冷却/日限统一 429 rate_limited；其余错误（如落库失败）照常上抛 → 500。
+      if (err instanceof EmailCooldownError) return reply.code(429).send({ error: "rate_limited" });
+      throw err;
+    }
+    return { ok: true };
+  });
+
+  app.post("/auth/email/verify", { config: authRateLimit }, async (req, reply) => {
+    const raw = z.object({ email: z.string(), code: z.string() }).safeParse(req.body);
+    if (!raw.success) return reply.code(400).send({ error: "invalid_body" });
+    const email = normalizeEmail(raw.data.email);
+    const body = emailVerifySchema.safeParse({ email, code: raw.data.code });
+    if (!body.success) return reply.code(400).send({ error: "invalid_body" });
+    // 校验失败一律 401 invalid_code——不区分"错/过期/超试"，不给攻击者反馈面。
+    const ok = await verifyEmailCode(app.prisma, body.data.email, body.data.code);
+    if (!ok) return reply.code(401).send({ error: "invalid_code" });
+    // 规范化后的邮箱即身份 subject；EMAIL 缺省昵称规则由 loginByIdentity 内部实现。
+    return loginByIdentity(app, "EMAIL", body.data.email);
+  });
 
   app.get("/me", { preHandler: requireUser }, async (req, reply) => {
     const user = await app.prisma.user.findUnique({ where: { id: req.userId } });

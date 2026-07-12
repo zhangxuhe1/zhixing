@@ -79,7 +79,7 @@ test("防泄露回归：stories 响应不含禁字段子串", async () => {
   expect(res.statusCode).toBe(200);
   expect(res.json().items).toHaveLength(1);
   const raw = JSON.stringify(res.json());
-  for (const banned of ['"userId"', '"appleSub"', '"lat"', '"lng"', '"takenAt"']) {
+  for (const banned of ['"userId"', '"appleSub"', '"lat"', '"lng"', '"takenAt"', '"email"', '"subject"']) {
     expect(raw).not.toContain(banned);
   }
 });
