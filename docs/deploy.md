@@ -37,6 +37,12 @@
 - MinIO 生产可换 Cloudflare R2 / 阿里云 OSS：只改 S3_* 五个环境变量，代码零改动
 - 公开上线（M4）前迁国内云 + 备案，见规格书 §5.2，本 runbook 不覆盖
 
+## SMTP 配置（邮箱验证码登录）
+
+- `SMTP_URL`：`smtps://user:pass@host:465` 格式连接串，直接交给 nodemailer 建立发信连接；留空时验证码只打印到 api 容器日志，不会真的发出邮件——这是 dev/test 默认，生产环境要让邮箱登录真正可用，必须配置这个变量
+- `MAIL_FROM`：发件人，格式「显示名 <地址>」，默认 `知行 <noreply@example.com>`；改用自有发信地址时一并改这里
+- 发信域名（`MAIL_FROM` 里 @ 后的域名）需要在 DNS 配好 SPF/DKIM，否则验证码邮件大概率被目标邮箱服务商（尤其 QQ/163/Gmail）打入垃圾箱或直接拒收
+
 ## 部署前硬化清单（M1 终审建议，首次部署时执行）
 
 - [ ] 备份含照片：backup.sh 目前只 pg_dump——首次部署时把 minio-data 卷纳入备份（如 `docker run --rm -v zhixing_minio-data:/data -v $PWD/backups:/backup alpine tar czf /backup/minio-$(date +%Y%m%d).tar.gz /data`）
