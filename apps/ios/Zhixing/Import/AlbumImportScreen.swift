@@ -23,7 +23,7 @@ struct AlbumImportScreen: View {
                     Button("关闭") { dismiss() }.disabled(isImporting)
                 }
             }
-            .background(ZXTheme.canvas)
+            .zxCanvasBackground()
         }
         .interactiveDismissDisabled(isImporting)
         // 用结构化的 view task 承担首次扫描和授权刷新：scanRequest 变化时旧任务会先被取消，

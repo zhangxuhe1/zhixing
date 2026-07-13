@@ -83,9 +83,25 @@ private struct ZXSurfaceModifier: ViewModifier {
     }
 }
 
+/// 页面级宣纸底色。先把内容撑满导航容器给出的可用区域，再让底色越过安全区；
+/// 若直接对空状态或完成态调用 `.background`，底色只会覆盖内容本身的尺寸，宽屏下会形成色块断层。
+private struct ZXCanvasBackgroundModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                ZXTheme.canvas.ignoresSafeArea()
+            }
+    }
+}
+
 extension View {
     func zxSurface(radius: CGFloat = 22, padding: CGFloat = 20) -> some View {
         modifier(ZXSurfaceModifier(radius: radius, padding: padding))
+    }
+
+    func zxCanvasBackground() -> some View {
+        modifier(ZXCanvasBackgroundModifier())
     }
 }
 

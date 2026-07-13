@@ -51,7 +51,7 @@ struct TripsScreen: View {
                 .background(ZXTheme.canvas)
             }
         }
-        .background(ZXTheme.canvas)
+        .zxCanvasBackground()
         .navigationTitle("旅程小结")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $creatingSuggestion) { suggestion in

@@ -43,7 +43,7 @@ struct FavoritesScreen: View {
             }
         }
         .navigationTitle("收藏")
-        .background(ZXTheme.canvas)
+        .zxCanvasBackground()
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedCard) { CardDetailView(card: $0) }
         .task { await load() }

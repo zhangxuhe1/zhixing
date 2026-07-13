@@ -59,7 +59,7 @@ struct SearchSheet: View {
                 }
             }
             }
-            .background(ZXTheme.canvas)
+            .zxCanvasBackground()
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: prompt)
             .onChange(of: query) { state = .idle } // 编辑即复位：未提交的新输入不沿用旧搜索的空态/结果

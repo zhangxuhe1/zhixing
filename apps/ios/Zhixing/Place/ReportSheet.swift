@@ -22,7 +22,7 @@ struct ReportSheet: View {
                     form
                 }
             }
-            .background(ZXTheme.canvas)
+            .zxCanvasBackground()
             .navigationTitle("内容有误？告诉我们")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
