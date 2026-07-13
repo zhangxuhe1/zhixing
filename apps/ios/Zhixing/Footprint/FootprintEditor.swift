@@ -27,15 +27,17 @@ struct FootprintEditor: View {
         _isPublic = State(initialValue: footprint.visibility == "PUBLIC")
     }
 
-    private enum PendingConfirmation: Identifiable {
+    private enum PendingConfirmation: Identifiable, Equatable {
         case makePublic
         case reReview
+        case delete
 
         var id: Self { self }
         var title: String {
             switch self {
             case .makePublic: PublicityConfirmationCopy.title
             case .reReview: "修改后将重新审核"
+            case .delete: "删除这条足迹？"
             }
         }
 
@@ -43,6 +45,7 @@ struct FootprintEditor: View {
             switch self {
             case .makePublic: PublicityConfirmationCopy.message
             case .reReview: "这条足迹已公开展示；保存改动后将重新进入审核，通过前其他旅人暂时看不到它。"
+            case .delete: "删除后无法恢复，足迹中的照片也会一并删除。"
             }
         }
     }
@@ -97,6 +100,12 @@ struct FootprintEditor: View {
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(.red).font(.footnote)
                 }
+                Section {
+                    Button("删除足迹", role: .destructive) {
+                        pendingConfirmation = .delete
+                    }
+                    .frame(maxWidth: .infinity)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(ZXTheme.canvas)
@@ -127,7 +136,11 @@ struct FootprintEditor: View {
             )
         ) {
             Button("再想想", role: .cancel) {}
-            Button("确认") { Task { await performSave() } }
+            if pendingConfirmation == .delete {
+                Button("删除足迹", role: .destructive) { Task { await performDelete() } }
+            } else {
+                Button("确认") { Task { await performSave() } }
+            }
         } message: {
             Text(pendingConfirmation?.message ?? "")
         }
@@ -154,6 +167,17 @@ struct FootprintEditor: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func performDelete() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await store.delete(footprint)
+            dismiss()
+        } catch {
+            errorMessage = "删除失败：\(error.localizedDescription)"
         }
     }
 }
