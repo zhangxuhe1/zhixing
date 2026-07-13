@@ -11,12 +11,40 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** 品牌文案集中一处——页头品牌字、标语、页脚。均为可信常量，插入模板无需转义（仅动态值 code 过 escapeHtml）。 */
+const BRAND = {
+  name: "知行",
+  tagline: "知一方风土，行万里路", // 取「知行合一」注解：知一方风土、行万里路
+  footer: "系统自动发送，请勿回复。",
+} as const;
+
+/**
+ * 「水墨留白·朱砂」调色，集中一处便于维护——避免十六进制在模板里散落。
+ * 宣纸暖白底 + 墨色正文 + 朱砂红验证码，贴知行的人文遗产气质。
+ */
+const C = {
+  pageBg: "#efe9db", // 邮件外底：宣纸暖色
+  card: "#fbf8f2", // 正文卡底：暖白
+  hair: "#e8dfc9", // 描边 / 发丝线
+  brand: "#a8322a", // 品牌字 / 验证码：朱砂
+  muted: "#6b6248", // 标语：暖褐灰
+  ink: "#3a352e", // 正文墨色
+  codeBg: "#faf0e9", // 验证码块底：浅朱砂晕
+  hint: "#8a8070", // 提示文字
+  footBg: "#f4efe2", // 页脚带底
+  foot: "#b3a889", // 页脚字
+} as const;
+
+const SERIF = "'Songti SC','Noto Serif SC',STSong,SimSun,serif";
+const SANS = "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif";
+const MONO = "'Courier New',Courier,monospace";
+
 /**
  * 渲染登录验证码邮件的文本与 HTML 双版本。
  *
- * HTML 用表格布局 + 全内联样式（QQ 邮箱/163 等客户端不支持现代 CSS/外链样式表）：
- * 外层灰底居中，内层 480px 白色卡片，品牌头部"知行"，正文含大号等宽居中验证码块，
- * 页脚"系统自动发送请勿回复"。
+ * HTML 为完整文档（<!DOCTYPE> + head/viewport meta），表格布局 + 全内联样式
+ * （QQ 邮箱/163 等客户端不支持现代 CSS / 外链样式表）：宣纸暖底居中，480px 移动自适应白卡，
+ * 衬线体「知行」品牌头 + 标语，正文含大号等宽居中朱砂验证码块，页脚「系统自动发送请勿回复」。
  *
  * 返回的 subject 未加前缀——统一由 sendMail 加上「【知行】」前缀，调用方不应重复添加。
  */
@@ -24,44 +52,54 @@ export function renderCodeEmail(code: string): { subject: string; text: string; 
   const safeCode = escapeHtml(code);
   const subject = "登录验证码";
   const text = [
+    `${BRAND.name} · ${BRAND.tagline}`,
+    "",
     "你正在登录知行，本次登录验证码：",
+    "",
     code,
     "",
     "验证码 10 分钟内有效。如非本人操作，请忽略这封邮件。",
     "",
-    "系统自动发送请勿回复。",
+    BRAND.footer,
   ].join("\n");
-  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 0;">
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:${C.pageBg};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.pageBg};padding:32px 16px;">
   <tr>
     <td align="center">
-      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;background-color:#ffffff;border-radius:8px;overflow:hidden;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:${C.card};border:1px solid ${C.hair};border-radius:12px;overflow:hidden;">
         <tr>
-          <td style="padding:24px 32px;background-color:#1f1f1f;">
-            <span style="color:#ffffff;font-size:20px;font-weight:bold;">知行</span>
+          <td style="padding:24px 32px 18px;border-bottom:1px solid ${C.hair};">
+            <span style="font-family:${SERIF};font-size:22px;font-weight:700;letter-spacing:2px;color:${C.brand};">${BRAND.name}</span>
+            <span style="font-size:12px;color:${C.muted};padding-left:10px;">${BRAND.tagline}</span>
           </td>
         </tr>
         <tr>
-          <td style="padding:32px;color:#333333;font-size:14px;line-height:1.6;">
+          <td style="padding:28px 32px 12px;font-family:${SANS};color:${C.ink};font-size:14px;line-height:1.7;">
             <p style="margin:0 0 16px 0;">你正在登录知行，本次登录验证码：</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:0 0 16px 0;">
-                  <span style="display:inline-block;padding:12px 24px;font-family:'Courier New',Courier,monospace;font-size:28px;font-weight:bold;letter-spacing:8px;color:#1f1f1f;background-color:#f5f5f5;border-radius:6px;">${safeCode}</span>
+                  <span style="display:inline-block;padding:12px 28px;font-family:${MONO};font-size:28px;font-weight:700;letter-spacing:8px;text-indent:8px;color:${C.brand};background:${C.codeBg};border-radius:8px;">${safeCode}</span>
                 </td>
               </tr>
             </table>
-            <p style="margin:0;color:#999999;font-size:12px;">验证码 10 分钟内有效。如非本人操作，请忽略这封邮件。</p>
+            <p style="margin:0;color:${C.hint};font-size:12px;">验证码 10 分钟内有效。如非本人操作，请忽略这封邮件。</p>
           </td>
         </tr>
         <tr>
-          <td style="padding:16px 32px;background-color:#fafafa;border-top:1px solid #eeeeee;">
-            <p style="margin:0;color:#bbbbbb;font-size:12px;text-align:center;">系统自动发送请勿回复</p>
+          <td style="padding:16px 32px 22px;background:${C.footBg};border-top:1px solid ${C.hair};">
+            <p style="margin:0;color:${C.foot};font-size:12px;text-align:center;">${BRAND.footer}</p>
           </td>
         </tr>
       </table>
     </td>
   </tr>
-</table>`;
+</table>
+</body>
+</html>`;
   return { subject, text, html };
 }
 
