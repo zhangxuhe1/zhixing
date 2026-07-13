@@ -65,6 +65,7 @@ struct MeScreen: View {
                         }
                     }
                 }
+                #if !targetEnvironment(macCatalyst)
                 Section {
                     Button { showImport = true } label: {
                         Label("从相册点亮过去的旅行", systemImage: "photo.stack.fill")
@@ -80,11 +81,14 @@ struct MeScreen: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
+                #endif
             }
             .scrollContentBackground(.hidden)
             .background(ZXTheme.canvas)
             .navigationTitle("我的知行")
+            #if !targetEnvironment(macCatalyst)
             .sheet(isPresented: $showImport) { AlbumImportScreen().appStores() }
+            #endif
             .sheet(item: $editingFootprint) { fp in FootprintEditor(footprint: fp).appStores() }
             .task { await store.load() }
             .alert(

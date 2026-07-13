@@ -66,7 +66,9 @@ private enum DesktopDestination: Hashable {
 
 /// Catalyst 宽屏壳层：把手机底部 Tab 换成可识别的桌面侧栏，地图获得稳定的主工作区。
 private struct DesktopMainView: View {
+    @Environment(SessionStore.self) private var session
     @State private var selection: DesktopDestination? = .map
+    @State private var showImport = false
 
     var body: some View {
         NavigationSplitView {
@@ -78,6 +80,28 @@ private struct DesktopMainView: View {
                 Section("个人") {
                     Label("我的知行", systemImage: "person.crop.circle")
                         .tag(DesktopDestination.me)
+                }
+                Section {
+                    Button { showImport = true } label: {
+                        Label {
+                            Text("从相册点亮旅行")
+                                .foregroundStyle(.primary)
+                        } icon: {
+                            Image(systemName: "photo.stack.fill")
+                                .foregroundStyle(ZXTheme.pine)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("从相册点亮过去的旅行")
+                    .accessibilityLabel("从相册点亮过去的旅行")
+                } header: {
+                    Text("快捷操作")
+                } footer: {
+                    Label("导入的足迹默认仅自己可见", systemImage: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
             .listStyle(.sidebar)
@@ -104,10 +128,7 @@ private struct DesktopMainView: View {
                 .background(.ultraThinMaterial)
             }
             .safeAreaInset(edge: .bottom) {
-                Label("足迹默认仅自己可见", systemImage: "lock.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 12)
+                sidebarAccountAction
             }
         } detail: {
             switch selection ?? .map {
@@ -119,6 +140,30 @@ private struct DesktopMainView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .tint(ZXTheme.pine)
+        .sheet(isPresented: $showImport) {
+            AlbumImportScreen().appStores()
+        }
+    }
+
+    /// 低频账户操作独立沉底，与导航和相册导入拉开距离，避免视觉竞争与误触。
+    private var sidebarAccountAction: some View {
+        VStack(spacing: 0) {
+            Divider()
+            Button(role: .destructive) { session.signOut() } label: {
+                Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("退出当前账户")
+            .accessibilityLabel("退出当前账户")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
     }
 }
 #endif
