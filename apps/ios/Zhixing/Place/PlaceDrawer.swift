@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaceDrawer: View {
     let pin: Pin
+    @Environment(\.dismiss) private var dismiss
     @State private var cardsState: LoadState<[Card]> = .idle
     @State private var showComposer = false
     @State private var section: DrawerSection = .cards
@@ -39,6 +40,14 @@ struct PlaceDrawer: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
             .toolbar {
+                // Mac Catalyst：抽屉是以 sheet 弹出的浮层，Mac 上没有 iOS 的下滑关闭手势、只能按 ESC；
+                // 补一个显式「关闭」把抽屉收回地图。iOS 不加：detent + 下滑关闭已是原生约定，加了反而多余。
+                // 位置/写法对齐旅人故事详情（StoryDetailView）的 .cancellationAction「关闭」。
+                #if targetEnvironment(macCatalyst)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+                #endif
                 ToolbarItem(placement: .bottomBar) {
                     Button { showComposer = true } label: {
                         Label("在此留足迹", systemImage: "shoeprints.fill")
