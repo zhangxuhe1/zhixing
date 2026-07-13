@@ -49,7 +49,7 @@ struct StoriesSection: View {
                 }
             }
         }
-        .sheet(item: $selectedStory) { story in StoryDetailView(story: story) }
+        .sheet(item: $selectedStory) { story in StoryDetailView(story: story).appStores() }
         .task { await load() }
     }
 

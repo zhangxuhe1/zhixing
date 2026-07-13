@@ -5,18 +5,12 @@ import UIKit
 
 @main
 struct ZhixingApp: App {
-    @State private var session = SessionStore()
-    @State private var footprints = FootprintStore()
-    @State private var favorites = FavoritesStore()
-    @State private var pinsCache = PinsCache()
-
+    // store 实例统一收敛在 AppStores（Catalyst 模态环境断链问题，见其文件头注释），
+    // 这里不再用 @State 持有——static 常量同样保证生命周期，@Observable 观察不受影响。
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environment(session)
-                .environment(footprints)
-                .environment(favorites)
-                .environment(pinsCache)
+                .appStores()
                 #if targetEnvironment(macCatalyst)
                 .onAppear { Self.applyWindowSizeRestrictions() }
                 #endif

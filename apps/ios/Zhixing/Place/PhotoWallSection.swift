@@ -38,9 +38,11 @@ struct PhotoWallSection: View {
                         storyTarget = pending
                     }
                 }
+                .appStores()
         }
         .sheet(item: $storyTarget) { target in
             StoryDetailView(footprintId: target.footprintId)
+                .appStores()
         }
         .task { await load() }
     }

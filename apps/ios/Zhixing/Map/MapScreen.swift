@@ -35,21 +35,25 @@ struct MapScreen: View {
         }
         .sheet(item: $selected) { pin in
             PlaceDrawer(pin: pin)
+                .appStores()
         }
         .sheet(isPresented: $showSearch) {
             SearchSheet { pin in
                 showSearch = false
                 goTo(pin)
             }
+            .appStores()
         }
         .sheet(isPresented: $showPlacePicker) {
             PlacePickerSheet(pins: pinsCache.pins) { pin in
                 showPlacePicker = false
                 composerPin = pin
             }
+            .appStores()
         }
         .sheet(item: $composerPin) { pin in
             FootprintComposer(pin: pin)
+                .appStores()
         }
     }
 

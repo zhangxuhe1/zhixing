@@ -72,6 +72,7 @@ struct CardDetailView: View {
         .animation(.default, value: favoriteError)
         .sheet(isPresented: $showReportSheet) {
             ReportSheet(cardId: card.id)
+                .appStores()
         }
         .task {
             // 冷启动后首次打开任意卡片详情时兜底预热收藏态——FavoritesScreen 未必先被访问过；

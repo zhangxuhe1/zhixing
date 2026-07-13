@@ -53,12 +53,15 @@ struct TripsScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $creatingSuggestion) { suggestion in
             TripEditScreen(mode: .create(suggestion), onSaved: handleSaved)
+                .appStores()
         }
         .sheet(item: $editingTrip) { trip in
             TripEditScreen(mode: .edit(trip), onSaved: handleSaved)
+                .appStores()
         }
         .sheet(item: $sharingTrip) { trip in
             TripShareScreen(trip: trip)
+                .appStores()
         }
         .task { await reloadAll() }
     }

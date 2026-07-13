@@ -45,7 +45,7 @@ struct PlaceDrawer: View {
                     }
                 }
             }
-            .sheet(isPresented: $showComposer) { FootprintComposer(pin: pin) }
+            .sheet(isPresented: $showComposer) { FootprintComposer(pin: pin).appStores() }
         }
         .presentationDetents([.medium, .large])
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))

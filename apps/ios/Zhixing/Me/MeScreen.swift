@@ -52,8 +52,8 @@ struct MeScreen: View {
                 }
             }
             .navigationTitle(session.user?.nickname ?? "我的")
-            .sheet(isPresented: $showImport) { AlbumImportScreen() }
-            .sheet(item: $editingFootprint) { fp in FootprintEditor(footprint: fp) }
+            .sheet(isPresented: $showImport) { AlbumImportScreen().appStores() }
+            .sheet(item: $editingFootprint) { fp in FootprintEditor(footprint: fp).appStores() }
             .task { await store.load() }
             .alert(
                 "删除失败", isPresented: Binding(
