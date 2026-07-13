@@ -11,39 +11,92 @@ struct CardDetailView: View {
     private var isFavorited: Bool { favorites.cardIds.contains(card.id) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    Text(card.categoryLabel)
-                        .font(.caption)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(.teal.opacity(0.15), in: Capsule())
+        ZStack {
+            ZXTheme.canvas.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("一 方 风 物")
+                        .font(.caption.weight(.semibold))
+                        .tracking(3)
+                        .foregroundStyle(ZXTheme.cinnabar)
+
+                    HStack(spacing: 8) {
+                        ZXCategoryBadge(text: card.categoryLabel)
                     if card.isAIGenerated {
                         Label("AI 整理·待复核", systemImage: "sparkles")
-                            .font(.caption).foregroundStyle(.orange)
-                    }
-                }
-                Text(card.title).font(.title2.bold())
-                ForEach(card.blocks) { block in
-                    if block.type == "TEXT", let text = block.text {
-                        Text(text).font(.body).lineSpacing(7)
-                    }
-                }
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(card.sources, id: \.self) { source in
-                            Text("· \(source)").font(.footnote).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(ZXTheme.oldGold)
                         }
                     }
-                    .padding(.top, 6)
-                } label: {
-                    Text("参考来源").font(.subheadline)
-                }
-                Button("内容有误？告诉我们") { showReportSheet = true }
+
+                    Text(card.title)
+                        .font(.system(size: 34, weight: .bold, design: .serif))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 10) {
+                        Rectangle().fill(ZXTheme.oldGold.opacity(0.50)).frame(height: 1)
+                        Circle().fill(ZXTheme.cinnabar).frame(width: 6, height: 6)
+                        Rectangle().fill(ZXTheme.oldGold.opacity(0.50)).frame(height: 1)
+                    }
+
+                    ForEach(card.blocks) { block in
+                        if block.type == "TEXT", let text = block.text {
+                            Text(text)
+                                .font(.system(.body, design: .serif))
+                                .lineSpacing(9)
+                                .foregroundStyle(.primary.opacity(0.90))
+                                .textSelection(.enabled)
+                        } else if block.type == "IMAGE", let value = block.mediaUrl,
+                                  let url = URL(string: value) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case let .success(image):
+                                    image.resizable().scaledToFill()
+                                case .failure:
+                                    ZStack {
+                                        ZXTheme.jade.opacity(0.08)
+                                        Image(systemName: "photo")
+                                            .font(.title2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                default:
+                                    ZStack {
+                                        ZXTheme.jade.opacity(0.08)
+                                        ProgressView().tint(ZXTheme.pine)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 360)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .accessibilityLabel("风物卡配图")
+                        }
+                    }
+
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 9) {
+                            ForEach(card.sources, id: \.self) { source in
+                                Label(source, systemImage: "book.closed")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.top, 10)
+                    } label: {
+                        Label("参考来源", systemImage: "books.vertical")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .zxSurface(radius: 16, padding: 16)
+
+                    Button { showReportSheet = true } label: {
+                        Label("内容有误？告诉我们", systemImage: "exclamationmark.bubble")
+                    }
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: 720, alignment: .leading)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 30)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -52,6 +105,7 @@ struct CardDetailView: View {
                     Task { await toggleFavorite() }
                 } label: {
                     Image(systemName: isFavorited ? "bookmark.fill" : "bookmark")
+                        .foregroundStyle(isFavorited ? ZXTheme.cinnabar : ZXTheme.pine)
                 }
                 .disabled(isTogglingFavorite)
                 .accessibilityLabel(isFavorited ? "取消收藏" : "收藏")

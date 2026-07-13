@@ -12,20 +12,26 @@ struct MapScreen: View {
     @State private var showHumanities = true
     @State private var showFootprintLayer = true
     @State private var flightTask: Task<Void, Never>?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        ZStack(alignment: .trailing) {
+        ZStack(alignment: .topTrailing) {
             MapView(pins: pinsCache.pins, litPlaceIds: footprints.litPlaceIds,
                     showHumanities: showHumanities, showFootprints: showFootprintLayer,
                     flyTo: $flyTo, onSelect: { selected = $0 })
                 .ignoresSafeArea()
-            controls.padding(.trailing, 12)
+            controls
+                .padding(.top, 16)
+                .padding(.trailing, 16)
+        }
+        .overlay(alignment: .bottomLeading) {
+            layerLegend
+                .padding(.leading, 16)
+                .padding(.bottom, 18)
         }
         .overlay(alignment: .bottom) {
             if let loadError {
-                Text(loadError)
-                    .font(.footnote).foregroundStyle(.red)
-                    .padding(8).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                ZXErrorBanner(message: loadError)
                     .padding(.bottom, 24)
             }
         }
@@ -58,9 +64,26 @@ struct MapScreen: View {
     }
 
     private var controls: some View {
-        VStack(spacing: 14) {
-            controlButton("magnifyingglass") { showSearch = true }
-            controlButton("shuffle") {
+        Group {
+            if horizontalSizeClass == .regular {
+                HStack(spacing: 4) { controlItems }
+            } else {
+                VStack(spacing: 4) { controlItems }
+            }
+        }
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.50), lineWidth: 1)
+        }
+        .shadow(color: ZXTheme.ink.opacity(0.16), radius: 18, y: 8)
+    }
+
+    @ViewBuilder
+    private var controlItems: some View {
+        controlButton("magnifyingglass", title: "搜索地点") { showSearch = true }
+        controlButton("shuffle", title: "随便走走") {
                 Task {
                     do {
                         let pin: Pin = try await APIClient.shared.get("/places/random")
@@ -70,26 +93,62 @@ struct MapScreen: View {
                         loadError = "随机地点加载失败，请重试"
                     }
                 }
-            }
-            Menu {
-                Toggle("人文层（知）", isOn: $showHumanities)
-                Toggle("足迹层（行）", isOn: $showFootprintLayer)
-            } label: {
-                Image(systemName: "square.3.layers.3d")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                    .background(.thinMaterial, in: Circle())
-            }
-            controlButton("plus") { showPlacePicker = true }
         }
+        Menu {
+            Toggle("人文层（知）", isOn: $showHumanities)
+            Toggle("足迹层（行）", isOn: $showFootprintLayer)
+        } label: {
+            Image(systemName: "square.3.layers.3d")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(ZXTheme.pine)
+                .frame(width: 42, height: 42)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("地图图层")
+        .help("地图图层")
+        controlButton("plus", title: "留下足迹", emphasized: true) { showPlacePicker = true }
     }
 
-    private func controlButton(_ icon: String, action: @escaping () -> Void) -> some View {
+    private func controlButton(
+        _ icon: String,
+        title: String,
+        emphasized: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
-                .background(.thinMaterial, in: Circle())
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(emphasized ? .white : ZXTheme.pine)
+                .frame(width: 42, height: 42)
+                .background(emphasized ? ZXTheme.cinnabar : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .help(title)
+    }
+
+    private var layerLegend: some View {
+        HStack(spacing: 12) {
+            if showHumanities {
+                legendItem(color: ZXTheme.pine, text: "风物")
+            }
+            if showFootprintLayer {
+                legendItem(color: ZXTheme.cinnabar, text: "足迹")
+            }
+        }
+        .font(.caption.weight(.medium))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay { Capsule().stroke(Color.white.opacity(0.45), lineWidth: 1) }
+        .shadow(color: ZXTheme.ink.opacity(0.12), radius: 12, y: 6)
+    }
+
+    private func legendItem(color: Color, text: String) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(text)
         }
     }
 
@@ -126,6 +185,8 @@ private struct PlacePickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
+                Text("快速选点")
+                    .font(.headline)
                 Button {
                     Task { await useCurrentLocation() }
                 } label: {
@@ -140,13 +201,15 @@ private struct PlacePickerSheet: View {
                     }
                 }
                 .disabled(locating)
+                .buttonStyle(ZXSecondaryButtonStyle())
                 if let hint {
                     Text(hint)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding()
+            .padding(20)
+            .background(ZXTheme.canvas)
             Divider()
             SearchSheet(prompt: "搜地点，在那里留足迹", onPick: onPick)
         }

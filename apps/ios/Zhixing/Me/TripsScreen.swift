@@ -47,8 +47,11 @@ struct TripsScreen: View {
                         }
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(ZXTheme.canvas)
             }
         }
+        .background(ZXTheme.canvas)
         .navigationTitle("旅程小结")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $creatingSuggestion) { suggestion in
@@ -90,12 +93,11 @@ struct TripsScreen: View {
     }
 
     private var emptyState: some View {
-        Text("留下带日期的足迹后，这里会自动整理出你的旅程")
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
+        ZXEmptyState(
+            icon: "map.circle",
+            title: "旅程会在这里慢慢成形",
+            message: "留下带日期的足迹后，知行会自动把相邻的日子整理成一段旅行。")
+        .frame(maxWidth: .infinity)
     }
 
     /// 保存/删除成功后的统一收口：两段列表 + FootprintStore 都要重新拉取（tripId 分布变了）。

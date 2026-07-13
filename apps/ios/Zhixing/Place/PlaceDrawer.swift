@@ -16,27 +16,49 @@ struct PlaceDrawer: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("显示分段", selection: $section) {
-                    ForEach(DrawerSection.allCases, id: \.self) { item in
-                        Text(item.rawValue).tag(item)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+            ZStack {
+                ZXTheme.canvas.ignoresSafeArea()
+                LinearGradient(
+                    colors: [ZXTheme.rice.opacity(0.48), .clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing)
+                    .ignoresSafeArea()
 
-                switch section {
-                case .cards:
-                    cardsContent
-                case .stories:
-                    StoriesSection(placeId: pin.id, onComposeFootprint: { showComposer = true })
-                case .photos:
-                    PhotoWallSection(placeId: pin.id)
+                VStack(spacing: 0) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(ZXTheme.pine, in: RoundedRectangle(cornerRadius: 13))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("在地故事")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(ZXTheme.cinnabar)
+                            Text(pin.name)
+                                .font(.system(.title2, design: .serif, weight: .bold))
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 12)
+
+                    Picker("显示分段", selection: $section) {
+                        ForEach(DrawerSection.allCases, id: \.self) { item in
+                            Text(item.rawValue).tag(item)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+
+                    sectionContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .navigationTitle(pin.name)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
             .toolbar {
@@ -48,44 +70,76 @@ struct PlaceDrawer: View {
                     Button("关闭") { dismiss() }
                 }
                 #endif
-                ToolbarItem(placement: .bottomBar) {
-                    Button { showComposer = true } label: {
-                        Label("在此留足迹", systemImage: "shoeprints.fill")
-                    }
-                }
             }
             .sheet(isPresented: $showComposer) { FootprintComposer(pin: pin).appStores() }
         }
         .presentationDetents([.medium, .large])
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .safeAreaInset(edge: .bottom) {
+            Button { showComposer = true } label: {
+                Label("在此留足迹", systemImage: "shoeprints.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ZXPrimaryButtonStyle())
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
         .task { await loadCards() }
+    }
+
+    @ViewBuilder
+    private var sectionContent: some View {
+        switch section {
+        case .cards:
+            cardsContent
+        case .stories:
+            StoriesSection(placeId: pin.id, onComposeFootprint: { showComposer = true })
+        case .photos:
+            PhotoWallSection(placeId: pin.id, onComposeFootprint: { showComposer = true })
+        }
     }
 
     private var cardsContent: some View {
         LoadStateView(state: cardsState, retry: { Task { await loadCards() } }) { cards in
-            List {
+            ScrollView {
+                LazyVStack(spacing: 10) {
                 if cards.isEmpty {
-                    Text("这里还没有风物卡，搜索或报错会帮我们知道该补哪儿")
-                        .foregroundStyle(.secondary)
+                    ZXSectionEmptyState(
+                        icon: "text.book.closed",
+                        eyebrow: "风物卡",
+                        title: "这里的故事还在路上",
+                        message: "搜索与访问会帮助我们知道，下一张风物卡该补在哪里。")
                 }
                 ForEach(cards) { card in
                     NavigationLink(value: card) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(spacing: 6) {
-                                Text(card.categoryLabel)
-                                    .font(.caption)
-                                    .padding(.horizontal, 7).padding(.vertical, 2)
-                                    .background(.teal.opacity(0.15), in: Capsule())
-                                if card.isAIGenerated {
-                                    Text("AI 整理·待复核")
-                                        .font(.caption2).foregroundStyle(.orange)
+                        HStack(spacing: 14) {
+                            VStack(alignment: .leading, spacing: 9) {
+                                HStack(spacing: 7) {
+                                    ZXCategoryBadge(text: card.categoryLabel)
+                                    if card.isAIGenerated {
+                                            Label("待复核", systemImage: "sparkles")
+                                                .font(.caption2)
+                                                .foregroundStyle(ZXTheme.oldGold)
+                                    }
                                 }
+                                Text(card.title)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .multilineTextAlignment(.leading)
                             }
-                            Text(card.title).font(.headline)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
                         }
-                        .padding(.vertical, 2)
+                        .zxSurface(radius: 17, padding: 16)
                     }
+                    .buttonStyle(.plain)
                 }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
         }
     }

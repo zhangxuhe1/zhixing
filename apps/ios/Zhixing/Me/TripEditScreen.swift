@@ -126,6 +126,8 @@ struct TripEditScreen: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(ZXTheme.canvas)
             .disabled(saving)
             .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)

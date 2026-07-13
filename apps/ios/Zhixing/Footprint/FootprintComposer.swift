@@ -48,6 +48,8 @@ struct FootprintComposer: View {
                     Text(error).foregroundStyle(.red).font(.footnote)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(ZXTheme.canvas)
             .disabled(saving)
             .navigationTitle("留下足迹")
             .navigationBarTitleDisplayMode(.inline)

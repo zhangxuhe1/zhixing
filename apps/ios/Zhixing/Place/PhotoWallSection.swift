@@ -5,8 +5,9 @@ import SwiftUI
 /// 客户端只管渲染，绝不重排、也不再过滤——护栏，规格书 §4.1。
 struct PhotoWallSection: View {
     let placeId: String
+    let onComposeFootprint: () -> Void
 
-    @State private var state: LoadState<[PhotoWallGroup]> = .idle
+    @State private var state: LoadState<[PhotoWallGroup]> = .loading
     @State private var browseSession: BrowseSession?
     /// 全屏浏览器里点「查看故事」时先记下目标，等浏览器真正从层级消失（onDisappear）后才转成 sheet——
     /// fullScreenCover 与 sheet 是两层独立 modal，同一时刻关一个开另一个在 SwiftUI 下偶发不弹
@@ -17,13 +18,17 @@ struct PhotoWallSection: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
     var body: some View {
-        LoadStateView(state: state, retry: { Task { await load() } }) { groups in
-            if groups.isEmpty {
-                emptyState
-            } else {
-                grid(groups)
+        ZStack(alignment: .top) {
+            LoadStateView(state: state, retry: { Task { await load() } }) { groups in
+                if groups.isEmpty {
+                    emptyState
+                } else {
+                    grid(groups)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .fullScreenCover(item: $browseSession) { session in
             PhotoWallBrowser(
                 photos: session.photos, startIndex: session.startIndex,
@@ -44,6 +49,7 @@ struct PhotoWallSection: View {
             StoryDetailView(footprintId: target.footprintId)
                 .appStores()
         }
+        .background(ZXTheme.canvas)
         .task { await load() }
     }
 
@@ -91,17 +97,25 @@ struct PhotoWallSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(.background)
+            .background(.ultraThinMaterial)
     }
 
     private var emptyState: some View {
-        VStack {
-            Spacer()
-            Text("这里还没有公开的旅人照片")
-                .foregroundStyle(.secondary)
-            Spacer()
+        VStack(spacing: 12) {
+            ZXSectionEmptyState(
+                icon: "camera.viewfinder",
+                eyebrow: "旅人镜头",
+                title: "等待第一束旅人目光",
+                message: "公开并通过审核的足迹照片，会在这里按季节汇成一面时光墙。")
+            Button(action: onComposeFootprint) {
+                Label("留下第一张照片", systemImage: "camera")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ZXSecondaryButtonStyle())
         }
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     /// 给每张照片算出它在"跨组拍平"数组里的全局下标（供全屏浏览器翻页用）：一次线性遍历累加组内

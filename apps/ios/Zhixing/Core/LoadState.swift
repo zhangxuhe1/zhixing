@@ -37,15 +37,22 @@ struct LoadStateView<Value: Sendable, Content: View>: View {
         case .idle:
             EmptyView()
         case .loading:
-            HStack { Spacer(); ProgressView(); Spacer() }
-        case let .failed(message):
             VStack(spacing: 12) {
-                Text(message)
-                    .font(.subheadline)
+                ProgressView().tint(ZXTheme.pine)
+                Text("正在沿地图寻找…")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        case let .failed(message):
+            VStack(spacing: 14) {
+                ZXEmptyState(
+                    icon: "wifi.exclamationmark",
+                    title: "这一段路暂时没连上",
+                    message: message)
                 Button("重试", action: retry)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(ZXSecondaryButtonStyle())
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)

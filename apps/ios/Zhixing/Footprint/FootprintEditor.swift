@@ -98,6 +98,8 @@ struct FootprintEditor: View {
                     Text(errorMessage).foregroundStyle(.red).font(.footnote)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(ZXTheme.canvas)
             .disabled(saving)
             .navigationTitle("编辑足迹")
             .navigationBarTitleDisplayMode(.inline)
@@ -170,9 +172,9 @@ struct PublishBadgeLabel: View {
 
     private var tint: Color {
         switch badge {
-        case .pending: .orange
-        case .rejected: .red
-        case .published: .green
+        case .pending: ZXTheme.oldGold
+        case .rejected: ZXTheme.cinnabar
+        case .published: ZXTheme.jade
         }
     }
 }

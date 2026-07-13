@@ -22,6 +22,7 @@ struct ReportSheet: View {
                     form
                 }
             }
+            .background(ZXTheme.canvas)
             .navigationTitle("内容有误？告诉我们")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -69,6 +70,8 @@ struct ReportSheet: View {
                 Text(errorMessage).foregroundStyle(.red).font(.footnote)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(ZXTheme.canvas)
         .disabled(submitting)
     }
 
@@ -76,11 +79,12 @@ struct ReportSheet: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(.green)
+                .foregroundStyle(ZXTheme.jade)
             Text("已收到，谢谢指正")
                 .font(.headline)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ZXTheme.canvas)
     }
 
     private struct ReportBody: Encodable { let text: String }

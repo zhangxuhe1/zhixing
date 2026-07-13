@@ -6,7 +6,7 @@ struct StoriesSection: View {
     let placeId: String
     let onComposeFootprint: () -> Void
 
-    @State private var state: LoadState<[Story]> = .idle
+    @State private var state: LoadState<[Story]> = .loading
     @State private var nextCursor: String?
     @State private var isLoadingMore = false
     @State private var loadMoreFailed = false
@@ -16,39 +16,45 @@ struct StoriesSection: View {
     @State private var selectedStory: Story?
 
     var body: some View {
-        LoadStateView(state: state, retry: { Task { await load() } }) { stories in
-            Group {
-                if stories.isEmpty {
-                    emptyState
-                } else {
-                    List {
-                        ForEach(stories) { story in
-                            StoryRow(story: story, onToggleLike: { Task { await toggleLike(story) } })
-                                .contentShape(Rectangle())
-                                .onTapGesture { selectedStory = story }
+        ZStack(alignment: .top) {
+            LoadStateView(state: state, retry: { Task { await load() } }) { stories in
+                Group {
+                    if stories.isEmpty {
+                        emptyState
+                    } else {
+                        List {
+                            ForEach(stories) { story in
+                                StoryRow(story: story, onToggleLike: { Task { await toggleLike(story) } })
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedStory = story }
+                            }
+                            // 分页 footer：nextCursor 非空时常驻末尾。`.id(nextCursor)` 让每成功翻一页
+                            // 都重建 footer——若它仍停留在屏内，onAppear 会再次触发、继续加载下一页
+                            //（末行 .onAppear 方案在"行没离开过屏幕"时不会重发，这里用身份重建绕开）。
+                            if nextCursor != nil {
+                                loadMoreFooter.id(nextCursor)
+                            }
                         }
-                        // 分页 footer：nextCursor 非空时常驻末尾。`.id(nextCursor)` 让每成功翻一页
-                        // 都重建 footer——若它仍停留在屏内，onAppear 会再次触发、继续加载下一页
-                        //（末行 .onAppear 方案在"行没离开过屏幕"时不会重发，这里用身份重建绕开）。
-                        if nextCursor != nil {
-                            loadMoreFooter.id(nextCursor)
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .background(ZXTheme.canvas)
+                        .safeAreaInset(edge: .bottom) {
+                            if let likeError {
+                                Text(likeError)
+                                    .font(.footnote).foregroundStyle(.white)
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity)
+                                    .background(.red, in: RoundedRectangle(cornerRadius: 10))
+                                    .padding([.horizontal, .bottom], 8)
+                            }
                         }
+                        .animation(.default, value: likeError)
                     }
-                    .listStyle(.plain)
-                    .safeAreaInset(edge: .bottom) {
-                        if let likeError {
-                            Text(likeError)
-                                .font(.footnote).foregroundStyle(.white)
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .frame(maxWidth: .infinity)
-                                .background(.red, in: RoundedRectangle(cornerRadius: 10))
-                                .padding([.horizontal, .bottom], 8)
-                        }
-                    }
-                    .animation(.default, value: likeError)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .sheet(item: $selectedStory) { story in StoryDetailView(story: story).appStores() }
         .task { await load() }
     }
@@ -75,13 +81,20 @@ struct StoriesSection: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text("还没有旅人在此留下公开足迹")
-                .foregroundStyle(.secondary)
-            Button("留下第一条", action: onComposeFootprint)
-                .buttonStyle(.bordered)
+            ZXSectionEmptyState(
+                icon: "quote.bubble",
+                eyebrow: "旅人故事",
+                title: "等待第一位讲述者",
+                message: "这里还没有公开的旅人故事。你可以把一次抵达、一段记忆，留给后来的人。")
+            Button(action: onComposeFootprint) {
+                Label("留下第一段故事", systemImage: "square.and.pencil")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ZXSecondaryButtonStyle())
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     private func load() async {
@@ -170,7 +183,9 @@ private struct StoryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(story.authorNickname).font(.headline)
+                Label(story.authorNickname, systemImage: "person.crop.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(ZXTheme.pine)
                 Spacer()
                 Text(story.date, format: .dateTime.year().month().day()
                     .locale(Locale(identifier: "zh_Hans_CN")))
@@ -193,7 +208,7 @@ private struct StoryRow: View {
             HStack(spacing: 4) {
                 Button(action: onToggleLike) {
                     Image(systemName: story.likedByMe ? "heart.fill" : "heart")
-                        .foregroundStyle(story.likedByMe ? .red : .secondary)
+                        .foregroundStyle(story.likedByMe ? ZXTheme.cinnabar : .secondary)
                 }
                 .buttonStyle(.plain)
                 Text("\(story.likeCount)").font(.caption).foregroundStyle(.secondary)

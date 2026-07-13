@@ -19,6 +19,7 @@ struct AlbumImportScreen: View {
                     Button("关闭") { dismiss() }.disabled(isImporting)
                 }
             }
+            .background(ZXTheme.canvas)
         }
         .interactiveDismissDisabled(isImporting)
         .task { await loadPinsAndScan() }
@@ -62,7 +63,7 @@ struct AlbumImportScreen: View {
         case let .finished(created, photos, skippedIndices):
             VStack(spacing: 14) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 52)).foregroundStyle(.green)
+                    .font(.system(size: 52)).foregroundStyle(ZXTheme.jade)
                 Text("点亮了 \(created) 段足迹、\(photos) 张照片").font(.headline)
                 if !skippedIndices.isEmpty {
                     Text("已跳过 \(skippedIndices.count) 张无法读取的照片（第 "
@@ -103,6 +104,8 @@ struct AlbumImportScreen: View {
                 .disabled(model.groups.allSatisfy { !$0.include })
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(ZXTheme.canvas)
     }
 
     private var isImporting: Bool {

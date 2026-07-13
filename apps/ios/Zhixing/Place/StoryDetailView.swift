@@ -23,36 +23,55 @@ struct StoryDetailView: View {
     var body: some View {
         NavigationStack {
             LoadStateView(state: state, retry: { Task { await load() } }) { story in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text(story.authorNickname).font(.headline)
+                ZStack {
+                    ZXTheme.canvas.ignoresSafeArea()
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("旅 人 手 记")
+                                .font(.caption.weight(.semibold))
+                                .tracking(3)
+                                .foregroundStyle(ZXTheme.cinnabar)
+                            HStack(spacing: 10) {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(ZXTheme.pine)
+                                Text(story.authorNickname).font(.headline)
                             Spacer()
                             Text(story.date, format: .dateTime.year().month().day()
                                 .locale(Locale(identifier: "zh_Hans_CN")))
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }
                         if let text = story.text, !text.isEmpty {
-                            Text(text).font(.body).lineSpacing(7)
+                                Text(text)
+                                    .font(.system(.body, design: .serif))
+                                    .lineSpacing(9)
+                                    .textSelection(.enabled)
                         }
                         ForEach(story.photos) { photo in
                             AuthedPhotoView(photoId: photo.id)
                                 .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         }
                         Button { Task { await toggleLike(story) } } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: story.likedByMe ? "heart.fill" : "heart")
-                                    .foregroundStyle(story.likedByMe ? .red : .secondary)
+                                        .foregroundStyle(story.likedByMe ? ZXTheme.cinnabar : .secondary)
                                 Text("\(story.likeCount)").foregroundStyle(.secondary)
                             }
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 9)
+                                .background(ZXTheme.surface, in: Capsule())
                         }
                         .buttonStyle(.plain)
                         if let likeError {
                             Text(likeError).font(.footnote).foregroundStyle(.red)
                         }
                     }
-                    .padding(20)
+                        .frame(maxWidth: 720, alignment: .leading)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 28)
+                        .frame(maxWidth: .infinity)
+                    }
                 }
             }
             .navigationTitle("旅人故事")

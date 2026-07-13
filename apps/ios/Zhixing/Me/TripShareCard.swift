@@ -33,13 +33,19 @@ struct TripShareCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Self.horizontalPadding)
         .frame(width: Self.width, alignment: .leading)
-        .background(Color.white)
+        .background(ZXTheme.rice)
         .environment(\.colorScheme, .light)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.title2.bold())
+            Text("知 行 旅 记")
+                .font(.caption2.weight(.semibold))
+                .tracking(3)
+                .foregroundStyle(ZXTheme.cinnabar)
+            Text(title)
+                .font(.system(.title2, design: .serif, weight: .bold))
+                .foregroundStyle(ZXTheme.ink)
             Text(dateRange).font(.subheadline).foregroundStyle(.secondary)
             if !cityNames.isEmpty {
                 Text(cityNames.joined(separator: " · "))
@@ -51,7 +57,9 @@ struct TripShareCard: View {
     private var excerptBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(excerpts.enumerated()), id: \.offset) { _, excerpt in
-                Text(excerpt).font(.callout)
+                Text(excerpt)
+                    .font(.system(.callout, design: .serif))
+                    .lineSpacing(5)
             }
         }
     }
@@ -112,10 +120,12 @@ struct TripShareCard: View {
 
     private var brandFooter: some View {
         VStack(spacing: 10) {
-            Divider()
+            Rectangle().fill(ZXTheme.oldGold.opacity(0.45)).frame(height: 1)
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("知行").font(.headline.weight(.bold))
+                    Text("知行")
+                        .font(.system(.headline, design: .serif, weight: .bold))
+                        .foregroundStyle(ZXTheme.pine)
                     Text("一张有故事的中国地图").font(.caption2).foregroundStyle(.tertiary)
                 }
                 Spacer()

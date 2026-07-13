@@ -65,40 +65,130 @@ struct EmailSignInSection: View {
     @State private var sending = false
     @State private var verifying = false
     @State private var error: String?
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case email, code }
 
     /// 每秒推一次 now，驱动倒计时刷新（SendCooldown 自身不读隐式时间）
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                TextField("邮箱", text: $email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button(sendTitle) { Task { await send() } }
-                    .disabled(sending || cooldown.isCoolingDown(now: now)
-                        || !EmailAuthRules.isValidEmail(email))
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("邮箱地址")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.black.opacity(0.66))
+                HStack(spacing: 10) {
+                    Image(systemName: "envelope")
+                        .foregroundStyle(ZXTheme.jade)
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
+                    ZStack(alignment: .leading) {
+                        if email.isEmpty {
+                            Text(verbatim: "name@example.com")
+                                .foregroundColor(Color.black.opacity(0.24))
+                                .allowsHitTesting(false)
+                        }
+                        TextField("", text: $email)
+                            .foregroundStyle(Color.black.opacity(0.82))
+                            .tint(ZXTheme.pine)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .email)
+                            .submitLabel(.send)
+                            .onSubmit { if canSend { Task { await send() } } }
+                    }
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        if sending {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text(sendTitle).font(.caption.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(ZXTheme.pine)
+                    .disabled(!canSend)
+                }
+                .padding(.horizontal, 13)
+                .frame(minHeight: 48)
+                .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 13))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13)
+                        .stroke(focusedField == .email ? ZXTheme.pine.opacity(0.55) : Color.black.opacity(0.10), lineWidth: 1)
+                }
             }
-            HStack(spacing: 8) {
-                TextField("6 位验证码", text: $code)
-                    .keyboardType(.numberPad)
-                Button("登录") { Task { await verify() } }
-                    .disabled(verifying || !EmailAuthRules.isValidCode(code))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("验证码")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.black.opacity(0.66))
+                HStack(spacing: 10) {
+                    Image(systemName: "ellipsis.rectangle")
+                        .foregroundStyle(ZXTheme.jade)
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
+                    ZStack(alignment: .leading) {
+                        if code.isEmpty {
+                            Text("6 位数字")
+                                .foregroundStyle(Color.black.opacity(0.32))
+                                .allowsHitTesting(false)
+                        }
+                        TextField("", text: $code)
+                            .foregroundStyle(Color.black.opacity(0.82))
+                            .tint(ZXTheme.pine)
+                            .keyboardType(.numberPad)
+                            .textContentType(.oneTimeCode)
+                            .focused($focusedField, equals: .code)
+                            .submitLabel(.go)
+                            .onSubmit { if canVerify { Task { await verify() } } }
+                    }
+                }
+                .padding(.horizontal, 13)
+                .frame(minHeight: 48)
+                .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 13))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13)
+                        .stroke(focusedField == .code ? ZXTheme.pine.opacity(0.55) : Color.black.opacity(0.10), lineWidth: 1)
+                }
             }
+
+            Button { Task { await verify() } } label: {
+                HStack(spacing: 8) {
+                    if verifying { ProgressView().tint(.white).controlSize(.small) }
+                    Text(verifying ? "正在登录…" : "进入知行")
+                    if !verifying { Image(systemName: "arrow.right") }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ZXPrimaryButtonStyle())
+            .disabled(!canVerify)
+
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                ZXErrorBanner(message: error)
             }
         }
-        .textFieldStyle(.roundedBorder)
-        .padding(.horizontal, 40)
         .onReceive(ticker) { now = $0 }
+        .onChange(of: code) { _, value in
+            let digits = value.filter(\.isNumber)
+            if digits != value || digits.count > 6 { code = String(digits.prefix(6)) }
+        }
+    }
+
+    private var canSend: Bool {
+        !sending && !cooldown.isCoolingDown(now: now) && EmailAuthRules.isValidEmail(email)
+    }
+
+    private var canVerify: Bool {
+        !verifying && EmailAuthRules.isValidCode(code) && EmailAuthRules.isValidEmail(email)
     }
 
     private var sendTitle: String {
         let remaining = cooldown.remaining(now: now)
-        return remaining > 0 ? "重新发送(\(remaining)秒)" : "发送验证码"
+        return remaining > 0 ? "\(remaining) 秒后重发" : "发送验证码"
     }
 
     private var trimmedEmail: String {
@@ -112,6 +202,7 @@ struct EmailSignInSection: View {
             try await session.sendEmailCode(email: trimmedEmail)
             error = nil
             cooldown.start(now: Date())
+            focusedField = .code
         } catch {
             self.error = EmailAuthRules.message(for: error)
         }

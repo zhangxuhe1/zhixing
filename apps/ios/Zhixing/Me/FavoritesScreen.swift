@@ -27,6 +27,8 @@ struct FavoritesScreen: View {
                     .disabled(openingCardId != nil)
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(ZXTheme.canvas)
                 .safeAreaInset(edge: .bottom) {
                     if let openError {
                         Text(openError)
@@ -41,18 +43,18 @@ struct FavoritesScreen: View {
             }
         }
         .navigationTitle("收藏")
+        .background(ZXTheme.canvas)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedCard) { CardDetailView(card: $0) }
         .task { await load() }
     }
 
     private var emptyState: some View {
-        Text("行前收藏几张卡，这里会是这趟旅行的功课清单")
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
+        ZXEmptyState(
+            icon: "bookmark",
+            title: "还没有收藏风物",
+            message: "行前收藏几张卡，这里就会成为这趟旅行的文化功课清单。")
+        .frame(maxWidth: .infinity)
     }
 
     private func load() async {
@@ -94,10 +96,7 @@ private struct FavoriteRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text(categoryLabel)
-                        .font(.caption)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(.teal.opacity(0.15), in: Capsule())
+                    ZXCategoryBadge(text: categoryLabel)
                     Spacer()
                     Text(item.favoritedAt, format: .dateTime.year().month().day())
                         .font(.caption).foregroundStyle(.secondary)

@@ -8,13 +8,24 @@ struct RootView: View {
     var body: some View {
         Group {
             if session.restoring {
-                ProgressView()
+                ZStack {
+                    ZXTheme.canvas.ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        Image(systemName: "map.fill")
+                            .font(.system(size: 28, weight: .light))
+                            .foregroundStyle(ZXTheme.pine)
+                        ProgressView("正在展开地图…")
+                            .tint(ZXTheme.pine)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } else if session.isSignedIn {
                 MainTabView()
             } else {
                 SignInScreen()
             }
         }
+        .tint(ZXTheme.pine)
         .task { await session.restore() }
         .onChange(of: session.isSignedIn) { _, signedIn in
             // 登出/会话失效的统一清理点：所有"用户私有数据 store"都必须在这里 reset（§5.1 防跨账号泄露）。
@@ -35,9 +46,79 @@ struct RootView: View {
 
 struct MainTabView: View {
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        DesktopMainView()
+        #else
         TabView {
             MapScreen().tabItem { Label("地图", systemImage: "map.fill") }
             MeScreen().tabItem { Label("我的", systemImage: "person.fill") }
         }
+        .tint(ZXTheme.pine)
+        #endif
     }
 }
+
+#if targetEnvironment(macCatalyst)
+private enum DesktopDestination: Hashable {
+    case map
+    case me
+}
+
+/// Catalyst 宽屏壳层：把手机底部 Tab 换成可识别的桌面侧栏，地图获得稳定的主工作区。
+private struct DesktopMainView: View {
+    @State private var selection: DesktopDestination? = .map
+
+    var body: some View {
+        NavigationSplitView {
+            List(selection: $selection) {
+                Section("探索") {
+                    Label("故事地图", systemImage: "map.fill")
+                        .tag(DesktopDestination.map)
+                }
+                Section("个人") {
+                    Label("我的知行", systemImage: "person.crop.circle")
+                        .tag(DesktopDestination.me)
+                }
+            }
+            .listStyle(.sidebar)
+            .navigationTitle("知行")
+            .navigationSplitViewColumnWidth(min: 200, ideal: 228, max: 280)
+            .safeAreaInset(edge: .top) {
+                HStack(spacing: 11) {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(ZXTheme.pine, in: RoundedRectangle(cornerRadius: 11))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("知行")
+                            .font(.system(.title3, design: .serif, weight: .bold))
+                        Text("一张有故事的中国地图")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Label("足迹默认仅自己可见", systemImage: "lock.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
+            }
+        } detail: {
+            switch selection ?? .map {
+            case .map:
+                MapScreen()
+            case .me:
+                MeScreen()
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .tint(ZXTheme.pine)
+    }
+}
+#endif
