@@ -1,11 +1,15 @@
 import SwiftUI
+import UIKit
 
 struct AlbumImportScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(FootprintStore.self) private var store
     @Environment(PinsCache.self) private var pinsCache
     @State private var model = AlbumImportModel()
     @State private var pinsState: LoadState<[Pin]> = .idle
+    @State private var scanRequest = 0
 
     var body: some View {
         NavigationStack {
@@ -22,7 +26,15 @@ struct AlbumImportScreen: View {
             .background(ZXTheme.canvas)
         }
         .interactiveDismissDisabled(isImporting)
-        .task { await loadPinsAndScan() }
+        // 用结构化的 view task 承担首次扫描和授权刷新：scanRequest 变化时旧任务会先被取消，
+        // sheet 消失时任务也随视图取消，不留下可能继续枚举大相册的游离 Task。
+        .task(id: scanRequest) { await loadPinsAndScan() }
+        .onChange(of: scenePhase) { _, newPhase in
+            // 用户从「系统设置」返回时，sheet 仍在视图树里，原 task 不会重跑；只在旧状态确实
+            // 是 denied 时复查，避免普通的前后台切换触发全量相册扫描。
+            guard newPhase == .active, model.needsAuthorizationRefresh else { return }
+            scanRequest &+= 1
+        }
     }
 
     private func loadPinsAndScan() async {
@@ -49,9 +61,18 @@ struct AlbumImportScreen: View {
                     .buttonStyle(.bordered)
             }
         case .denied:
+            ContentUnavailableView {
+                Label("需要相册权限", systemImage: "photo.badge.exclamationmark")
+            } description: {
+                Text("允许知行访问照片，即可一键点亮历年足迹")
+            } actions: {
+                Button("打开系统设置") { openPhotoSettings() }
+                    .buttonStyle(.borderedProminent)
+            }
+        case .restricted:
             ContentUnavailableView(
-                "需要相册权限", systemImage: "photo.badge.exclamationmark",
-                description: Text("去 设置 > 知行 里允许访问照片，即可一键点亮历年足迹"))
+                "无法访问相册", systemImage: "photo.badge.exclamationmark",
+                description: Text("相册访问受到系统策略限制，请检查家长控制或设备管理设置"))
         case .review:
             reviewList
         case let .importing(done, total):
@@ -111,5 +132,10 @@ struct AlbumImportScreen: View {
     private var isImporting: Bool {
         if case .importing = model.phase { return true }
         return false
+    }
+
+    private func openPhotoSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
 }

@@ -50,6 +50,7 @@ final class AlbumImportModel {
     enum Phase {
         case scanning
         case denied
+        case restricted
         case review
         case importing(done: Int, total: Int)
         /// skippedIndices：本次导入里因"无法读取/无法解码"被跳过的照片，按跨组全局序号（1-based）记录，
@@ -61,10 +62,28 @@ final class AlbumImportModel {
     var groups: [DraftGroup] = []
     var unmatchedCount = 0
 
+    /// 只有用户可在系统设置里改回来的 denied 才需要在 App 重新活跃时复查。
+    /// restricted 通常来自家长控制或设备策略，反复扫描既无效，也会误导用户。
+    var needsAuthorizationRefresh: Bool {
+        if case .denied = phase { return true }
+        return false
+    }
+
     func scan(pins: [Pin]) async {
+        phase = .scanning
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
-        guard status == .authorized || status == .limited else {
+        guard !Task.isCancelled else { return }
+        switch status {
+        case .authorized, .limited:
+            break
+        case .restricted:
+            phase = .restricted
+            return
+        case .denied, .notDetermined:
             phase = .denied
+            return
+        @unknown default:
+            phase = .restricted
             return
         }
         let assets = await Self.fetchAssetMetas()

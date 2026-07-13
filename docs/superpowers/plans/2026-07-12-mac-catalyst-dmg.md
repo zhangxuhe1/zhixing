@@ -330,7 +330,7 @@ targets:
 
 其余（PRODUCT_BUNDLE_IDENTIFIER、entitlements.path 指向 Zhixing.entitlements 等）保持不动；ZhixingTests target 保持 `platform: iOS` 不动。
 
-**ZhixingMac.entitlements**：合法 plist、根为空 dict（无 applesignin，无沙箱——ad-hoc 非商店分发不需要）。
+**ZhixingMac.entitlements**：合法 plist；无 applesignin、无 App Sandbox（ad-hoc 非商店分发不需要），但必须包含值为 `true` 的 `com.apple.security.personal-information.photos-library`，使 Mac TCC 允许批量读取照片库。
 
 **窗口最小尺寸契约（ZhixingApp.swift）：**
 
@@ -348,7 +348,7 @@ private static func applyWindowSizeRestrictions()
 - [x] `xcodegen generate` 成功
 - [x] Catalyst Debug 构建成功（Global Constraints 里的验证命令）
 - [x] 版本号断言：`/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app/Contents/Info.plist` 输出 `0.1.0`
-- [x] entitlements 断言：`codesign -d --entitlements - DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app` 输出**不含** `applesignin`
+- [x] entitlements 断言：`codesign -d --entitlements - DerivedData/mac-debug/Build/Products/Debug-maccatalyst/Zhixing.app` 输出**包含**值为 `true` 的 `com.apple.security.personal-information.photos-library`，且**不含** `applesignin`
 - [x] iOS 回归：整套 `scripts/ios-test.sh` 全绿
 - [x] Commit: `feat(ios): Mac Catalyst 目标——entitlements 按 SDK 分叉 + 版本号 0.1.0 + 窗口最小 1000×700`
 

@@ -41,7 +41,7 @@
 **project.yml 改动**（唯一工程真源，改完 `xcodegen generate`）：
 
 - Zhixing target 加 `supportedDestinations: [iOS, macCatalyst]`；
-- **entitlements 按平台分叉**（关键）：现有 `Zhixing.entitlements` 含 `com.apple.developer.applesignin`，ad-hoc 签名带着它 Mac 构建直接失败。用条件构建设置 `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` 指向新增的 `ZhixingMac.entitlements`（不含 SIWA；Catalyst 构建走 macosx SDK，条件精确命中），iOS 构建不受影响；
+- **entitlements 按平台分叉**（关键）：现有 `Zhixing.entitlements` 含 `com.apple.developer.applesignin`，ad-hoc 签名带着它 Mac 构建直接失败。用条件构建设置 `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` 指向新增的 `ZhixingMac.entitlements`（不含 SIWA，但必须包含 `com.apple.security.personal-information.photos-library`，否则 TCC 即使显示已授权也会拒绝访问 Mac 照片库；Catalyst 构建走 macosx SDK，条件精确命中），iOS 构建不受影响；
 - 补 `MARKETING_VERSION: 0.1.0`，**并同步**在 `info.properties` 补 `CFBundleShortVersionString: $(MARKETING_VERSION)`——XcodeGen 生成的 Info.plist 把版本号硬编码为 1.0，只加构建设置流不进产物（探针已实证），dmg 产物命名依赖真实版本号。
 
 **最小桌面适配**（只做三件事）：
