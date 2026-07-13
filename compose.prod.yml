@@ -18,6 +18,8 @@ services:
     image: minio/minio:latest
     restart: unless-stopped
     command: server /data
+    # 仅绑宿主 127.0.0.1，供宿主层 Caddy 反代 s3.<域名>（S3 API 端口，仅本机可达）
+    ports: ["127.0.0.1:9000:9000"]
     environment:
       # 默认 user=zhixing、password=S3_SECRET_KEY；如需自定义在 .env.production 设
       # MINIO_ROOT_USER/MINIO_ROOT_PASSWORD，api 侧 S3 凭据会自动跟随（见 api.environment）
@@ -35,6 +37,8 @@ services:
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: unless-stopped
+    # 仅绑宿主 127.0.0.1，供宿主层 Caddy 反代 api.<域名>（仅本机可达，不暴露公网）
+    ports: ["127.0.0.1:8787:8787"]
     environment:
       # 触发 server.ts 的生产启动断言（src/prodGuard.ts）：弱密钥拒绝启动
       NODE_ENV: production
@@ -70,10 +74,15 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://api.${ZHIXING_DOMAIN}
     restart: unless-stopped
+    # 仅绑宿主 127.0.0.1，供宿主层 Caddy 反代 admin.<域名>（容器内仍监听 3000）
+    ports: ["127.0.0.1:8788:3000"]
 
   caddy:
     image: caddy:2
     restart: unless-stopped
+    # 默认不启动：本机已有宿主层 Caddy 占 80/443 并反代现有服务，知行挂到宿主 Caddy 后面。
+    # 仅在需要"容器自带边缘反代"的全新机器上，用 `docker compose --profile edge up` 显式启用。
+    profiles: ["edge"]
     ports: ["80:80", "443:443"]
     environment:
       ZHIXING_DOMAIN: ${ZHIXING_DOMAIN}
