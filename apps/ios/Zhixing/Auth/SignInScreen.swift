@@ -11,21 +11,7 @@ struct SignInScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
-                Image("LoginLandscape")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
-                    .ignoresSafeArea()
-                    .accessibilityHidden(true)
-
-                LinearGradient(
-                    colors: [Color.black.opacity(0.28), Color.clear, ZXTheme.rice.opacity(0.10)],
-                    startPoint: .leading,
-                    endPoint: .trailing)
-                    .ignoresSafeArea()
-
+            Group {
                 if proxy.size.width >= 760 {
                     landscapeLayout
                         .padding(.horizontal, max(42, proxy.size.width * 0.055))
@@ -42,7 +28,27 @@ struct SignInScreen: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
+        .background {
+            fullBleedBackground
+        }
         .preferredColorScheme(.light)
+    }
+
+    /// 背景通过 GeometryReader 的 background 绘制，不参与前景内容的尺寸计算；
+    /// 同时独立越过窗口安全区，避免 Catalyst 底部露出默认白色底色。
+    private var fullBleedBackground: some View {
+        ZStack {
+            ZXTheme.rice
+            Image("LoginLandscape")
+                .resizable()
+                .scaledToFill()
+            LinearGradient(
+                colors: [Color.black.opacity(0.28), Color.clear, ZXTheme.rice.opacity(0.10)],
+                startPoint: .leading,
+                endPoint: .trailing)
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 
     private var landscapeLayout: some View {
