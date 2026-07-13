@@ -24,5 +24,22 @@ extension View {
             .environment(AppStores.footprints)
             .environment(AppStores.favorites)
             .environment(AppStores.pinsCache)
+            // Catalyst 会把模态 NavigationStack 的 navigationTitle 提升成窗口标题，关闭后偶发不恢复；
+            // 根视图与每个模态根都走本修饰器，出现/消失时统一把窗口标题收敛回产品名。
+            .onAppear { CatalystWindowTitle.restore() }
+            .onDisappear { CatalystWindowTitle.restore() }
+    }
+}
+
+@MainActor
+private enum CatalystWindowTitle {
+    static func restore() {
+        #if targetEnvironment(macCatalyst)
+        DispatchQueue.main.async {
+            for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                scene.title = "知行"
+            }
+        }
+        #endif
     }
 }

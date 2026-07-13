@@ -5,6 +5,7 @@ struct MapScreen: View {
     @Environment(PinsCache.self) private var pinsCache
     @State private var selected: Pin?
     @State private var flyTo: Pin?
+    @State private var fitPlaceIds: Set<String>?
     @State private var showSearch = false
     @State private var loadError: String?
     @State private var showPlacePicker = false
@@ -18,7 +19,8 @@ struct MapScreen: View {
         ZStack(alignment: .topTrailing) {
             MapView(pins: pinsCache.pins, litPlaceIds: footprints.litPlaceIds,
                     showHumanities: showHumanities, showFootprints: showFootprintLayer,
-                    flyTo: $flyTo, onSelect: { selected = $0 })
+                    flyTo: $flyTo, fitPlaceIds: $fitPlaceIds,
+                    onSelect: { selected = $0 })
                 .ignoresSafeArea()
             controls
                 .padding(.top, 16)
