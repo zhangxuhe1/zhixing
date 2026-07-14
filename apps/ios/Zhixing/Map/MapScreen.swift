@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct MapScreen: View {
@@ -11,6 +12,17 @@ struct MapScreen: View {
     @State private var showPlacePicker = false
     @State private var composerPin: Pin?
     @State private var pendingComposerPin: Pin?
+    #if targetEnvironment(macCatalyst)
+    @State private var composerDraftPin: Pin?
+    @State private var composerText = ""
+    @State private var composerDate = Date()
+    @State private var composerPhotoItems: [PhotosPickerItem] = []
+    @State private var composerIsPublic = false
+    @State private var composerError: String?
+    @State private var composerCreatedFootprint: Footprint?
+    @State private var showComposerPhotoPicker = false
+    @State private var restoreComposerAfterPhotoPicker = false
+    #endif
     @State private var showHumanities = true
     @State private var showFootprintLayer = true
     @State private var flightTask: Task<Void, Never>?
@@ -65,15 +77,42 @@ struct MapScreen: View {
             }
             .appStores()
         }
-        #if targetEnvironment(macCatalyst)
-        .fullScreenCover(item: $composerPin) { pin in
+        .sheet(item: $composerPin, onDismiss: handleComposerDismissed) { pin in
+            #if targetEnvironment(macCatalyst)
+            FootprintComposer(
+                pin: pin,
+                text: $composerText,
+                date: $composerDate,
+                items: $composerPhotoItems,
+                isPublic: $composerIsPublic,
+                error: $composerError,
+                createdFootprint: $composerCreatedFootprint,
+                onChoosePhotos: requestComposerPhotoPicker
+            )
+                .appStores()
+            #else
             FootprintComposer(pin: pin)
                 .appStores()
+            #endif
         }
-        #else
-        .sheet(item: $composerPin) { pin in
-            FootprintComposer(pin: pin)
-                .appStores()
+        #if targetEnvironment(macCatalyst)
+        // 选择器挂在地图根层，而不是撰写器的小 sheet 内；PhotosUI 因而能使用完整窗口，
+        // 同时不会迫使 FootprintComposer 本身改成全屏。
+        .photosPicker(
+            isPresented: $showComposerPhotoPicker,
+            selection: $composerPhotoItems,
+            maxSelectionCount: 9,
+            selectionBehavior: .ordered,
+            matching: .images
+        )
+        .photosPickerStyle(.presentation)
+        .onChange(of: showComposerPhotoPicker) { wasPresented, isPresented in
+            guard wasPresented, !isPresented,
+                  restoreComposerAfterPhotoPicker,
+                  let pin = composerDraftPin
+            else { return }
+            restoreComposerAfterPhotoPicker = false
+            composerPin = pin
         }
         #endif
     }
@@ -81,8 +120,54 @@ struct MapScreen: View {
     private func presentPendingComposer() {
         guard composerPin == nil, let pin = pendingComposerPin else { return }
         pendingComposerPin = nil
+        #if targetEnvironment(macCatalyst)
+        beginComposerDraft(for: pin)
+        #endif
         composerPin = pin
     }
+
+    private func handleComposerDismissed() {
+        #if targetEnvironment(macCatalyst)
+        if restoreComposerAfterPhotoPicker {
+            // PhotosPicker 与普通 sheet 不能同时由同一根视图可靠呈现；等待小窗完全收起后再开图库。
+            showComposerPhotoPicker = true
+        } else {
+            resetComposerDraft()
+        }
+        #endif
+    }
+
+    #if targetEnvironment(macCatalyst)
+    private func requestComposerPhotoPicker() {
+        guard composerDraftPin != nil, !showComposerPhotoPicker else { return }
+        restoreComposerAfterPhotoPicker = true
+        composerPin = nil
+    }
+
+    private func beginComposerDraft(for pin: Pin) {
+        composerDraftPin = pin
+        composerText = ""
+        composerDate = Date()
+        composerPhotoItems = []
+        composerIsPublic = false
+        composerError = nil
+        composerCreatedFootprint = nil
+        showComposerPhotoPicker = false
+        restoreComposerAfterPhotoPicker = false
+    }
+
+    private func resetComposerDraft() {
+        composerDraftPin = nil
+        composerText = ""
+        composerDate = Date()
+        composerPhotoItems = []
+        composerIsPublic = false
+        composerError = nil
+        composerCreatedFootprint = nil
+        showComposerPhotoPicker = false
+        restoreComposerAfterPhotoPicker = false
+    }
+    #endif
 
     private var controls: some View {
         Group {

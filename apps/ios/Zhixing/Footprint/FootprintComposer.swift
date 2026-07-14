@@ -5,40 +5,54 @@ struct FootprintComposer: View {
     let pin: Pin
     @Environment(\.dismiss) private var dismiss
     @Environment(FootprintStore.self) private var store
+    #if targetEnvironment(macCatalyst)
+    @Binding private var text: String
+    @Binding private var date: Date
+    @Binding private var items: [PhotosPickerItem]
+    @Binding private var isPublic: Bool
+    @Binding private var error: String?
+    @Binding private var createdFootprint: Footprint?
+    private let onChoosePhotos: () -> Void
+    #else
     @State private var text = ""
     @State private var date = Date()
     @State private var items: [PhotosPickerItem] = []
     @State private var isPublic = false // 默认私密铁律：公开开关默认关
-    @State private var showPublicConfirm = false
-    @State private var saving = false
     @State private var error: String?
     @State private var createdFootprint: Footprint?
+    #endif
+    @State private var showPublicConfirm = false
+    @State private var saving = false
     @State private var skipSummary: String?
+
+    #if targetEnvironment(macCatalyst)
+    init(
+        pin: Pin,
+        text: Binding<String>,
+        date: Binding<Date>,
+        items: Binding<[PhotosPickerItem]>,
+        isPublic: Binding<Bool>,
+        error: Binding<String?>,
+        createdFootprint: Binding<Footprint?>,
+        onChoosePhotos: @escaping () -> Void
+    ) {
+        self.pin = pin
+        _text = text
+        _date = date
+        _items = items
+        _isPublic = isPublic
+        _error = error
+        _createdFootprint = createdFootprint
+        self.onChoosePhotos = onChoosePhotos
+    }
+    #endif
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("地点") { Text(pin.name) }
                 Section("照片") {
-                    // items.isEmpty/count 先取到局部变量再闭包捕获：PhotosPicker 的 label
-                    // 闭包被推断为 @Sendable，直接引用 @State 会触发 Swift 6 隔离告警
-                    let itemsEmpty = items.isEmpty
-                    let itemsCount = items.count
-                    PhotosPicker(
-                        selection: $items,
-                        maxSelectionCount: 9,
-                        // 有序模式会在相册缩略图右上角显示醒目的数字徽标；
-                        // 比单一颜色或同形对勾更清楚，也顺带说明最终上传顺序。
-                        selectionBehavior: .ordered,
-                        matching: .images
-                    ) {
-                        PhotoPickerRowLabel(itemsEmpty: itemsEmpty, itemsCount: itemsCount)
-                    }
-                    // 明确使用系统的完整 presentation 模式。PhotosUI 会根据宿主的可用空间
-                    // 决定具体布局；Catalyst 下撰写器由 MapScreen 在窗口根层全屏呈现。
-                    .photosPickerStyle(.presentation)
-                    .accessibilityLabel(itemsEmpty ? "选择照片" : "已选择 \(itemsCount) 张照片")
-                    .accessibilityHint("最多选择 9 张，已选照片会显示选择顺序")
+                    photoPickerControl
                 }
                 Section("这一刻") {
                     TextField("写点什么（可选）", text: $text, axis: .vertical)
@@ -96,6 +110,38 @@ struct FootprintComposer: View {
         } message: { message in
             Text(message)
         }
+    }
+
+    @ViewBuilder
+    private var photoPickerControl: some View {
+        // items.isEmpty/count 先取到局部变量再闭包捕获：PhotosPicker 的 label
+        // 闭包被推断为 @Sendable，直接引用 @State/Binding 会触发 Swift 6 隔离告警。
+        let itemsEmpty = items.isEmpty
+        let itemsCount = items.count
+
+        #if targetEnvironment(macCatalyst)
+        // Catalyst 的系统图库必须从 MapScreen 根层呈现，才能获得整个窗口的空间；
+        // 撰写器自身仍保持普通小 sheet，避免为了图库而牺牲填写体验。
+        Button(action: onChoosePhotos) {
+            PhotoPickerRowLabel(itemsEmpty: itemsEmpty, itemsCount: itemsCount)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(itemsEmpty ? "选择照片" : "已选择 \(itemsCount) 张照片")
+        .accessibilityHint("最多选择 9 张，已选照片会显示选择顺序")
+        #else
+        PhotosPicker(
+            selection: $items,
+            maxSelectionCount: 9,
+            // 有序模式会在相册缩略图右上角显示醒目的数字徽标；
+            // 比单一颜色或同形对勾更清楚，也顺带说明最终上传顺序。
+            selectionBehavior: .ordered,
+            matching: .images
+        ) {
+            PhotoPickerRowLabel(itemsEmpty: itemsEmpty, itemsCount: itemsCount)
+        }
+        .accessibilityLabel(itemsEmpty ? "选择照片" : "已选择 \(itemsCount) 张照片")
+        .accessibilityHint("最多选择 9 张，已选照片会显示选择顺序")
+        #endif
     }
 
     /// 足迹一旦创建（createdFootprint 非 nil），后续「保存」只是重试照片上传——不再重复弹隐私确认。

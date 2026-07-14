@@ -36,15 +36,27 @@ final class InteractionDesignTests: XCTestCase {
         XCTAssertTrue(composer.contains("已选照片会显示选择顺序"))
     }
 
-    func testCatalystPhotoPickerKeepsFullPresentationAtWindowRoot() throws {
+    func testCatalystKeepsComposerAsSheetAndPresentsPhotoPickerAtWindowRoot() throws {
         let composer = try source("Footprint/FootprintComposer.swift")
         let map = try source("Map/MapScreen.swift")
         let drawer = try source("Place/PlaceDrawer.swift")
 
-        XCTAssertTrue(composer.contains(".photosPickerStyle(.presentation)"))
+        XCTAssertTrue(composer.contains("Button(action: onChoosePhotos)"))
         XCTAssertFalse(composer.contains(".photosPickerStyle(.inline)"))
         XCTAssertFalse(composer.contains("CatalystPhotoPickerSheet"))
-        XCTAssertTrue(map.contains(".fullScreenCover(item: $composerPin)"))
+        XCTAssertTrue(map.contains(".sheet(item: $composerPin"))
+        XCTAssertFalse(map.contains(".fullScreenCover(item: $composerPin)"))
+        XCTAssertTrue(map.contains("isPresented: $showComposerPhotoPicker"))
+        XCTAssertTrue(map.contains("selection: $composerPhotoItems"))
+        XCTAssertTrue(map.contains(".photosPickerStyle(.presentation)"))
+        XCTAssertTrue(map.contains("restoreComposerAfterPhotoPicker = true"))
+        XCTAssertTrue(map.contains("composerPin = nil"))
+        XCTAssertTrue(map.contains("composerPin = pin"))
+        XCTAssertTrue(map.contains("text: $composerText"))
+        XCTAssertTrue(map.contains("date: $composerDate"))
+        XCTAssertTrue(map.contains("isPublic: $composerIsPublic"))
+        XCTAssertTrue(map.contains("error: $composerError"))
+        XCTAssertTrue(map.contains("createdFootprint: $composerCreatedFootprint"))
         XCTAssertTrue(map.contains("pendingComposerPin = pin"))
         XCTAssertTrue(drawer.contains("#if !targetEnvironment(macCatalyst)"))
         XCTAssertTrue(drawer.contains("private func requestComposeFootprint()"))
