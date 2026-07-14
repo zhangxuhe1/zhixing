@@ -14,7 +14,7 @@ function escapeHtml(raw: string): string {
 /** 品牌文案集中一处——页头品牌字、标语、页脚。均为可信常量，插入模板无需转义（仅动态值 code 过 escapeHtml）。 */
 const BRAND = {
   name: "知行",
-  tagline: "知一方风土，行万里路", // 取「知行合一」注解：知一方风土、行万里路
+  tagline: "知一方风土，行万里山河",
   footer: "系统自动发送，请勿回复。",
 } as const;
 

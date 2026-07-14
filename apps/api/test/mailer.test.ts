@@ -14,10 +14,12 @@ test("用例1 主题无前缀：subject 为「登录验证码」，不带【知�
 });
 
 test("用例2 HTML 结构与品牌：含验证码 / 品牌名 / 标语 / 文档骨架 / viewport", () => {
-  const { html } = renderCodeEmail(CODE);
+  const { html, text } = renderCodeEmail(CODE);
   expect(html).toContain(CODE);
   expect(html).toContain("知行");
-  expect(html).toContain("知一方风土，行万里路"); // 标语（现状缺，RED 驱动）
+  expect(html).toContain("知一方风土，行万里山河");
+  expect(text).toContain("知一方风土，行万里山河");
+  expect(html).not.toContain("知一方风土，行万里路");
   expect(html).toMatch(/<!doctype/i); // 完整 HTML 文档骨架（现状缺）
   expect(html).toContain("viewport"); // 移动端自适应（现状缺）
 });
