@@ -47,10 +47,16 @@ struct SearchSheet: View {
                                             .font(.caption)
                                             .foregroundStyle(.tertiary)
                                     }
-                                    .padding(.vertical, 5)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 16)
+                                    .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+                                    // Spacer 本身不参与命中测试；显式矩形命中区才能让整张白色结果卡都可点。
+                                    .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(SearchResultButtonStyle())
                                 .foregroundStyle(.primary)
+                                .accessibilityHint("在地图上查看这个地点")
+                                .listRowInsets(EdgeInsets())
                             }
                         }
                         .listStyle(.insetGrouped)
@@ -84,5 +90,16 @@ struct SearchSheet: View {
         } catch {
             state = .failed("搜索失败，请重试")
         }
+    }
+}
+
+/// 按下反馈只改变底色，不缩放卡片，避免列表内容在点击时发生位移。
+private struct SearchResultButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? ZXTheme.jade.opacity(0.10) : Color.clear)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }

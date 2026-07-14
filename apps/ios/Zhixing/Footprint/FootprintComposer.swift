@@ -24,10 +24,21 @@ struct FootprintComposer: View {
                     // 闭包被推断为 @Sendable，直接引用 @State 会触发 Swift 6 隔离告警
                     let itemsEmpty = items.isEmpty
                     let itemsCount = items.count
-                    PhotosPicker(selection: $items, maxSelectionCount: 9, matching: .images) {
-                        Label(itemsEmpty ? "选择照片（可选）" : "已选 \(itemsCount) 张",
-                              systemImage: "photo.on.rectangle")
+                    PhotosPicker(
+                        selection: $items,
+                        maxSelectionCount: 9,
+                        // 有序模式会在相册缩略图右上角显示醒目的数字徽标；
+                        // 比单一颜色或同形对勾更清楚，也顺带说明最终上传顺序。
+                        selectionBehavior: .ordered,
+                        matching: .images
+                    ) {
+                        PhotoPickerRowLabel(itemsEmpty: itemsEmpty, itemsCount: itemsCount)
                     }
+                    // 明确使用系统的完整 presentation 模式。PhotosUI 会根据宿主的可用空间
+                    // 决定具体布局；Catalyst 下撰写器由 MapScreen 在窗口根层全屏呈现。
+                    .photosPickerStyle(.presentation)
+                    .accessibilityLabel(itemsEmpty ? "选择照片" : "已选择 \(itemsCount) 张照片")
+                    .accessibilityHint("最多选择 9 张，已选照片会显示选择顺序")
                 }
                 Section("这一刻") {
                     TextField("写点什么（可选）", text: $text, axis: .vertical)
@@ -141,5 +152,30 @@ struct FootprintComposer: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+private struct PhotoPickerRowLabel: View {
+    let itemsEmpty: Bool
+    let itemsCount: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: itemsEmpty ? "photo.on.rectangle" : "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(itemsEmpty ? ZXTheme.pine : ZXTheme.jade)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(itemsEmpty ? "选择照片（可选）" : "已选 \(itemsCount) 张")
+                Text(itemsEmpty ? "最多 9 张" : "再次进入可调整选择与顺序")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }

@@ -34,21 +34,30 @@ struct SignInScreen: View {
         .preferredColorScheme(.light)
     }
 
-    /// 背景通过 GeometryReader 的 background 绘制，不参与前景内容的尺寸计算；
-    /// 同时独立越过窗口安全区，避免 Catalyst 底部露出默认白色底色。
+    /// 背景通过 GeometryReader 的 `.background` 绘制，不参与前景内容的尺寸计算；
+    /// 同时独立越过窗口安全区，避免 Catalyst 边缘露出默认白色底色。
+    ///
+    /// 尺寸锚点必须是 `ZXTheme.rice` 这个 `Color`：Color 永远精确铺满被提议的尺寸，
+    /// 而底图作为它的 `.overlay` 不会反向撑大宿主。若把 `.scaledToFill()` 的 `Image`
+    /// 直接当作 ZStack 的兄弟层，aspect-fill 的溢出会把整个背景（连同 rice）拽成
+    /// 图片自身的宽高比——当窗口比图片更“高”（宽高比 < 图片）时背景会比窗口矮一截，
+    /// 底部露白。这正是“某些窗口尺寸下才露白”的根因，故底图一律走 overlay + clipped。
     private var fullBleedBackground: some View {
-        ZStack {
-            ZXTheme.rice
-            Image("LoginLandscape")
-                .resizable()
-                .scaledToFill()
-            LinearGradient(
-                colors: [Color.black.opacity(0.28), Color.clear, ZXTheme.rice.opacity(0.10)],
-                startPoint: .leading,
-                endPoint: .trailing)
-        }
-        .ignoresSafeArea()
-        .accessibilityHidden(true)
+        ZXTheme.rice
+            .overlay {
+                Image("LoginLandscape")
+                    .resizable()
+                    .scaledToFill()
+            }
+            .overlay {
+                LinearGradient(
+                    colors: [Color.black.opacity(0.28), Color.clear, ZXTheme.rice.opacity(0.10)],
+                    startPoint: .leading,
+                    endPoint: .trailing)
+            }
+            .clipped()
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
     }
 
     private var landscapeLayout: some View {

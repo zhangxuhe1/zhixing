@@ -10,6 +10,7 @@ struct MapScreen: View {
     @State private var loadError: String?
     @State private var showPlacePicker = false
     @State private var composerPin: Pin?
+    @State private var pendingComposerPin: Pin?
     @State private var showHumanities = true
     @State private var showFootprintLayer = true
     @State private var flightTask: Task<Void, Never>?
@@ -41,9 +42,14 @@ struct MapScreen: View {
             await load()
             await footprints.load()
         }
-        .sheet(item: $selected) { pin in
-            PlaceDrawer(pin: pin)
-                .appStores()
+        .sheet(item: $selected, onDismiss: presentPendingComposer) { pin in
+            PlaceDrawer(pin: pin) {
+                // Catalyst 上不能从 PlaceDrawer 的小 form sheet 继续嵌套撰写器；
+                // 先关闭抽屉，再由地图根层呈现，PhotosUI 才能拿到整个窗口的可用空间。
+                pendingComposerPin = pin
+                selected = nil
+            }
+            .appStores()
         }
         .sheet(isPresented: $showSearch) {
             SearchSheet { pin in
@@ -52,17 +58,30 @@ struct MapScreen: View {
             }
             .appStores()
         }
-        .sheet(isPresented: $showPlacePicker) {
+        .sheet(isPresented: $showPlacePicker, onDismiss: presentPendingComposer) {
             PlacePickerSheet(pins: pinsCache.pins) { pin in
+                pendingComposerPin = pin
                 showPlacePicker = false
-                composerPin = pin
             }
             .appStores()
         }
+        #if targetEnvironment(macCatalyst)
+        .fullScreenCover(item: $composerPin) { pin in
+            FootprintComposer(pin: pin)
+                .appStores()
+        }
+        #else
         .sheet(item: $composerPin) { pin in
             FootprintComposer(pin: pin)
                 .appStores()
         }
+        #endif
+    }
+
+    private func presentPendingComposer() {
+        guard composerPin == nil, let pin = pendingComposerPin else { return }
+        pendingComposerPin = nil
+        composerPin = pin
     }
 
     private var controls: some View {

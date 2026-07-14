@@ -2,9 +2,12 @@ import SwiftUI
 
 struct PlaceDrawer: View {
     let pin: Pin
+    let onComposeFootprint: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var cardsState: LoadState<[Card]> = .idle
+    #if !targetEnvironment(macCatalyst)
     @State private var showComposer = false
+    #endif
     @State private var section: DrawerSection = .cards
 
     /// 三段式 tab：风物卡（M1 落地）/ 旅人故事（I4）/ 旅人镜头（本任务，I5）。
@@ -71,12 +74,15 @@ struct PlaceDrawer: View {
                 }
                 #endif
             }
+            #if !targetEnvironment(macCatalyst)
+            // iOS 保留原生的抽屉内 sheet 返回路径；只有 Catalyst 需要提升到窗口根层。
             .sheet(isPresented: $showComposer) { FootprintComposer(pin: pin).appStores() }
+            #endif
         }
         .presentationDetents([.medium, .large])
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         .safeAreaInset(edge: .bottom) {
-            Button { showComposer = true } label: {
+            Button(action: requestComposeFootprint) {
                 Label("在此留足迹", systemImage: "shoeprints.fill")
                     .frame(maxWidth: .infinity)
             }
@@ -94,10 +100,18 @@ struct PlaceDrawer: View {
         case .cards:
             cardsContent
         case .stories:
-            StoriesSection(placeId: pin.id, onComposeFootprint: { showComposer = true })
+            StoriesSection(placeId: pin.id, onComposeFootprint: requestComposeFootprint)
         case .photos:
-            PhotoWallSection(placeId: pin.id, onComposeFootprint: { showComposer = true })
+            PhotoWallSection(placeId: pin.id, onComposeFootprint: requestComposeFootprint)
         }
+    }
+
+    private func requestComposeFootprint() {
+        #if targetEnvironment(macCatalyst)
+        onComposeFootprint()
+        #else
+        showComposer = true
+        #endif
     }
 
     private var cardsContent: some View {
