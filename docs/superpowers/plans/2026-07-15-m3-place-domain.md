@@ -38,7 +38,7 @@
 - Produces: 数据形状——直辖市/特区为 `level=PROVINCE` 链顶;普通城市 `parentId` 指向省节点;省节点 `level=PROVINCE, parentId=null`。`importPlaces`/`importRegions` 签名不变。
 - 后续任务依赖:Task 2 的 ancestors、`/me/stats` 的省份数都建立在这个数据形状上。
 
-- [ ] **Step 1: 改数据文件**
+- [x] **Step 1: 改数据文件**
 
 `beijing-places.json`:city 对象的 `"level": "CITY"` 改为 `"level": "PROVINCE"`(北京是直辖市,自身即省级链顶)。
 
@@ -67,7 +67,7 @@
   "spots": [ ... 原样保留 ... ] }
 ```
 
-- [ ] **Step 2: 写失败测试(先跑红)**
+- [x] **Step 2: 写失败测试(先跑红)**
 
 `apps/pipeline/test/regions.test.ts` 整体替换为:
 
@@ -152,12 +152,12 @@ test("直辖市升级:存量北京市 CITY 链顶,重跑导入后升为 PROVINCE
   expect(first.city.level).toBe("PROVINCE");
 ```
 
-- [ ] **Step 3: 跑测试确认失败**
+- [x] **Step 3: 跑测试确认失败**
 
 Run: `pnpm -C apps/pipeline exec vitest run test/regions.test.ts test/import.test.ts`
 Expected: FAIL(count 40 拿到 28;level 仍是 CITY)
 
-- [ ] **Step 4: 实现导入脚本**
+- [x] **Step 4: 实现导入脚本**
 
 `apps/pipeline/src/import-places.ts` 整体替换为:
 
@@ -291,12 +291,12 @@ if (isMain) {
 }
 ```
 
-- [ ] **Step 5: 跑测试确认通过**
+- [x] **Step 5: 跑测试确认通过**
 
 Run: `pnpm -C apps/pipeline exec vitest run`
 Expected: PASS(全部 pipeline 用例)
 
-- [ ] **Step 6: 本地 dev 库执行迁移并抽查**
+- [x] **Step 6: 本地 dev 库执行迁移并抽查**
 
 ```bash
 pnpm --filter @zhixing/pipeline import-places
@@ -312,7 +312,7 @@ docker exec -i $(docker ps -qf name=db) psql -U zhixing -d zhixing -c \
 
 Expected: 北京市/香港/澳门 + 12 个省,均 is_top=t。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add apps/pipeline
@@ -333,7 +333,7 @@ git commit -m "feat(pipeline): 数据补省级层——建省挂城/直辖市升
 - Produces: `placeAncestors(prisma, startParentId: string | null): Promise<Array<{id: string; name: string; level: string}>>`——**顺序从远到近(省→市→区)**。`GET /places/:id` DTO 变为 `{ id, name, level, lat, lng, intro, ancestors }`(**children 字段移除**,全库无消费方);`GET /places/random` 在 Pin 形状上追加 `ancestors`;`GET /cards/:id` 的 `place` 变为 `{ id, name, level, lat, lng, ancestors }`。
 - Consumes: Task 1 的三级树数据(测试自造,不依赖导入)。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `apps/api/test/places.test.ts`:把既有用例"创建并查询地点树"的最后两行断言
 
@@ -405,12 +405,12 @@ test("random 带祖先链", async () => {
   expect(detail.json().place).not.toHaveProperty("createdAt"); // place 改为逐字段 DTO
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `pnpm -C apps/api exec vitest run test/places.test.ts test/pins.test.ts test/cards.test.ts`
 Expected: FAIL(无 ancestors 字段;仍有 children/createdAt)
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 新建 `apps/api/src/placeAncestors.ts`:
 
@@ -497,12 +497,12 @@ export async function placeAncestors(
   });
 ```
 
-- [ ] **Step 4: 跑全量 api 测试**
+- [x] **Step 4: 跑全量 api 测试**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/api
@@ -523,7 +523,7 @@ git commit -m "feat(api): 地点/卡片 DTO 附祖先链 ancestors——从远�
 - Produces: `PlaceAncestor { id, name, level }`、`PlaceDetail { id, name, level, intro?, ancestors, pathText }`、`Card.place: CardPlaceRef?`(可选——`/places/:id/cards` 列表无此字段,必须容错)、`CardDetailView(card:placePathOverride:)`。
 - Consumes: Task 2 的 `/places/:id`、`/cards/:id` DTO。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/ios/Tests/PlacePathTests.swift`:
 
@@ -573,12 +573,12 @@ final class PlacePathTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑 iOS 测试确认失败(编译错误即失败)**
+- [x] **Step 2: 跑 iOS 测试确认失败(编译错误即失败)**
 
 Run: `scripts/ios-test.sh`
 Expected: FAIL——`PlaceDetail`/`card.place` 不存在,编译不过。
 
-- [ ] **Step 3: 实现模型**
+- [x] **Step 3: 实现模型**
 
 `apps/ios/Zhixing/Core/Models.swift` 中:
 
@@ -635,7 +635,7 @@ struct CardPlaceRef: Codable {
 
 注意:`Card` 手写了 `==`/`hash`(按 id),新增属性不影响;`Codable` 合成会自动把缺失的 `place` 解成 nil(可选属性)。
 
-- [ ] **Step 4: PlaceDrawer 加载详情并显示路径**
+- [x] **Step 4: PlaceDrawer 加载详情并显示路径**
 
 `apps/ios/Zhixing/Place/PlaceDrawer.swift`:
 
@@ -692,7 +692,7 @@ struct CardPlaceRef: Codable {
     }
 ```
 
-- [ ] **Step 5: CardDetailView 显示位置行**
+- [x] **Step 5: CardDetailView 显示位置行**
 
 `apps/ios/Zhixing/Place/CardDetailView.swift`:
 
@@ -716,17 +716,17 @@ struct CardPlaceRef: Codable {
 
 `FavoritesScreen` 的 `CardDetailView(card: $0)` 不需要改:收藏详情走 `GET /cards/:id`,`card.place` 已带路径。
 
-- [ ] **Step 6: 跑 iOS 测试**
+- [x] **Step 6: 跑 iOS 测试**
 
 Run: `scripts/ios-test.sh`
 Expected: PASS
 
-- [ ] **Step 7: Catalyst 走查**
+- [x] **Step 7: Catalyst 走查**
 
 Run: `scripts/mac-dev.sh`
 验证:点开济南某街区抽屉,名称下出现"山东省 · 济南市";"随便走走"落点后抽屉同样带路径;点进卡片详情看到位置行;收藏页打开卡片同样有位置行。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add apps/ios
@@ -749,7 +749,7 @@ git commit -m "feat(ios): 地点抽屉与卡片详情显示省市路径"
 **Interfaces:**
 - Produces: `PlaceLink { id, placeId, platform: LinkPlatform, title, url, sortOrder, createdAt }`,`Place.links: PlaceLink[]`,`enum LinkPlatform { XIAOHONGSHU BILIBILI DOUYIN WEIBO OTHER }`。
 
-- [ ] **Step 1: schema 变更**
+- [x] **Step 1: schema 变更**
 
 `packages/db/prisma/schema.prisma`:`IdentityProvider` 枚举之后追加:
 
@@ -788,7 +788,7 @@ model PlaceLink {
 }
 ```
 
-- [ ] **Step 2: 迁移 + 测试库建表**
+- [x] **Step 2: 迁移 + 测试库建表**
 
 ```bash
 pnpm --filter @zhixing/db exec prisma migrate dev --name place-links
@@ -797,7 +797,7 @@ pnpm -C packages/db push:test
 
 Expected: 迁移生成且应用成功。
 
-- [ ] **Step 3: 八处 TRUNCATE 列表加 "PlaceLink"**
+- [x] **Step 3: 八处 TRUNCATE 列表加 "PlaceLink"**
 
 以下文件的 TRUNCATE 语句在 `"Place"` 前插入 `"PlaceLink",`(TRUNCATE 顺序无关紧要,统一插同一位置便于 review):
 
@@ -811,7 +811,7 @@ Expected: 迁移生成且应用成功。
     'TRUNCATE TABLE "Like","FootprintPhoto","Footprint","Trip","CardFavorite","CardReport","CardBlock","Card","PlaceLink","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
 ```
 
-- [ ] **Step 4: 写模型往返测试**
+- [x] **Step 4: 写模型往返测试**
 
 `packages/db/test/schema.test.ts` 末尾追加:
 
@@ -837,12 +837,12 @@ test("PlaceLink 往返:挂地点、级联删除", async () => {
 
 (注意该文件顶部 `prisma` 实例已存在,直接用。)
 
-- [ ] **Step 5: 跑 db + 全仓测试**
+- [x] **Step 5: 跑 db + 全仓测试**
 
 Run: `pnpm -C packages/db exec vitest run && pnpm test`
 Expected: PASS(全仓,确认 TRUNCATE 无遗漏)
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add packages/db apps/api/test/helpers.ts apps/pipeline/test
@@ -863,7 +863,7 @@ git commit -m "feat(db): PlaceLink 地点外链表 + LinkPlatform 枚举"
 - Produces: `POST /admin/places/:id/links`(201 → `{ id, platform, title, url, sortOrder }`)、`PATCH /admin/links/:id`、`DELETE /admin/links/:id`(204);`GET /places/:id` DTO 追加 `links: [{ id, platform, title, url }]`(按 sortOrder asc, createdAt asc);`adminPlacesRoutes(app)` 承接原 `POST /admin/places`(行为不变)。
 - Consumes: Task 4 的 PlaceLink 模型、Task 2 的 detail DTO。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/api/test/placeLinks.test.ts`:
 
@@ -955,12 +955,12 @@ test("PATCH 改排序与标题;DELETE 删除;地点不存在 404", async () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `pnpm -C apps/api exec vitest run test/placeLinks.test.ts`
 Expected: FAIL(路由不存在 404)
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 新建 `apps/api/src/routes/adminPlaces.ts`:
 
@@ -1074,7 +1074,7 @@ export async function adminPlacesRoutes(app: FastifyInstance) {
 
 `apps/api/src/app.ts`:import 区加 `import { adminPlacesRoutes } from "./routes/adminPlaces.js";`,`app.register(placesRoutes);` 之后加 `app.register(adminPlacesRoutes);`。
 
-- [ ] **Step 4: 更新 Task 2 的 keys 断言**
+- [x] **Step 4: 更新 Task 2 的 keys 断言**
 
 `apps/api/test/places.test.ts` 中 detail 的逐字段断言改为:
 
@@ -1084,12 +1084,12 @@ export async function adminPlacesRoutes(app: FastifyInstance) {
   );
 ```
 
-- [ ] **Step 5: 跑全量 api 测试**
+- [x] **Step 5: 跑全量 api 测试**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: PASS
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/api
@@ -1107,7 +1107,7 @@ git commit -m "feat(api): 地点外链 admin CRUD,地点详情带 links——adm
 **Interfaces:**
 - Consumes: Task 5 的 `GET /places/:id`(links)、`POST /admin/places/:id/links`、`PATCH /admin/links/:id`、`DELETE /admin/links/:id`。
 
-- [ ] **Step 1: 地点列表行加入口**
+- [x] **Step 1: 地点列表行加入口**
 
 `apps/admin/app/places/page.tsx` 整体替换为:
 
@@ -1147,7 +1147,7 @@ export default function PlacesPage() {
 }
 ```
 
-- [ ] **Step 2: 外链管理详情页**
+- [x] **Step 2: 外链管理详情页**
 
 新建 `apps/admin/app/places/[id]/page.tsx`:
 
@@ -1247,11 +1247,11 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
 }
 ```
 
-- [ ] **Step 3: 浏览器验证**
+- [x] **Step 3: 浏览器验证**
 
 启动 preview(launch.json 已配 api :8799 + admin :3000),在 admin 地点库点进任一地点:添加两条不同 sortOrder 的链接 → 列表按序显示;改排序、删除各验证一次;贴 `http://` 链接应报 400。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add apps/admin
@@ -1271,7 +1271,7 @@ git commit -m "feat(admin): 地点外链管理页——增删/调序"
 **Interfaces:**
 - Produces: `PlaceLink { id, platform, title, url, platformLabel }`、`PlaceDetail.links: [PlaceLink]?`(可选,容错旧缓存/旧服务端)、`PlaceLinksSection(links:)` 视图。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `apps/ios/Tests/PlacePathTests.swift` 追加:
 
@@ -1298,7 +1298,7 @@ git commit -m "feat(admin): 地点外链管理页——增删/调序"
 
 Run: `scripts/ios-test.sh` → Expected: FAIL(编译错误)。
 
-- [ ] **Step 2: 模型**
+- [x] **Step 2: 模型**
 
 `Models.swift` 的 `PlaceDetail` 内 `let ancestors: [PlaceAncestor]` 之后追加:
 
@@ -1326,7 +1326,7 @@ struct PlaceLink: Codable, Identifiable {
 
 (Task 3 已写好的 `PlaceDetail` 测试 JSON 无 links 键,可选属性解码兼容,不需回改。)
 
-- [ ] **Step 3: 攻略区视图**
+- [x] **Step 3: 攻略区视图**
 
 新建 `apps/ios/Zhixing/Place/PlaceLinksSection.swift`:
 
@@ -1406,7 +1406,7 @@ private struct SafariView: UIViewControllerRepresentable {
 #endif
 ```
 
-- [ ] **Step 4: 挂进抽屉**
+- [x] **Step 4: 挂进抽屉**
 
 `PlaceDrawer.swift` 的 `cardsContent` 中,`ForEach(cards) { ... }` 闭合之后(仍在 `LazyVStack` 内)追加:
 
@@ -1417,7 +1417,7 @@ private struct SafariView: UIViewControllerRepresentable {
                 }
 ```
 
-- [ ] **Step 5: xcodegen + 测试 + 走查**
+- [x] **Step 5: xcodegen + 测试 + 走查**
 
 ```bash
 cd apps/ios && xcodegen generate && cd ../..
@@ -1427,7 +1427,7 @@ scripts/mac-dev.sh
 
 Expected: 测试 PASS;走查:给某地点后台加两条链接后,抽屉风物卡列表底部出现"网友攻略",点击在默认浏览器打开;无链接地点不出现该区块。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/ios
@@ -1447,7 +1447,7 @@ git commit -m "feat(ios): 地点抽屉网友攻略区块——链接跳浏览器
 **Interfaces:**
 - Produces: `enum PlaceStatus { ACTIVE PENDING REJECTED }`;`Place.status`(默认 ACTIVE,存量零迁移)、`Place.createdById?/createdBy?`(User, onDelete SetNull)、`User.createdPlaces`。
 
-- [ ] **Step 1: schema 变更**
+- [x] **Step 1: schema 变更**
 
 `schema.prisma`:`LinkPlatform` 枚举之后追加:
 
@@ -1492,14 +1492,14 @@ model Place {
   createdPlaces Place[]  @relation("UserCreatedPlaces")
 ```
 
-- [ ] **Step 2: 迁移 + 测试库**
+- [x] **Step 2: 迁移 + 测试库**
 
 ```bash
 pnpm --filter @zhixing/db exec prisma migrate dev --name place-status
 pnpm -C packages/db push:test
 ```
 
-- [ ] **Step 3: 模型测试**
+- [x] **Step 3: 模型测试**
 
 `packages/db/test/schema.test.ts` 末尾追加:
 
@@ -1522,7 +1522,7 @@ test("Place.status 默认 ACTIVE;createdBy 用户删除后 SetNull", async () =>
 });
 ```
 
-- [ ] **Step 4: 跑测试 + 提交**
+- [x] **Step 4: 跑测试 + 提交**
 
 Run: `pnpm -C packages/db exec vitest run`
 Expected: PASS
@@ -1545,7 +1545,7 @@ git commit -m "feat(db): Place 状态机与提交者——PENDING/REJECTED 仅�
 - Produces: `config.placeSubmission`(env `ZHIXING_PLACE_SUBMISSION`,**默认开**,`"0"` 关);`app.placeSubmission: boolean`(buildApp opts 可注入,镜像 devAuth 模式);`GET /app-config` 追加 `placeSubmission`;`optionalUser` preHandler(设 `req.optionalUserId: string | null`,绝不 401);visibility.ts 的 `PLACE_ACTIVE` / `placeVisibleTo(userId)` / `placeSearchableTo(userId)`;`testApp(overrides?)`。
 - Consumes: Task 8 的 status 字段。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `apps/api/test/places.test.ts` 末尾追加(依赖本任务稍后给 testApp 加的 overrides 参数——红阶段表现为编译失败,同样算红):
 
@@ -1565,7 +1565,7 @@ test("app-config 下发地点申请开关;buildApp 可注入关闭", async () =>
 
 Run: `pnpm -C apps/api exec vitest run test/places.test.ts` → FAIL(placeSubmission 不存在,类型/断言双红)。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 `apps/api/src/config.ts` 在 `trustProxy` 行之后追加:
 
@@ -1658,7 +1658,7 @@ export function testApp(overrides: Partial<BuildAppOpts> = {}) {
 }
 ```
 
-- [ ] **Step 3: 跑全量 + 提交**
+- [x] **Step 3: 跑全量 + 提交**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: PASS
@@ -1681,7 +1681,7 @@ git commit -m "feat(api): 地点申请开关经 app-config 下发 + optionalUser
 - Produces: `POST /places`(requireUser)body `{ name: string(1-50), lat: number(-90..90), lng: number(-180..180) }` → 201 Pin 形状 `{ id, name, level: "POI", parentId, lat, lng, status: "PENDING", cardCount: 0 }`。错误:403 `place_submission_disabled` / 429 `daily_limit` / 409 `place_exists`(附 `placeId`)/ 400 `invalid_body`。`haversineMeters(lat1,lng1,lat2,lng2)`(geo.ts)。运营常量 `PLACE_SUBMISSION = { dailyLimit: 10, parentRadiusMeters: 150_000 }`。
 - Consumes: Task 9 的 `app.placeSubmission`、Task 8 的 status/createdById。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/api/test/placeSubmission.test.ts`:
 
@@ -1814,7 +1814,7 @@ test("24 小时滚动窗内第 11 个申请 429;开关关闭 403;匿名 401;非�
 
 Run: `pnpm -C apps/api exec vitest run test/placeSubmission.test.ts` → FAIL(POST /places 404)。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 新建 `apps/api/src/geo.ts`:
 
@@ -1935,7 +1935,7 @@ const submitPlaceSchema = z.object({
   });
 ```
 
-- [ ] **Step 3: 跑全量 + 提交**
+- [x] **Step 3: 跑全量 + 提交**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: PASS
@@ -1958,7 +1958,7 @@ git commit -m "feat(api): 用户申请新地点——PENDING 建点/父级自动
 - Produces: `GET /places/pins` 加 `optionalUser`——返回 ACTIVE + 本人 PENDING/REJECTED,DTO 增 `status` 字段;`GET /places/random` 只随机 ACTIVE;`GET /search` 加 `optionalUser`——ACTIVE + 本人 PENDING;`GET /places/:id` 加 `optionalUser`——非本人的 PENDING/REJECTED 404,DTO 增 `status`;`GET /places` 改 **requireAdmin**(唯一消费方是 admin console;user 建点后含 createdById 的整行不能再裸奔在匿名接口上);`/places/:id/stories` 与 `/places/:id/photo-wall` 的地点查找按 `placeVisibleTo(req.userId)` 过滤(他人待审点 404,杜绝地点枚举);pipeline `queryFillTargets(prisma, city?)`——batch 补卡只圈 ACTIVE 地点。
 - Consumes: Task 9 的 optionalUser/placeVisibleTo/placeSearchableTo。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/api/test/placeVisibility.test.ts`:
 
@@ -2114,7 +2114,7 @@ detail 逐字段断言(Task 5 版本)改为含 status:
 
 Run: `pnpm -C apps/api exec vitest run test/placeVisibility.test.ts` → FAIL。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 `apps/api/src/routes/places.ts`:
 
@@ -2258,7 +2258,7 @@ export async function queryFillTargets(
     const places = await queryFillTargets(prisma, values.city);
 ```
 
-- [ ] **Step 3: 跑全量 + 提交**
+- [x] **Step 3: 跑全量 + 提交**
 
 Run: `pnpm -C apps/api exec vitest run && pnpm -C apps/pipeline exec vitest run`
 Expected: PASS(注意 pins.test.ts 既有用例不带头也应照常通过——匿名见官方点)
@@ -2280,7 +2280,7 @@ git commit -m "feat(api,pipeline): 地点读面按状态收口——本人见待
 - Produces: `POST /footprints`(visibility=PUBLIC 时)与 `PATCH /footprints/:id`(切 PUBLIC 时)在地点非 ACTIVE 时返回 400 `{ error: "place_pending" }`;`FOOTPRINT_SELECT.place` 增加 `status`(iOS 编辑器靠它禁用公开开关)。
 - Consumes: Task 8 的 Place.status。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `apps/api/test/footprints.test.ts` 末尾追加(该文件已有 `app`/`userAuth` 等基建,沿用其惯例):
 
@@ -2328,7 +2328,7 @@ test("挂 PENDING 地点的足迹:创建时直接公开与事后切公开都 400
 
 Run: `pnpm -C apps/api exec vitest run test/footprints.test.ts` → FAIL。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 `apps/api/src/routes/footprints.ts`:
 
@@ -2361,7 +2361,7 @@ Run: `pnpm -C apps/api exec vitest run test/footprints.test.ts` → FAIL。
 
 (注意该分支要能 return,把原 `if/else if` 链保持原状,仅在 PUBLIC 分支首部加卫语句。)
 
-- [ ] **Step 3: 跑全量 + 提交**
+- [x] **Step 3: 跑全量 + 提交**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: PASS(既有足迹用例的 place DTO 多了 status 字段——`FOOTPRINT_SELECT` 是白名单 select,加字段不会破坏既有断言;若有 keys 全等断言按新形状更新)
@@ -2386,7 +2386,7 @@ git commit -m "feat(api): 挂待审地点的足迹禁止申请公开——place_
   - `POST /admin/places/:id/merge` body `{ targetId }` → 204;事务内迁移 footprints/cards/links/子节点后删除源点;源非 PENDING 409 `not_pending`,目标不存在或非 ACTIVE 400 `invalid_target`,源=目标 400 `invalid_target`。
 - Consumes: Task 8 字段;Task 10 的提交流程造数。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/api/test/adminPlaces.test.ts`:
 
@@ -2509,7 +2509,7 @@ test("merge:足迹整体迁移到目标点,源点删除,统计随之归正", asy
 
 Run: `pnpm -C apps/api exec vitest run test/adminPlaces.test.ts` → FAIL。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 `apps/api/src/routes/adminPlaces.ts` 追加(import 区补 `import { z } from "zod";` 已有):
 
@@ -2615,7 +2615,7 @@ const mergeSchema = z.object({ targetId: z.string() });
   });
 ```
 
-- [ ] **Step 3: 跑全量 + 提交**
+- [x] **Step 3: 跑全量 + 提交**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: PASS
@@ -2637,7 +2637,7 @@ git commit -m "feat(api): 地点审核 admin API——队列/通过(改名改父
 **Interfaces:**
 - Consumes: Task 13 的三个 admin 端点 + `GET /places`(requireAdmin,含 status)。
 
-- [ ] **Step 1: 导航**
+- [x] **Step 1: 导航**
 
 `apps/admin/app/layout.tsx`:找到 `<Link href="/places">地点库</Link>`,其后追加:
 
@@ -2645,7 +2645,7 @@ git commit -m "feat(api): 地点审核 admin API——队列/通过(改名改父
           <Link href="/places/pending">地点审核</Link>
 ```
 
-- [ ] **Step 2: 地点库列表加状态列**
+- [x] **Step 2: 地点库列表加状态列**
 
 `apps/admin/app/places/page.tsx`:`type Place` 加 `status: string;`;表头 `<th>层级</th>` 后加 `<th>状态</th>`;行内 `<td>{p.level}</td>` 后加 `<td>{p.status}</td>`;"外链"入口改为:
 
@@ -2655,7 +2655,7 @@ git commit -m "feat(api): 地点审核 admin API——队列/通过(改名改父
 
 (详情接口按用户面可见性过滤,admin token 不是用户会话,非 ACTIVE 详情会 404——待审点的处置全在审核页完成。)
 
-- [ ] **Step 3: 审核队列页**
+- [x] **Step 3: 审核队列页**
 
 新建 `apps/admin/app/places/pending/page.tsx`:
 
@@ -2754,11 +2754,11 @@ export default function PendingPlacesPage() {
 }
 ```
 
-- [ ] **Step 4: 浏览器验证**
+- [x] **Step 4: 浏览器验证**
 
 preview 启动 api(:8799 dev auth)+ admin:用 `POST /auth/dev` 造一个用户 token,`POST /places` 提交两个点(其一同名于已有地点附近)→ admin 审核页:一个"通过"(顺手改父级),一个"合并"到已有点 → 列表消失、地点库状态正确、足迹随迁(可在 DB 或用户端核对)。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/admin
@@ -2784,7 +2784,7 @@ git commit -m "feat(admin): 地点审核队列页——通过/改父/合并/拒�
 - Consumes: `POST /places`(Task 10)、pins 的 `status`(Task 11)、`/app-config.placeSubmission`(Task 9)、足迹 place.status(Task 12)。
 - Produces: `Pin.status: String?` + `isAwaitingReview`;`PlaceRef.status: String?`;`RemoteConfig.shared.placeSubmission`(缺字段默认 true);`CreatePlaceSheet(lat:lng:onCreated:)`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/ios/Tests/PlaceSubmissionTests.swift`:
 
@@ -2834,7 +2834,7 @@ final class PlaceSubmissionTests: XCTestCase {
 
 Run: `scripts/ios-test.sh` → FAIL(编译错误)。
 
-- [ ] **Step 2: 模型与配置**
+- [x] **Step 2: 模型与配置**
 
 `Models.swift`:
 
@@ -2882,7 +2882,7 @@ struct RemoteAppConfig: Codable {
             placeSubmission = config.placeSubmission ?? true
 ```
 
-- [ ] **Step 3: 地图长按 + 待审 pin 样式**
+- [x] **Step 3: 地图长按 + 待审 pin 样式**
 
 `MapView.swift`:
 
@@ -2942,7 +2942,7 @@ struct RemoteAppConfig: Codable {
                 .map { PlaceAnnotation(pin: $0, isFootprint: false) }
 ```
 
-- [ ] **Step 4: 建点 sheet**
+- [x] **Step 4: 建点 sheet**
 
 新建 `apps/ios/Zhixing/Place/CreatePlaceSheet.swift`:
 
@@ -3029,7 +3029,7 @@ struct CreatePlaceSheet: View {
 }
 ```
 
-- [ ] **Step 5: 地图流转**
+- [x] **Step 5: 地图流转**
 
 `MapScreen.swift`:
 
@@ -3204,7 +3204,7 @@ private struct PlacePickerSheet: View {
 }
 ```
 
-- [ ] **Step 6: 搜索空态文案 + 撰写器/编辑器公开开关联动 + 抽屉徽标**
+- [x] **Step 6: 搜索空态文案 + 撰写器/编辑器公开开关联动 + 抽屉徽标**
 
 `SearchSheet.swift` 空结果 `ZXEmptyState` 的 message 改为:
 
@@ -3287,7 +3287,7 @@ private struct PlacePickerSheet: View {
 
 (Task 3/7 的 PlaceDetail 测试 JSON 无 status 键,可选属性兼容。)
 
-- [ ] **Step 7: xcodegen + 测试**
+- [x] **Step 7: xcodegen + 测试**
 
 ```bash
 cd apps/ios && xcodegen generate && cd ../..
@@ -3298,6 +3298,10 @@ Expected: PASS
 
 - [ ] **Step 8: Catalyst 全链路走查**
 
+> 2026-07-15 自动化验收进度：已确认新版搜索空态、本人待审地点可见、抽屉“审核中”徽标，
+> 以及足迹撰写器公开开关禁用。Catalyst 定位请求超时，桌面自动化无法稳定模拟 0.5 秒长按；
+> 长按建点/当前位置未命中、审核后变色与远程关停入口仍需在有定位能力的真机或模拟器补走查。
+
 Run: `scripts/mac-dev.sh`
 验证清单:
 1. 地图长按空白处 → 建点 sheet → 提交 → 自动飞到灰色"审"pin 并弹出足迹撰写器,公开开关禁用且带说明;
@@ -3306,7 +3310,7 @@ Run: `scripts/mac-dev.sh`
 4. admin 审核通过后,App 重新拉 pins(重进地图或重启),pin 变常规色,编辑该足迹可开公开;
 5. 服务端 `ZHIXING_PLACE_SUBMISSION=0` 重启后,长按无反应、两处入口文案/按钮消失。
 
-- [ ] **Step 9: 提交**
+- [x] **Step 9: 提交**
 
 ```bash
 git add apps/ios
@@ -3323,7 +3327,7 @@ git commit -m "feat(ios): 用户申请新地点——长按建点/待审样式/�
 
 **Interfaces:** 无代码。
 
-- [ ] **Step 1: content-ops.md**
+- [x] **Step 1: content-ops.md**
 
 在导入命令(import-places/import-regions)相关小节追加:
 
@@ -3333,7 +3337,7 @@ git commit -m "feat(ios): 用户申请新地点——长按建点/待审样式/�
 > 不新建重复节点,足迹与风物卡无需迁移。
 ```
 
-- [ ] **Step 2: deploy.md**
+- [x] **Step 2: deploy.md**
 
 环境变量说明处追加:
 
@@ -3341,7 +3345,7 @@ git commit -m "feat(ios): 用户申请新地点——长按建点/待审样式/�
 | `ZHIXING_PLACE_SUBMISSION` | 用户申请新地点开关。默认开;置 `0` 关闭(iOS 入口隐藏 + POST /places 返回 403)。地点覆盖度足够后建议关闭以控审核负担。 |
 ```
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add docs
