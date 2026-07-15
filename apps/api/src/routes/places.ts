@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { requireUser } from "../auth.js";
+import { optionalUser, requireAdmin, requireUser } from "../auth.js";
 import { haversineMeters } from "../geo.js";
 import { countCardsByPlace } from "../placeCounts.js";
 import { placeAncestors } from "../placeAncestors.js";
+import { placeVisibleTo } from "../visibility.js";
 
 // pins/random 未鉴权且是重查询（全量地点 + 卡数聚合），同样受全局 keyGenerator
 // "有 Authorization 头就按头计费"的伪造绕过影响——覆盖为按 req.ip 计数；不传 max/
@@ -29,9 +30,10 @@ const submitPlaceSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
-async function queryPins(app: FastifyInstance) {
+async function queryPins(app: FastifyInstance, userId: string | null) {
   const places = await app.prisma.place.findMany({
-    select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true },
+    where: placeVisibleTo(userId),
+    select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true, status: true },
     orderBy: { createdAt: "asc" },
   });
   const countBy = await countCardsByPlace(app.prisma, places.map((p) => p.id));
@@ -39,16 +41,21 @@ async function queryPins(app: FastifyInstance) {
 }
 
 export async function placesRoutes(app: FastifyInstance) {
-  app.get("/places/pins", { config: ipKeyedRateLimit }, async () => queryPins(app));
+  app.get(
+    "/places/pins",
+    { config: ipKeyedRateLimit, preHandler: optionalUser },
+    async (req) => queryPins(app, req.optionalUserId),
+  );
 
   app.get("/places/random", { config: ipKeyedRateLimit }, async (_req, reply) => {
-    const withContent = (await queryPins(app)).filter((p) => p.cardCount > 0);
+    // 随机漫步是公开发现功能:只在 ACTIVE 且有内容的地点里抽,与登录态无关
+    const withContent = (await queryPins(app, null)).filter((p) => p.cardCount > 0);
     if (withContent.length === 0) return reply.code(404).send({ error: "no_content" });
     const pick = withContent[Math.floor(Math.random() * withContent.length)];
     return { ...pick, ancestors: await placeAncestors(app.prisma, pick.parentId) };
   });
 
-  app.get("/places", async (req, reply) => {
+  app.get("/places", { preHandler: requireAdmin }, async (req, reply) => {
     const q = listQuerySchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: "invalid_query" });
     return app.prisma.place.findMany({
@@ -57,10 +64,10 @@ export async function placesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/places/:id", async (req, reply) => {
+  app.get("/places/:id", { preHandler: optionalUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const place = await app.prisma.place.findUnique({
-      where: { id },
+    const place = await app.prisma.place.findFirst({
+      where: { id, AND: [placeVisibleTo(req.optionalUserId)] },
       include: { links: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
     });
     if (!place) return reply.code(404).send({ error: "not_found" });
@@ -71,6 +78,7 @@ export async function placesRoutes(app: FastifyInstance) {
       lat: place.lat,
       lng: place.lng,
       intro: place.intro,
+      status: place.status,
       ancestors: await placeAncestors(app.prisma, place.parentId),
       links: place.links.map((l) => ({
         id: l.id, platform: l.platform, title: l.title, url: l.url, sortOrder: l.sortOrder,

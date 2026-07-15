@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { requireAdmin } from "../auth.js";
+import { optionalUser, requireAdmin } from "../auth.js";
 import { countCardsByPlace } from "../placeCounts.js";
+import { placeSearchableTo } from "../visibility.js";
 
 // /search 未鉴权，全局 keyGenerator 在有 Authorization 头时按头计费——攻击者可给每次
 // 请求都塞一个随机头骗出新桶，绕开 30/min 限流刷查询。这里显式覆盖为按 req.ip 计数。
@@ -11,7 +12,7 @@ const searchRateLimit = {
 export async function searchRoutes(app: FastifyInstance) {
   app.get(
     "/search",
-    { config: searchRateLimit },
+    { config: searchRateLimit, preHandler: optionalUser },
     async (req, reply) => {
       const { q } = req.query as { q?: string };
       const query = q?.trim() ?? "";
@@ -19,8 +20,11 @@ export async function searchRoutes(app: FastifyInstance) {
       if (query.length > 64) return reply.code(400).send({ error: "query_too_long" });
 
       const places = await app.prisma.place.findMany({
-        where: { name: { contains: query, mode: "insensitive" } },
-        select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true },
+        where: {
+          name: { contains: query, mode: "insensitive" },
+          AND: [placeSearchableTo(req.optionalUserId)],
+        },
+        select: { id: true, name: true, level: true, parentId: true, lat: true, lng: true, status: true },
         take: 20,
       });
       if (places.length === 0) {

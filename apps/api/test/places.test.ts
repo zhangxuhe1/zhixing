@@ -28,7 +28,7 @@ test("创建并查询地点树", async () => {
   });
   expect(spot.statusCode).toBe(201);
 
-  const list = await app.inject({ method: "GET", url: `/places?parentId=${cityId}` });
+  const list = await app.inject({ method: "GET", url: `/places?parentId=${cityId}`, headers: ADMIN_AUTH });
   expect(list.json().map((p: { name: string }) => p.name)).toEqual(["什刹海"]);
 
   const detail = await app.inject({ method: "GET", url: `/places/${cityId}` });
@@ -65,7 +65,7 @@ test("GET /places/:id 返回从远到近的祖先链", async () => {
   ]);
   // 逐字段 DTO：不外传 createdAt/parentId 之外的内部字段
   expect(Object.keys(res.json()).sort()).toEqual(
-    ["ancestors", "id", "intro", "lat", "level", "links", "lng", "name"].sort(),
+    ["ancestors", "id", "intro", "lat", "level", "links", "lng", "name", "status"].sort(),
   );
 });
 
