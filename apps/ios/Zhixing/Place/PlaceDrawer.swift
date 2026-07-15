@@ -9,6 +9,7 @@ struct PlaceDrawer: View {
     @State private var showComposer = false
     #endif
     @State private var section: DrawerSection = .cards
+    @State private var placeDetail: PlaceDetail?
 
     /// 三段式 tab：风物卡（M1 落地）/ 旅人故事（I4）/ 旅人镜头（本任务，I5）。
     private enum DrawerSection: String, CaseIterable, Hashable {
@@ -40,6 +41,11 @@ struct PlaceDrawer: View {
                                 .foregroundStyle(ZXTheme.cinnabar)
                             Text(pin.name)
                                 .font(.system(.title2, design: .serif, weight: .bold))
+                            if let path = placeDetail?.pathText {
+                                Text(path)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         Spacer()
                     }
@@ -63,7 +69,9 @@ struct PlaceDrawer: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: Card.self) { CardDetailView(card: $0) }
+            .navigationDestination(for: Card.self) {
+                CardDetailView(card: $0, placePathOverride: drawerLocationText)
+            }
             .toolbar {
                 // Mac Catalyst：抽屉是以 sheet 弹出的浮层，Mac 上没有 iOS 的下滑关闭手势、只能按 ESC；
                 // 补一个显式「关闭」把抽屉收回地图。iOS 不加：detent + 下滑关闭已是原生约定，加了反而多余。
@@ -91,7 +99,11 @@ struct PlaceDrawer: View {
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
         }
-        .task { await loadCards() }
+        .task {
+            async let cards: Void = loadCards()
+            async let detail: Void = loadDetail()
+            _ = await (cards, detail)
+        }
     }
 
     @ViewBuilder
@@ -166,5 +178,16 @@ struct PlaceDrawer: View {
         } catch {
             cardsState = .failed("风物卡加载失败，请重试")
         }
+    }
+
+    private func loadDetail() async {
+        // 路径属锦上添花：失败静默（nil 不渲染），不打断风物卡主内容
+        placeDetail = try? await APIClient.shared.get("/places/\(pin.id)")
+    }
+
+    /// 抽屉里打开的卡片自身不带 place（列表接口）——用抽屉已知的路径+地点名兜底。
+    private var drawerLocationText: String {
+        if let path = placeDetail?.pathText { return "\(path) · \(pin.name)" }
+        return pin.name
     }
 }

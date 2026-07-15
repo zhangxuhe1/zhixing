@@ -2,6 +2,9 @@ import SwiftUI
 
 struct CardDetailView: View {
     let card: Card
+    var placePathOverride: String? = nil
+
+    private var locationText: String? { card.locationText ?? placePathOverride }
     @Environment(FavoritesStore.self) private var favorites
     @State private var isTogglingFavorite = false
     @State private var favoriteError: String?
@@ -26,6 +29,12 @@ struct CardDetailView: View {
                         Label("AI 整理·待复核", systemImage: "sparkles")
                                 .font(.caption).foregroundStyle(ZXTheme.oldGold)
                         }
+                    }
+
+                    if let locationText {
+                        Label(locationText, systemImage: "mappin.and.ellipse")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
 
                     Text(card.title)
