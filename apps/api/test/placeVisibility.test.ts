@@ -23,6 +23,8 @@ test("pins:本人见自己的 PENDING/REJECTED,他人与匿名不见;DTO 带 sta
   expect(mine.map((p) => p.id)).toContain(pending.id);
   expect(mine.map((p) => p.id)).toContain(rejected.id);
   expect(mine.find((p) => p.id === pending.id)?.status).toBe("PENDING");
+  // 公开面禁字段回归:归属者 id 绝不外传(CLAUDE.md 惯例断言)
+  expect(mine.find((p) => p.id === pending.id)).not.toHaveProperty("createdById");
 
   const others = (await app.inject({ method: "GET", url: "/places/pins", headers: bob.headers })).json() as Array<{ id: string }>;
   expect(others.map((p) => p.id)).not.toContain(pending.id);
@@ -41,6 +43,7 @@ test("搜索:本人可搜到自己的 PENDING;REJECTED 不进搜索;他人不见
 
   const mine = (await app.inject({ method: "GET", url: "/search?q=洪家楼", headers: alice.headers })).json() as Array<{ id: string }>;
   expect(mine.map((p) => p.id)).toContain(pending.id);
+  expect(mine.find((p) => p.id === pending.id)).not.toHaveProperty("createdById");
 
   const mineRejected = (await app.inject({ method: "GET", url: "/search?q=老商埠", headers: alice.headers })).json() as Array<{ id: string }>;
   expect(mineRejected).toHaveLength(0);
