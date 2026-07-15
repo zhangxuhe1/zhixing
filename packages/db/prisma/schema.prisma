@@ -56,6 +56,14 @@ enum IdentityProvider {
   EMAIL
 }
 
+enum LinkPlatform {
+  XIAOHONGSHU
+  BILIBILI
+  DOUYIN
+  WEIBO
+  OTHER
+}
+
 model Place {
   id         String      @id @default(cuid())
   name       String
@@ -68,10 +76,26 @@ model Place {
   intro      String?
   cards      Card[]
   footprints Footprint[]
+  links      PlaceLink[]
   createdAt  DateTime    @default(now())
 
   @@unique([name, parentId])
   @@index([level])
+}
+
+// 地点外链(小红书/B 站等攻略帖):第一期仅管理员维护;独立表而非 JSON,
+// 排序/增删与未来"用户提交+审核"演进都不再动 schema。
+model PlaceLink {
+  id        String       @id @default(cuid())
+  placeId   String
+  place     Place        @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  platform  LinkPlatform
+  title     String
+  url       String
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+
+  @@index([placeId])
 }
 
 model Card {

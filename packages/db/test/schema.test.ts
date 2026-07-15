@@ -7,7 +7,7 @@ const prisma = createPrisma(
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","PlaceLink","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
   );
 });
 afterAll(async () => prisma.$disconnect());
@@ -36,4 +36,22 @@ test("创建地点与多块风物卡并按 order 读回", async () => {
   });
   expect(read.status).toBe("AI_GENERATED"); // 默认状态即 AI 生成
   expect(read.blocks.map((b) => b.text)).toEqual(["第一段", "第二段"]);
+});
+
+test("PlaceLink 往返:挂地点、级联删除", async () => {
+  const place = await prisma.place.create({
+    data: { name: "什刹海", level: "DISTRICT", lat: 39.94, lng: 116.38 },
+  });
+  await prisma.placeLink.create({
+    data: {
+      placeId: place.id, platform: "XIAOHONGSHU",
+      title: "什刹海 citywalk 路线", url: "https://example.com/x", sortOrder: 1,
+    },
+  });
+  const links = await prisma.placeLink.findMany({ where: { placeId: place.id } });
+  expect(links).toHaveLength(1);
+  expect(links[0].platform).toBe("XIAOHONGSHU");
+
+  await prisma.place.delete({ where: { id: place.id } }); // onDelete: Cascade
+  expect(await prisma.placeLink.count()).toBe(0);
 });
