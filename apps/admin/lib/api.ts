@@ -9,7 +9,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      "content-type": "application/json",
+      // 仅带 body 的请求声明 JSON——DELETE 空体带 content-type 会被 Fastify 判 400 空 JSON
+      ...(init.body != null ? { "content-type": "application/json" } : {}),
       authorization: `Bearer ${getToken()}`,
       ...(init.headers ?? {}),
     },
