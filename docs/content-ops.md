@@ -5,6 +5,11 @@
 1. 导入地点库：
    pnpm --filter @zhixing/pipeline import-places     # 北京 16 点（幂等）
    pnpm --filter @zhixing/pipeline import-regions    # 6 熟悉地区 + 10 省会（幂等）
+
+   > M3 起数据文件带省级层（直辖市/港澳为省级链顶，普通城市挂省）。两个导入命令幂等，
+   > 生产升级省市层级 = 直接重跑上面两条 import——存量链顶城市会被原地补挂/升级，
+   > 不新建重复节点，足迹与风物卡无需迁移。
+
 2. 全国铺底（每地 ≥3 张，分类轮转；~80 张，配额紧张可分天跑）：
    pnpm --filter @zhixing/pipeline batch -- --fill 3 --delay 4000
 3. 北京加深（样板间，每点 ≥5 张）：
