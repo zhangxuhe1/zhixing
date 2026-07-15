@@ -16,7 +16,7 @@ struct PlaceAncestor: Codable, Hashable {
     let level: String
 }
 
-/// `GET /places/:id` 的地点详情：抽屉头部路径与后续攻略区共用。
+/// `GET /places/:id` 的地点详情:抽屉头部路径与后续攻略区共用。
 struct PlaceDetail: Codable {
     let id: String
     let name: String
@@ -24,7 +24,7 @@ struct PlaceDetail: Codable {
     let intro: String?
     let ancestors: [PlaceAncestor]
 
-    /// 从远到近的位置路径："山东省 · 济南市"；链顶（无祖先）为 nil，不渲染。
+    /// 从远到近的位置路径:"山东省 · 济南市";链顶(无祖先)为 nil,不渲染。
     var pathText: String? {
         ancestors.isEmpty ? nil : ancestors.map(\.name).joined(separator: " · ")
     }
@@ -48,7 +48,7 @@ struct Card: Codable, Identifiable, Hashable {
     let status: String
     let sources: [String]
     let blocks: [CardBlock]
-    /// 仅 `GET /cards/:id` 返回；`/places/:id/cards` 列表无此字段——必须可选容错。
+    /// 仅 `GET /cards/:id` 返回;`/places/:id/cards` 列表无此字段——必须可选容错。
     let place: CardPlaceRef?
 
     static let categoryLabels = [
@@ -58,7 +58,7 @@ struct Card: Codable, Identifiable, Hashable {
     var categoryLabel: String { Self.categoryLabels[category] ?? category }
     var isAIGenerated: Bool { status == "AI_GENERATED" }
 
-    /// 卡面位置行："北京市 · 什刹海"。无内嵌 place（列表来源）时为 nil，由调用方注入兜底。
+    /// 卡面位置行:"北京市 · 什刹海"。无内嵌 place(列表来源)时为 nil,由调用方注入兜底。
     var locationText: String? {
         guard let place else { return nil }
         return (place.ancestors.map(\.name) + [place.name]).joined(separator: " · ")

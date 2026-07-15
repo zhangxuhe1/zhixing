@@ -181,11 +181,11 @@ struct PlaceDrawer: View {
     }
 
     private func loadDetail() async {
-        // 路径属锦上添花：失败静默（nil 不渲染），不打断风物卡主内容
+        // 路径属锦上添花:失败静默(nil 不渲染),不打断风物卡主内容
         placeDetail = try? await APIClient.shared.get("/places/\(pin.id)")
     }
 
-    /// 抽屉里打开的卡片自身不带 place（列表接口）——用抽屉已知的路径+地点名兜底。
+    /// 抽屉里打开的卡片自身不带 place(列表接口)——用抽屉已知的路径+地点名兜底。
     private var drawerLocationText: String {
         if let path = placeDetail?.pathText { return "\(path) · \(pin.name)" }
         return pin.name
