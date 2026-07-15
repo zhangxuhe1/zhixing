@@ -26,6 +26,7 @@ declare module "fastify" {
     appleJwks: AppleJwks;
     devAuth: boolean;
     storage: Storage;
+    placeSubmission: boolean;
   }
 }
 
@@ -37,6 +38,7 @@ export interface BuildAppOpts {
   logger?: boolean;
   rateLimit?: false | { max?: number };
   trustProxy?: boolean;
+  placeSubmission?: boolean;
 }
 
 export function buildApp(opts: BuildAppOpts = {}) {
@@ -45,6 +47,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   app.decorate("prisma", prisma);
   app.decorate("appleJwks", opts.appleJwks ?? remoteAppleJwks());
   app.decorate("devAuth", opts.devAuth ?? config.devAuth);
+  app.decorate("placeSubmission", opts.placeSubmission ?? config.placeSubmission);
   const storage = createStorage({ ...config.s3, bucket: opts.s3Bucket ?? config.s3.bucket });
   app.decorate("storage", storage);
   // 统一错误形状（deploy.md 部署前硬化清单第 3 项）：框架级 404/413/500 收敛为 { error }。
@@ -79,7 +82,10 @@ export function buildApp(opts: BuildAppOpts = {}) {
   // 但同步声明的裸路由会先于其钩子挂载完成，导致不限流。
   app.after(() => {
     app.get("/health", async () => ({ ok: true }));
-    app.get("/app-config", async () => ({ shareLandingUrl: config.shareLandingUrl }));
+    app.get("/app-config", async () => ({
+      shareLandingUrl: config.shareLandingUrl,
+      placeSubmission: app.placeSubmission,
+    }));
   });
   app.register(placesRoutes);
   app.register(adminPlacesRoutes);

@@ -68,3 +68,13 @@ test("GET /places/:id 返回从远到近的祖先链", async () => {
     ["ancestors", "id", "intro", "lat", "level", "links", "lng", "name"].sort(),
   );
 });
+
+test("app-config 下发地点申请开关;buildApp 可注入关闭", async () => {
+  const on = await app.inject({ method: "GET", url: "/app-config" });
+  expect(on.json().placeSubmission).toBe(true); // 测试默认开
+
+  const offApp = testApp({ placeSubmission: false });
+  const off = await offApp.inject({ method: "GET", url: "/app-config" });
+  expect(off.json().placeSubmission).toBe(false);
+  await offApp.close();
+});
