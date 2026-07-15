@@ -47,6 +47,32 @@ test("suggestions：排除已归属足迹（沿祖先链解析城市），至少
   expect(shichahai.parentId).toBe(shichahai.parentId);
 });
 
+test("suggestions：北京市为 PROVINCE 链顶（M3 直辖市升级）时，无 CITY 祖先应回退链顶归组而非按叶子拆散", async () => {
+  const beijing = await app.prisma.place.create({
+    data: { name: "北京市", level: "PROVINCE", lat: 39.9, lng: 116.4 },
+  });
+  const shichahai = await app.prisma.place.create({
+    data: { name: "什刹海", level: "DISTRICT", parentId: beijing.id, lat: 39.94, lng: 116.38 },
+  });
+  const wudaoying = await app.prisma.place.create({
+    data: { name: "五道营胡同", level: "DISTRICT", parentId: beijing.id, lat: 39.95, lng: 116.42 },
+  });
+  const { headers } = await userAuth(app);
+
+  const fp1 = await createFootprint(headers, shichahai.id, "2026-05-01T08:00:00.000Z");
+  const fp2 = await createFootprint(headers, wudaoying.id, "2026-05-02T08:00:00.000Z");
+
+  const res = await app.inject({ method: "GET", url: "/me/trip-suggestions", headers });
+  expect(res.statusCode).toBe(200);
+  const suggestions = res.json().suggestions;
+  // 两个足迹应合并为同一"城市"（北京市链顶），而非各自按叶子地名单独拆分。
+  expect(suggestions).toHaveLength(1);
+  expect(suggestions[0].footprintIds.sort()).toEqual([fp1.id, fp2.id].sort());
+  // suggestedTitle 是 cityLabel 归组结果的唯一外部可观察体现（DTO 无独立 cityLabel 字段）：
+  // 归组正确时应为单一"北京市"，而不是两个叶子地名并列。
+  expect(suggestions[0].suggestedTitle).toBe("北京市·2026年5月");
+});
+
 test("POST 落库后，suggestions 不再包含这些足迹（tripId 已归属）", async () => {
   const { jinan } = await seedPlaces();
   const { headers } = await userAuth(app);

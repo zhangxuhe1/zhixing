@@ -19,15 +19,17 @@ class InvalidFootprintsError extends Error {}
 
 type PlaceNode = { id: string; parentId: string | null; level: string; name: string };
 
-/** 沿 place.parentId 链找 CITY 级祖先；无则回退自身 id/name。 */
+/** 沿 place.parentId 链找 CITY 级祖先；无则回退链顶——直辖市/特区自身即城市。 */
 function resolveCity(placeId: string, byId: Map<string, PlaceNode>): { cityKey: string; cityLabel: string } {
   const self = byId.get(placeId);
   let cur = self;
+  let top = self;
   while (cur) {
     if (cur.level === "CITY") return { cityKey: cur.id, cityLabel: cur.name };
+    top = cur;
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
-  return { cityKey: self?.id ?? placeId, cityLabel: self?.name ?? placeId };
+  return { cityKey: top?.id ?? placeId, cityLabel: top?.name ?? placeId };
 }
 
 function tripDTO(trip: { id: string; title: string; startDate: Date; endDate: Date; footprints: unknown[] }) {
