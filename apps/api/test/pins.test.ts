@@ -45,3 +45,20 @@ test("全库无内容时 random 404", async () => {
   const res = await app.inject({ method: "GET", url: "/places/random" });
   expect(res.statusCode).toBe(404);
 });
+
+test("random 带祖先链", async () => {
+  const prov = await app.prisma.place.create({
+    data: { name: "北京市", level: "PROVINCE", lat: 39.9, lng: 116.4 },
+  });
+  const spot = await app.prisma.place.create({
+    data: { name: "什刹海", level: "DISTRICT", parentId: prov.id, lat: 39.94, lng: 116.38 },
+  });
+  await app.prisma.card.create({
+    data: {
+      placeId: spot.id, category: "ANECDOTE", title: "银锭观山", sources: ["x"],
+      blocks: { create: [{ order: 0, type: "TEXT", text: "a".repeat(60) }] },
+    },
+  });
+  const res = await app.inject({ method: "GET", url: "/places/random" });
+  expect(res.json().ancestors).toEqual([{ id: prov.id, name: "北京市", level: "PROVINCE" }]);
+});

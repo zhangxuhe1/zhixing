@@ -41,6 +41,8 @@ test("创建卡并公开读取（默认 AI_GENERATED）", async () => {
 
   const detail = await app.inject({ method: "GET", url: `/cards/${created.json().id}` });
   expect(detail.json().place.name).toBe("什刹海");
+  expect(detail.json().place.ancestors).toEqual([]); // makePlace 造的是链顶点
+  expect(detail.json().place).not.toHaveProperty("createdAt"); // place 改为逐字段 DTO
 });
 
 test("状态机：review 只能从 AI_GENERATED；retire 不可重复", async () => {

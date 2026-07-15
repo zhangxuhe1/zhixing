@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireAdmin } from "../auth.js";
 import { countCardsByPlace } from "../placeCounts.js";
+import { placeAncestors } from "../placeAncestors.js";
 
 // pins/random 未鉴权且是重查询（全量地点 + 卡数聚合），同样受全局 keyGenerator
 // "有 Authorization 头就按头计费"的伪造绕过影响——覆盖为按 req.ip 计数；不传 max/
@@ -41,7 +42,8 @@ export async function placesRoutes(app: FastifyInstance) {
   app.get("/places/random", { config: ipKeyedRateLimit }, async (_req, reply) => {
     const withContent = (await queryPins(app)).filter((p) => p.cardCount > 0);
     if (withContent.length === 0) return reply.code(404).send({ error: "no_content" });
-    return withContent[Math.floor(Math.random() * withContent.length)];
+    const pick = withContent[Math.floor(Math.random() * withContent.length)];
+    return { ...pick, ancestors: await placeAncestors(app.prisma, pick.parentId) };
   });
 
   app.get("/places", async (req, reply) => {
@@ -55,12 +57,18 @@ export async function placesRoutes(app: FastifyInstance) {
 
   app.get("/places/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const place = await app.prisma.place.findUnique({
-      where: { id },
-      include: { children: true },
-    });
+    const place = await app.prisma.place.findUnique({ where: { id } });
     if (!place) return reply.code(404).send({ error: "not_found" });
-    return place;
+    // 逐字段 DTO：children 自 M3 移除(全库无消费方)，createdAt/parentId 不外传
+    return {
+      id: place.id,
+      name: place.name,
+      level: place.level,
+      lat: place.lat,
+      lng: place.lng,
+      intro: place.intro,
+      ancestors: await placeAncestors(app.prisma, place.parentId),
+    };
   });
 
   app.post("/admin/places", { preHandler: requireAdmin }, async (req, reply) => {

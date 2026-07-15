@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAdmin } from "../auth.js";
+import { placeAncestors } from "../placeAncestors.js";
 
 const blockSchema = z.object({
   type: z.enum(["TEXT", "IMAGE", "AUDIO", "VIDEO"]),
@@ -43,7 +44,19 @@ export async function cardsRoutes(app: FastifyInstance) {
       include: { ...includeBlocks, place: true },
     });
     if (!card) return reply.code(404).send({ error: "not_found" });
-    return card;
+    const { place, ...rest } = card;
+    // 卡片详情需要显示位置路径：place 改为逐字段 DTO 并附祖先链(从远到近)
+    return {
+      ...rest,
+      place: {
+        id: place.id,
+        name: place.name,
+        level: place.level,
+        lat: place.lat,
+        lng: place.lng,
+        ancestors: await placeAncestors(app.prisma, place.parentId),
+      },
+    };
   });
 
   app.post("/admin/cards", { preHandler: requireAdmin }, async (req, reply) => {

@@ -32,7 +32,8 @@ test("创建并查询地点树", async () => {
   expect(list.json().map((p: { name: string }) => p.name)).toEqual(["什刹海"]);
 
   const detail = await app.inject({ method: "GET", url: `/places/${cityId}` });
-  expect(detail.json().children).toHaveLength(1);
+  expect(detail.json().ancestors).toEqual([]); // 链顶无祖先
+  expect(detail.json()).not.toHaveProperty("children"); // M3 起 DTO 移除 children
 });
 
 test("非法 body 返回 400", async () => {
@@ -43,4 +44,27 @@ test("非法 body 返回 400", async () => {
     payload: { name: "", level: "BAD" },
   });
   expect(res.statusCode).toBe(400);
+});
+
+test("GET /places/:id 返回从远到近的祖先链", async () => {
+  const prov = await app.prisma.place.create({
+    data: { name: "山东省", level: "PROVINCE", lat: 36.67, lng: 117.02 },
+  });
+  const city = await app.prisma.place.create({
+    data: { name: "济南市", level: "CITY", parentId: prov.id, lat: 36.65, lng: 117.12 },
+  });
+  const spot = await app.prisma.place.create({
+    data: { name: "芙蓉街", level: "DISTRICT", parentId: city.id, lat: 36.665, lng: 117.023 },
+  });
+
+  const res = await app.inject({ method: "GET", url: `/places/${spot.id}` });
+  expect(res.statusCode).toBe(200);
+  expect(res.json().ancestors).toEqual([
+    { id: prov.id, name: "山东省", level: "PROVINCE" },
+    { id: city.id, name: "济南市", level: "CITY" },
+  ]);
+  // 逐字段 DTO：不外传 createdAt/parentId 之外的内部字段
+  expect(Object.keys(res.json()).sort()).toEqual(
+    ["ancestors", "id", "intro", "lat", "level", "lng", "name"].sort(),
+  );
 });
