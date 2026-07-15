@@ -65,6 +65,6 @@ test("GET /places/:id 返回从远到近的祖先链", async () => {
   ]);
   // 逐字段 DTO：不外传 createdAt/parentId 之外的内部字段
   expect(Object.keys(res.json()).sort()).toEqual(
-    ["ancestors", "id", "intro", "lat", "level", "lng", "name"].sort(),
+    ["ancestors", "id", "intro", "lat", "level", "links", "lng", "name"].sort(),
   );
 });

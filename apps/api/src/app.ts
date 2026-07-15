@@ -5,6 +5,7 @@ import Fastify from "fastify";
 import { createPrisma } from "@zhixing/db";
 import { remoteAppleJwks, type AppleJwks } from "./apple.js";
 import { config } from "./config.js";
+import { adminPlacesRoutes } from "./routes/adminPlaces.js";
 import { adminReviewRoutes } from "./routes/adminReview.js";
 import { authRoutes } from "./routes/auth.js";
 import { cardsRoutes } from "./routes/cards.js";
@@ -81,6 +82,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
     app.get("/app-config", async () => ({ shareLandingUrl: config.shareLandingUrl }));
   });
   app.register(placesRoutes);
+  app.register(adminPlacesRoutes);
   app.register(cardsRoutes);
   app.register(authRoutes);
   app.register(footprintsRoutes);

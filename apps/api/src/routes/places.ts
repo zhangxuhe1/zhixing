@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { requireAdmin } from "../auth.js";
 import { countCardsByPlace } from "../placeCounts.js";
 import { placeAncestors } from "../placeAncestors.js";
 
@@ -16,15 +15,6 @@ const levelEnum = z.enum(["PROVINCE", "CITY", "DISTRICT", "POI"]);
 const listQuerySchema = z.object({
   level: levelEnum.optional(),
   parentId: z.string().optional(),
-});
-
-const createPlaceSchema = z.object({
-  name: z.string().min(1),
-  level: levelEnum,
-  parentId: z.string().nullish(),
-  lat: z.number(),
-  lng: z.number(),
-  intro: z.string().optional(),
 });
 
 async function queryPins(app: FastifyInstance) {
@@ -57,9 +47,11 @@ export async function placesRoutes(app: FastifyInstance) {
 
   app.get("/places/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const place = await app.prisma.place.findUnique({ where: { id } });
+    const place = await app.prisma.place.findUnique({
+      where: { id },
+      include: { links: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+    });
     if (!place) return reply.code(404).send({ error: "not_found" });
-    // 逐字段 DTO：children 自 M3 移除(全库无消费方)，createdAt/parentId 不外传
     return {
       id: place.id,
       name: place.name,
@@ -68,17 +60,9 @@ export async function placesRoutes(app: FastifyInstance) {
       lng: place.lng,
       intro: place.intro,
       ancestors: await placeAncestors(app.prisma, place.parentId),
+      links: place.links.map((l) => ({
+        id: l.id, platform: l.platform, title: l.title, url: l.url, sortOrder: l.sortOrder,
+      })),
     };
-  });
-
-  app.post("/admin/places", { preHandler: requireAdmin }, async (req, reply) => {
-    const body = createPlaceSchema.safeParse(req.body);
-    if (!body.success) {
-      return reply.code(400).send({ error: "invalid_body", detail: body.error.flatten() });
-    }
-    const place = await app.prisma.place.create({
-      data: { ...body.data, parentId: body.data.parentId ?? null },
-    });
-    return reply.code(201).send(place);
   });
 }
