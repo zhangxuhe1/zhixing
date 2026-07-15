@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { createPrisma, type Place, type PrismaClient } from "@zhixing/db";
 
 type SeedFile = {
-  city: { name: string; level: "CITY"; lat: number; lng: number; intro?: string };
+  // 直辖市数据文件直接声明 PROVINCE:自身即省级链顶,统计上"既算 1 省又算 1 城"
+  city: { name: string; level: "CITY" | "PROVINCE"; lat: number; lng: number; intro?: string };
   spots: Array<{ name: string; lat: number; lng: number; intro?: string }>;
 };
 
@@ -14,10 +15,13 @@ export async function importPlaces(
 ): Promise<{ city: Place; spotCount: number }> {
   const seed = JSON.parse(readFileSync(dataPath, "utf-8")) as SeedFile;
 
-  // 顶层地点 parentId 为 null，复合唯一键对 null 不生效，用 findFirst+create 保证幂等
+  // 顶层地点 parentId 为 null,复合唯一键对 null 不生效,用 findFirst+create 保证幂等
   let city = await prisma.place.findFirst({ where: { name: seed.city.name, parentId: null } });
   if (!city) {
     city = await prisma.place.create({ data: seed.city });
+  } else if (city.level !== seed.city.level) {
+    // 存量升级:老库把直辖市建成 CITY,重跑导入原地升为 PROVINCE(id 不变,足迹/卡不受牵连)
+    city = await prisma.place.update({ where: { id: city.id }, data: { level: seed.city.level } });
   }
 
   for (const s of seed.spots) {

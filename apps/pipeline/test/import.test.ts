@@ -26,4 +26,15 @@ test("导入北京地点库，幂等可重复执行", async () => {
   const spot = await prisma.place.findFirstOrThrow({ where: { name: "什刹海" } });
   expect(spot.parentId).toBe(first.city.id);
   expect(spot.level).toBe("DISTRICT");
+  expect(first.city.level).toBe("PROVINCE");
+});
+
+test("直辖市升级:存量北京市 CITY 链顶,重跑导入后升为 PROVINCE,节点复用", async () => {
+  const legacy = await prisma.place.create({
+    data: { name: "北京市", level: "CITY", lat: 39.9042, lng: 116.4074 },
+  });
+  const r = await importPlaces(prisma, dataPath);
+  expect(r.city.id).toBe(legacy.id);
+  expect(r.city.level).toBe("PROVINCE");
+  expect(await prisma.place.count()).toBe(16); // 1 + 15,没有多出节点
 });
