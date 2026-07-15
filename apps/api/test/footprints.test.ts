@@ -319,3 +319,43 @@ test("链式3·曾公开转私后改文不触审：APPROVED→PRIVATE 后改文 
   expect(row.reviewStatus).toBe("APPROVED");
   expect(row.publicRequestedAt).toEqual(requestedAt);
 });
+
+test("挂 PENDING 地点的足迹:创建时直接公开与事后切公开都 400 place_pending;私密不受限", async () => {
+  const { headers } = await userAuth(app, "submitter");
+  const created = await app.inject({
+    method: "POST", url: "/places", headers,
+    payload: { name: "洪家楼", lat: 36.68, lng: 117.06 },
+  });
+  const placeId = created.json().id as string;
+
+  const publicTry = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId, date: "2026-07-01T10:00:00.000+08:00", visibility: "PUBLIC" },
+  });
+  expect(publicTry.statusCode).toBe(400);
+  expect(publicTry.json().error).toBe("place_pending");
+
+  const privateOk = await app.inject({
+    method: "POST", url: "/footprints", headers,
+    payload: { placeId, date: "2026-07-01T10:00:00.000+08:00" },
+  });
+  expect(privateOk.statusCode).toBe(201);
+  expect(privateOk.json().place.status).toBe("PENDING"); // 编辑器判据字段
+
+  const fpId = privateOk.json().id as string;
+  const patchTry = await app.inject({
+    method: "PATCH", url: `/footprints/${fpId}`, headers,
+    payload: { visibility: "PUBLIC" },
+  });
+  expect(patchTry.statusCode).toBe(400);
+  expect(patchTry.json().error).toBe("place_pending");
+
+  // 地点转正后放行
+  await app.prisma.place.update({ where: { id: placeId }, data: { status: "ACTIVE" } });
+  const patchOk = await app.inject({
+    method: "PATCH", url: `/footprints/${fpId}`, headers,
+    payload: { visibility: "PUBLIC" },
+  });
+  expect(patchOk.statusCode).toBe(200);
+  expect(patchOk.json().reviewStatus).toBe("PENDING"); // 正常进足迹审核队列
+});
