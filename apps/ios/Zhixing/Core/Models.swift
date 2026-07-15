@@ -8,6 +8,24 @@ struct Pin: Codable, Identifiable, Hashable {
     let lat: Double
     let lng: Double
     let cardCount: Int
+    /// M3:地点状态。旧缓存/旧服务端无此字段 → nil 视同 ACTIVE。
+    let status: String?
+
+    var isAwaitingReview: Bool { status == "PENDING" || status == "REJECTED" }
+
+    init(
+        id: String, name: String, level: String, parentId: String?,
+        lat: Double, lng: Double, cardCount: Int, status: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.level = level
+        self.parentId = parentId
+        self.lat = lat
+        self.lng = lng
+        self.cardCount = cardCount
+        self.status = status
+    }
 }
 
 struct PlaceAncestor: Codable, Hashable {
@@ -23,6 +41,8 @@ struct PlaceDetail: Codable {
     let level: String
     let intro: String?
     let ancestors: [PlaceAncestor]
+    /// M3:地点状态;旧服务端缺字段容错。
+    let status: String?
     /// 旧服务端/缓存无此字段,可选容错;空数组与 nil 均不渲染攻略区。
     let links: [PlaceLink]?
 
@@ -89,7 +109,18 @@ struct CardPlaceRef: Codable {
 struct User: Codable { let id: String; let nickname: String }
 struct AuthResponse: Codable { let token: String; let user: User }
 
-struct PlaceRef: Codable { let id: String; let name: String }
+struct PlaceRef: Codable {
+    let id: String
+    let name: String
+    /// 足迹编辑器据此禁用公开开关;旧响应缺字段容错。
+    let status: String?
+
+    init(id: String, name: String, status: String? = nil) {
+        self.id = id
+        self.name = name
+        self.status = status
+    }
+}
 struct FootprintPhotoMeta: Codable, Identifiable { let id: String; let takenAt: Date? }
 
 /// 足迹公开状态徽标：由 visibility/reviewStatus 纯映射得出，不直接来自服务端字段。
@@ -191,4 +222,11 @@ struct FavoriteItem: Codable, Identifiable {
 
 struct RemoteAppConfig: Codable {
     let shareLandingUrl: String
+    /// M3 前服务端没有该字段:可选容错,消费端缺省按"开"。
+    let placeSubmission: Bool?
+
+    init(shareLandingUrl: String, placeSubmission: Bool? = nil) {
+        self.shareLandingUrl = shareLandingUrl
+        self.placeSubmission = placeSubmission
+    }
 }

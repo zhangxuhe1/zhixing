@@ -27,6 +27,10 @@ struct FootprintEditor: View {
         _isPublic = State(initialValue: footprint.visibility == "PUBLIC")
     }
 
+    private var placeAwaitingReview: Bool {
+        footprint.place.status == "PENDING" || footprint.place.status == "REJECTED"
+    }
+
     private enum PendingConfirmation: Identifiable, Equatable {
         case makePublic
         case reReview
@@ -89,6 +93,11 @@ struct FootprintEditor: View {
                 }
                 Section("公开") {
                     Toggle("公开这条足迹", isOn: $isPublic)
+                        .disabled(placeAwaitingReview)
+                    if placeAwaitingReview {
+                        Text("地点审核通过后，才能公开这里的足迹。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     if let badge = footprint.publishBadge {
                         HStack {
                             Text("当前状态")

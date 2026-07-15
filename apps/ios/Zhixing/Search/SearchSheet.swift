@@ -27,7 +27,9 @@ struct SearchSheet: View {
                         ZXEmptyState(
                             icon: "map",
                             title: "暂时没有找到「\(query)」",
-                            message: "这次搜索已经记下，会成为后续补充地点与风物内容的线索。")
+                            message: RemoteConfig.shared.placeSubmission
+                                ? "这次搜索已经记下。也可以长按地图任意位置，直接创建新地点。"
+                                : "这次搜索已经记下，会成为后续补充地点与风物内容的线索。")
                     } else {
                         List {
                             ForEach(pins) { pin in

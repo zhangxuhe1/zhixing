@@ -22,6 +22,8 @@ struct MapView: UIViewRepresentable {
     @Binding var flyTo: Pin?
     @Binding var fitPlaceIds: Set<String>?
     var onSelect: (Pin) -> Void
+    /// 地图任意位置长按:回调经纬度,由上层决定是否进入建点流程(开关关闭时上层直接忽略)。
+    var onLongPress: (Double, Double) -> Void = { _, _ in }
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
@@ -31,6 +33,10 @@ struct MapView: UIViewRepresentable {
         map.register(MKMarkerAnnotationView.self,
                      forAnnotationViewWithReuseIdentifier: MKMapViewDefaultClusterAnnotationViewReuseIdentifier)
         map.pointOfInterestFilter = .excludingAll
+        let longPress = UILongPressGestureRecognizer(
+            target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPress.minimumPressDuration = 0.5
+        map.addGestureRecognizer(longPress)
         map.setRegion(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 36.0, longitude: 105.0),
             span: MKCoordinateSpan(latitudeDelta: 32, longitudeDelta: 32)), animated: false)
@@ -59,10 +65,18 @@ struct MapView: UIViewRepresentable {
         private var syncedKey = ""
         init(_ parent: MapView) { self.parent = parent }
 
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, let map = gesture.view as? MKMapView else { return }
+            let point = gesture.location(in: map)
+            let coordinate = map.convert(point, toCoordinateFrom: map)
+            parent.onLongPress(coordinate.latitude, coordinate.longitude)
+        }
+
         /// 数据没变就不重建标注（updateUIView 会被 SwiftUI 频繁调用）
         func sync(map: MKMapView) {
             var hasher = Hasher()
             hasher.combine(parent.pins.map(\.id))
+            hasher.combine(parent.pins.map(\.status))
             hasher.combine(parent.litPlaceIds)
             hasher.combine(parent.showHumanities)
             hasher.combine(parent.showFootprints)
@@ -79,6 +93,11 @@ struct MapView: UIViewRepresentable {
                 annotations += parent.pins.filter { parent.litPlaceIds.contains($0.id) }
                     .map { PlaceAnnotation(pin: $0, isFootprint: true) }
             }
+            // 本人的待审/驳回点:不属于人文层(无卡)也未必有足迹,单独补进图面,
+            // 否则用户刚建完点在地图上找不到它。
+            let shownIds = Set(annotations.map(\.pin.id))
+            annotations += parent.pins.filter { $0.isAwaitingReview && !shownIds.contains($0.id) }
+                .map { PlaceAnnotation(pin: $0, isFootprint: false) }
             map.addAnnotations(annotations)
         }
 
@@ -134,10 +153,20 @@ struct MapView: UIViewRepresentable {
                 withIdentifier: MKMapViewDefaultAnnotationViewReuseIdentifier,
                 for: annotation) as! MKMarkerAnnotationView
             v.clusteringIdentifier = pa.isFootprint ? "footprint" : "place"
-            v.markerTintColor = pa.isFootprint ? .systemOrange : .systemTeal
-            v.glyphText = pa.isFootprint ? "行" : "知"
+            if pa.pin.isAwaitingReview {
+                // 待审/驳回地点:灰 pin + "审"字,与正式点在图面上一眼区分
+                v.markerTintColor = .systemGray
+                v.glyphText = "审"
+            } else {
+                v.markerTintColor = pa.isFootprint ? .systemOrange : .systemTeal
+                v.glyphText = pa.isFootprint ? "行" : "知"
+            }
             v.displayPriority = .defaultHigh
-            v.accessibilityLabel = pa.isFootprint ? "\(pa.pin.name)，我的足迹" : "\(pa.pin.name)，风物地点"
+            if pa.pin.isAwaitingReview {
+                v.accessibilityLabel = "\(pa.pin.name)，待审地点"
+            } else {
+                v.accessibilityLabel = pa.isFootprint ? "\(pa.pin.name)，我的足迹" : "\(pa.pin.name)，风物地点"
+            }
             v.accessibilityHint = "打开地点详情"
             return v
         }

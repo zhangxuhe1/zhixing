@@ -12,6 +12,8 @@ struct MapScreen: View {
     @State private var showPlacePicker = false
     @State private var composerPin: Pin?
     @State private var pendingComposerPin: Pin?
+    @State private var createPlaceDraft: CreatePlaceDraft?
+    @State private var pendingCreateDraft: CreatePlaceDraft?
     #if targetEnvironment(macCatalyst)
     @State private var composerDraftPin: Pin?
     @State private var composerText = ""
@@ -33,7 +35,11 @@ struct MapScreen: View {
             MapView(pins: pinsCache.pins, litPlaceIds: footprints.litPlaceIds,
                     showHumanities: showHumanities, showFootprints: showFootprintLayer,
                     flyTo: $flyTo, fitPlaceIds: $fitPlaceIds,
-                    onSelect: { selected = $0 })
+                    onSelect: { selected = $0 },
+                    onLongPress: { lat, lng in
+                        guard RemoteConfig.shared.placeSubmission else { return }
+                        createPlaceDraft = CreatePlaceDraft(lat: lat, lng: lng)
+                    })
                 .ignoresSafeArea()
             controls
                 .padding(.top, 16)
@@ -51,6 +57,7 @@ struct MapScreen: View {
             }
         }
         .task {
+            await RemoteConfig.shared.load()
             await load()
             await footprints.load()
         }
@@ -70,10 +77,27 @@ struct MapScreen: View {
             }
             .appStores()
         }
-        .sheet(isPresented: $showPlacePicker, onDismiss: presentPendingComposer) {
-            PlacePickerSheet(pins: pinsCache.pins) { pin in
-                pendingComposerPin = pin
-                showPlacePicker = false
+        .sheet(isPresented: $showPlacePicker, onDismiss: handlePickerDismissed) {
+            PlacePickerSheet(
+                pins: pinsCache.pins,
+                onPick: { pin in
+                    pendingComposerPin = pin
+                    showPlacePicker = false
+                },
+                onCreateAt: { lat, lng in
+                    pendingCreateDraft = CreatePlaceDraft(lat: lat, lng: lng)
+                    showPlacePicker = false
+                })
+            .appStores()
+        }
+        .sheet(item: $createPlaceDraft, onDismiss: presentPendingComposer) { draft in
+            CreatePlaceSheet(lat: draft.lat, lng: draft.lng) { newPin in
+                // 刷新 pins(带上新的 PENDING 点),随后 onDismiss 链直接进入撰写器
+                Task {
+                    try? await pinsCache.load(force: true)
+                }
+                pendingComposerPin = newPin
+                flyTo = newPin
             }
             .appStores()
         }
@@ -124,6 +148,16 @@ struct MapScreen: View {
         beginComposerDraft(for: pin)
         #endif
         composerPin = pin
+    }
+
+    /// 选点面板关闭后的两条去路:建点(定位命中空白区)或直接进撰写器(选中已有点)。
+    private func handlePickerDismissed() {
+        if let draft = pendingCreateDraft {
+            pendingCreateDraft = nil
+            createPlaceDraft = draft
+            return
+        }
+        presentPendingComposer()
     }
 
     private func handleComposerDismissed() {
@@ -280,13 +314,23 @@ struct MapScreen: View {
     }
 }
 
+/// 建点草稿:仅承载长按/定位得到的坐标,Identifiable 供 sheet(item:) 驱动。
+struct CreatePlaceDraft: Identifiable {
+    let id = UUID()
+    let lat: Double
+    let lng: Double
+}
+
 /// ［+］选点 sheet：顶部「使用当前位置」一键命中最近地点，其下沿用既有搜索选点不变。
 private struct PlacePickerSheet: View {
     let pins: [Pin]
     var onPick: (Pin) -> Void
+    var onCreateAt: ((Double, Double) -> Void)? = nil
 
     @State private var locating = false
     @State private var hint: String?
+    @State private var missedLat: Double?
+    @State private var missedLng: Double?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -313,6 +357,19 @@ private struct PlacePickerSheet: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+                if let lat = missedLat, let lng = missedLng, let onCreateAt,
+                   RemoteConfig.shared.placeSubmission {
+                    Button {
+                        onCreateAt(lat, lng)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus")
+                            Text("以当前位置创建新地点")
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(ZXSecondaryButtonStyle())
+                }
             }
             .padding(20)
             .background(ZXTheme.canvas)
@@ -324,6 +381,8 @@ private struct PlacePickerSheet: View {
     private func useCurrentLocation() async {
         locating = true
         hint = nil
+        missedLat = nil
+        missedLng = nil
         defer { locating = false }
         do {
             let coordinate = try await LocationOnce.current()
@@ -331,6 +390,8 @@ private struct PlacePickerSheet: View {
                 onPick(pin)
             } else {
                 hint = "附近还没有收录的地点，试试搜索"
+                missedLat = coordinate.latitude
+                missedLng = coordinate.longitude
             }
         } catch LocationError.denied {
             hint = "尚未开启定位权限，请到系统设置中开启后重试"
