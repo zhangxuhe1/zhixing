@@ -23,11 +23,26 @@ struct PlaceDetail: Codable {
     let level: String
     let intro: String?
     let ancestors: [PlaceAncestor]
+    /// 旧服务端/缓存无此字段,可选容错;空数组与 nil 均不渲染攻略区。
+    let links: [PlaceLink]?
 
     /// 从远到近的位置路径:"山东省 · 济南市";链顶(无祖先)为 nil,不渲染。
     var pathText: String? {
         ancestors.isEmpty ? nil : ancestors.map(\.name).joined(separator: " · ")
     }
+}
+
+struct PlaceLink: Codable, Identifiable {
+    let id: String
+    let platform: String
+    let title: String
+    let url: String
+
+    static let platformLabels = [
+        "XIAOHONGSHU": "小红书", "BILIBILI": "B 站", "DOUYIN": "抖音",
+        "WEIBO": "微博", "OTHER": "网页",
+    ]
+    var platformLabel: String { Self.platformLabels[platform] ?? platform }
 }
 
 struct CardBlock: Codable, Identifiable {

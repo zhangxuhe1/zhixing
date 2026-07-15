@@ -40,4 +40,23 @@ final class PlacePathTests: XCTestCase {
         let card = try APIClient.decoder.decode(Card.self, from: Data(json.utf8))
         XCTAssertEqual(card.locationText, "北京市 · 什刹海")
     }
+
+    func testPlaceDetailDecodesLinksAndPlatformLabel() throws {
+        let json = """
+        {"id":"p1","name":"什刹海","level":"DISTRICT","intro":null,"ancestors":[],
+         "links":[{"id":"l1","platform":"XIAOHONGSHU","title":"citywalk 路线",
+                   "url":"https://example.com/a","sortOrder":1}]}
+        """
+        let detail = try APIClient.decoder.decode(PlaceDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(detail.links?.first?.platformLabel, "小红书")
+    }
+
+    /// links 字段缺失(旧服务端/缓存)不应让整个详情解码失败。
+    func testPlaceDetailToleratesMissingLinks() throws {
+        let json = """
+        {"id":"p1","name":"什刹海","level":"DISTRICT","intro":null,"ancestors":[]}
+        """
+        let detail = try APIClient.decoder.decode(PlaceDetail.self, from: Data(json.utf8))
+        XCTAssertNil(detail.links)
+    }
 }

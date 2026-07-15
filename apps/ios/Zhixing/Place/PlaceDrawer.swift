@@ -163,6 +163,10 @@ struct PlaceDrawer: View {
                     }
                     .buttonStyle(.plain)
                 }
+                if let links = placeDetail?.links, !links.isEmpty {
+                    PlaceLinksSection(links: links)
+                        .padding(.top, 6)
+                }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
