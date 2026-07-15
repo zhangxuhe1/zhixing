@@ -68,26 +68,26 @@ Schema 不动(四级树已支持),改数据与 DTO。
 ### Schema
 
 - 新枚举 `PlaceStatus: ACTIVE | PENDING | REJECTED`。
-- `Place` 加列:`status PlaceStatus @default(ACTIVE)`(存量零迁移)、`createdByUserId String?`(null=官方录入;关联 User,onDelete SetNull)。
+- `Place` 加列:`status PlaceStatus @default(ACTIVE)`(存量零迁移)、`createdById String?`(null=官方录入;关联 User,onDelete SetNull;命名对齐仓库 userId/placeId 惯例)。用户建点层级固定 `POI`。
 - **不建**独立 PlaceSubmission 表:足迹必须能立即挂新地点,分表会让 Footprint 外键分叉。
 
 ### 功能开关
 
 - env `ZHIXING_PLACE_SUBMISSION`(config.ts 给 dev 默认值,**默认开**)。
-- 新增 `GET /config`(requireUser):`{ placeSubmission: boolean }`。iOS 据此显示/隐藏入口;后续客户端开关统一走这里。
+- 开关经**既有 `GET /app-config`** 扩展下发(`{ shareLandingUrl, placeSubmission }`)——iOS 的 RemoteConfig 通道现成,不另建 `GET /config`(计划阶段修订:DRY)。iOS 据此显示/隐藏入口;后续客户端开关统一走这里。
 - `POST /places` 服务端硬校验:开关关闭返回 403 `place_submission_disabled`(不能只靠客户端藏入口)。
 
 ### 用户流程(iOS)
 
 - 入口 1:**地图长按任意位置**(Catalyst 为右键/长按触控板)→ "在此创建地点" → 表单只填名称(坐标已定)。
-- 入口 2:足迹选点面板(PlacePickerSheet)与搜索无结果处,"没找到?创建新地点"。
+- 入口 2:足迹选点面板(PlacePickerSheet)"使用当前位置"未命中时,给"以当前位置创建新地点"按钮(有坐标才有真按钮);搜索无结果处因**无坐标可用**,改为文案引导"长按地图任意位置创建"(计划阶段修订)。
 - 创建后立即可挂足迹。自己的 PENDING 点在地图上用**虚线灰 pin + "审核中"徽标**;REJECTED 点显示"未通过"样式(其上足迹仍可见,用户可编辑足迹改挂他点)。
 
 ### 服务端规则
 
-- `POST /places`(requireUser):body `{ name, lat, lng }`(zod:名称 1–50 字,坐标合法范围)。建 `status=PENDING, createdByUserId=me`。
+- `POST /places`(requireUser):body `{ name, lat, lng }`(zod:名称 1–50 字,坐标合法范围)。建 `status=PENDING, createdById=me, level=POI`。
 - **父级自动猜**:按坐标找最近的 CITY 级节点挂为 parent(距离阈值常量,建议 150km;超出则 parentId=null),管理员审核时可改。用户不需要懂行政区划。
-- 防滥用:**每用户每日建点上限常量**(定 10,放路由文件顶部,类似 `EMAIL_CODE` 模式);撞 `@@unique([name, parentId])` 返回 409 `place_exists` 并附已有地点 id,iOS 引导直接选用。
+- 防滥用:**每用户建点上限常量**(定 10,按 24 小时滚动窗计,免时区口径之争;放路由文件顶部,类似 `EMAIL_CODE` 模式);撞 `@@unique([name, parentId])` 返回 409 `place_exists` 并附已有地点 id,iOS 引导直接选用。
 - 可见性(统一进 `visibility.ts` 管理,仿 `PUBLICLY_VISIBLE`):
   - 用户面 pins / 搜索 / 选点:`ACTIVE` + **自己的** PENDING/REJECTED(REJECTED 不进搜索与选点,仅 pins 保留以免足迹成孤儿)。
   - 公开面(public.ts 全部端点):**只见 ACTIVE**,PENDING/REJECTED 永不出现。
@@ -178,7 +178,7 @@ enum LinkPlatform {
 
 | 端点 | 变更 |
 | --- | --- |
-| `GET /config` | 新增,下发 `{ placeSubmission }` |
+| `GET /app-config` | 扩展下发 `{ placeSubmission }`(计划阶段修订,不另建 /config) |
 | `POST /places` | 新增,用户申请地点(requireUser,开关硬校验) |
 | `GET /places/:id` | DTO 加 `ancestors`、`links` |
 | `GET /places/random` | DTO 加 `ancestors` |
