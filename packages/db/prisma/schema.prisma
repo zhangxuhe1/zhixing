@@ -64,6 +64,9 @@ enum LinkPlatform {
   OTHER
 }
 
+// 地点树(PROVINCE→CITY→DISTRICT→POI)。lat/lng 全库统一 GCJ-02(火星坐标):
+// iOS MapKit 大陆底图与管理端高德选点原生同系,全链路零转换;详见
+// docs/superpowers/specs/2026-07-16-place-intake-design.md
 model Place {
   id         String      @id @default(cuid())
   name       String

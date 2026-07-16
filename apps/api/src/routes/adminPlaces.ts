@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { Prisma } from "@zhixing/db";
 import { requireAdmin } from "../auth.js";
 
 const levelEnum = z.enum(["PROVINCE", "CITY", "DISTRICT", "POI"]);
@@ -30,16 +31,35 @@ const LINK_SELECT = {
 } as const;
 
 export async function adminPlacesRoutes(app: FastifyInstance) {
-  // 自 places.ts 迁入,行为不变:管理员建点(官方录入)
+  // 自 places.ts 迁入:管理员建点(官方录入)。加固:父级存在性与重名显式预检——
+  // @@unique([name,parentId]) 在 parentId 为 NULL 时不生效(Postgres NULL≠NULL),
+  // 且 FK/unique 违约直接抛会变 500,这里收敛为 400/409 业务错误。
   app.post("/admin/places", { preHandler: requireAdmin }, async (req, reply) => {
     const body = createPlaceSchema.safeParse(req.body);
     if (!body.success) {
       return reply.code(400).send({ error: "invalid_body", detail: body.error.flatten() });
     }
-    const place = await app.prisma.place.create({
-      data: { ...body.data, parentId: body.data.parentId ?? null },
+    const parentId = body.data.parentId ?? null;
+    if (parentId !== null) {
+      const parent = await app.prisma.place.findUnique({
+        where: { id: parentId }, select: { id: true },
+      });
+      if (!parent) return reply.code(400).send({ error: "unknown_parent" });
+    }
+    const dup = await app.prisma.place.findFirst({
+      where: { name: body.data.name, parentId }, select: { id: true },
     });
-    return reply.code(201).send(place);
+    if (dup) return reply.code(409).send({ error: "duplicate_name" });
+    try {
+      const place = await app.prisma.place.create({ data: { ...body.data, parentId } });
+      return reply.code(201).send(place);
+    } catch (err) {
+      // 预检与写入之间的并发竞态兜底
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        return reply.code(409).send({ error: "duplicate_name" });
+      }
+      throw err;
+    }
   });
 
   app.post("/admin/places/:id/links", { preHandler: requireAdmin }, async (req, reply) => {
