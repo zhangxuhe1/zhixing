@@ -35,7 +35,7 @@
 - Consumes: 既有 `POST /admin/places`（createPlaceSchema：name/level/parentId?/lat/lng/intro?）、`ADMIN_AUTH`/`resetDb`/`testApp`（test/helpers.ts）。
 - Produces: `POST /admin/places` 新错误契约——parentId 不存在 → 400 `{error:"unknown_parent"}`；同父（含链顶无父）重名 → 409 `{error:"duplicate_name"}`。Task 3 的表单错误文案依赖这两个 error 字符串。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/api/test/adminPlaces.test.ts`：
 
@@ -86,12 +86,12 @@ test("POST /admin/places：链顶（无父）重名同样 409——unique 索引
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `pnpm -C apps/api exec vitest run test/adminPlaces.test.ts`
 Expected: 3 个测试 FAIL——unknown_parent 用例是 500（Prisma P2003 外键炸）；两个重名用例分别是 500（P2002）和 201（NULL 父级 unique 不拦）。
 
-- [ ] **Step 3: 实现加固**
+- [x] **Step 3: 实现加固**
 
 `apps/api/src/routes/adminPlaces.ts`——顶部导入加 `Prisma`：
 
@@ -134,12 +134,12 @@ import { Prisma } from "@zhixing/db";
   });
 ```
 
-- [ ] **Step 4: 跑测试确认通过 + 既有测试不回归**
+- [x] **Step 4: 跑测试确认通过 + 既有测试不回归**
 
 Run: `pnpm -C apps/api exec vitest run test/adminPlaces.test.ts test/places.test.ts test/placeLinks.test.ts`
 Expected: 全部 PASS（places.test.ts 的"创建并查询地点树"“非法 body”与守卫测试都不受影响）。
 
-- [ ] **Step 5: 坐标系约定落文档**
+- [x] **Step 5: 坐标系约定落文档**
 
 `packages/db/prisma/schema.prisma`——Place 模型上方加注释（model Place 前一行）：
 
@@ -156,7 +156,7 @@ model Place {
 - All Place lat/lng are GCJ-02 (Mars coordinates) — matches MapKit's mainland-China tiles and AMap picker natively; never convert. FootprintPhoto EXIF coords stay WGS-84 (private data, not rendered on public maps).
 ```
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/api/src/routes/adminPlaces.ts apps/api/test/adminPlaces.test.ts packages/db/prisma/schema.prisma CLAUDE.md
@@ -175,7 +175,7 @@ git commit -m "feat(api): POST /admin/places 加固——unknown_parent 400/重�
 - Consumes: Task 1 的 `Prisma` 导入与错误契约。
 - Produces: `PATCH /admin/places/:id`（requireAdmin）。body 为 `{ name?, level?, parentId?: string|null, lat?, lng?, intro?: string|null }` 至少一个字段；成功 200 返回更新后 Place 实体（含 id/name/level/parentId/lat/lng/intro/createdAt）。错误：401 未鉴权 / 404 `not_found` / 400 `invalid_body` / 400 `unknown_parent` / 400 `cyclic_parent` / 409 `duplicate_name`。Task 3 表单的编辑保存走它。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `apps/api/test/adminPlaces.test.ts` 追加：
 
@@ -287,12 +287,12 @@ test("PATCH：改名/改父撞已有同名 409 duplicate_name", async () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `pnpm -C apps/api exec vitest run test/adminPlaces.test.ts`
 Expected: Task 1 的 3 个用例 PASS，新增用例全部 FAIL（PATCH 路由不存在 → Fastify 404，鉴权用例得到 404 而非 401 也算 FAIL）。
 
-- [ ] **Step 3: 实现 PATCH**
+- [x] **Step 3: 实现 PATCH**
 
 `apps/api/src/routes/adminPlaces.ts`——schema 区追加：
 
@@ -382,12 +382,12 @@ async function reachesSelf(
 
 注意：`FastifyInstance` 已在文件顶部 `import type` 引入，`reachesSelf` 的参数类型直接复用。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `pnpm -C apps/api exec vitest run test/adminPlaces.test.ts`
 Expected: 全部 PASS（3 旧 + 7 新）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/api/src/routes/adminPlaces.ts apps/api/test/adminPlaces.test.ts
@@ -414,7 +414,7 @@ export type PlaceRow = {
 //          onDone: () => void; onCancel: () => void }
 ```
 
-- [ ] **Step 1: 实现组件**
+- [x] **Step 1: 实现组件**
 
 新建 `apps/admin/app/places/place-form.tsx`：
 
@@ -535,12 +535,12 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
 }
 ```
 
-- [ ] **Step 2: 类型检查**
+- [x] **Step 2: 类型检查**
 
 Run: `pnpm -C apps/admin run build`
 Expected: 编译通过（组件尚未被引用，Next 仍会做全量类型检查）。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add apps/admin/app/places/place-form.tsx
@@ -558,7 +558,7 @@ git commit -m "feat(admin): 地点表单组件——新建/编辑,坐标手输,4
 - Consumes: Task 3 的 `PlaceForm` / `PlaceRow` / `LEVEL_LABELS`；`GET /places`（无参返回全量地点实体数组，含 parentId/intro）。
 - Produces: 页面行为——「新建地点」按钮开 create 表单；每行「编辑」开 edit 表单（预填）；保存成功后重拉列表并收起表单；「父级」列显示父地点名；层级下拉筛选（纯前端过滤）。
 
-- [ ] **Step 1: 重写页面**
+- [x] **Step 1: 重写页面**
 
 `apps/admin/app/places/page.tsx` 整文件替换为：
 
@@ -629,14 +629,14 @@ export default function PlacesPage() {
 }
 ```
 
-- [ ] **Step 2: 构建 + 手动冒烟**
+- [x] **Step 2: 构建 + 手动冒烟**
 
 Run: `pnpm -C apps/admin run build`
 Expected: 编译通过。
 
 冒烟（api 与 db 在跑的前提下）：`pnpm --filter @zhixing/admin dev`，浏览器开 `http://localhost:3000/places`，确认列表出父级列、筛选可用、新建/编辑表单能开合（真实创建留给 Task 6 走查）。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add apps/admin/app/places/page.tsx
@@ -656,7 +656,7 @@ git commit -m "feat(admin): 地点库页升级——新建/编辑入口+父级�
 - Consumes: 环境变量 `NEXT_PUBLIC_AMAP_KEY`、`NEXT_PUBLIC_AMAP_SECURITY_CODE`（高德「Web 端(JS API)」key + 2021-12 起强制的安全密钥；本地放 `apps/admin/.env.local`，已被 gitignore）。
 - Produces: `export function AMapPicker({ lat, lng, onPick }: { lat: number | null; lng: number | null; onPick: (lat: number, lng: number) => void })`——未配 key 时渲染 null（表单手输兜底）。
 
-- [ ] **Step 1: 实现选点组件**
+- [x] **Step 1: 实现选点组件**
 
 新建 `apps/admin/app/places/amap-picker.tsx`：
 
@@ -813,7 +813,7 @@ export function AMapPicker({ lat, lng, onPick }: {
 }
 ```
 
-- [ ] **Step 2: 接入表单**
+- [x] **Step 2: 接入表单**
 
 `apps/admin/app/places/place-form.tsx`——顶部加导入：
 
@@ -831,12 +831,12 @@ import { AMapPicker } from "./amap-picker";
       />
 ```
 
-- [ ] **Step 3: 构建**
+- [x] **Step 3: 构建**
 
 Run: `pnpm -C apps/admin run build`
 Expected: 编译通过（未配 key 的构建也必须通过——KEY 判空在运行时）。
 
-- [ ] **Step 4: 配置文档**
+- [x] **Step 4: 配置文档**
 
 `docs/deploy.md`——admin 相关段落之后追加小节（找不到合适锚点就加在环境变量说明附近）：
 
@@ -844,13 +844,14 @@ Expected: 编译通过（未配 key 的构建也必须通过——KEY 判空在�
 ### 管理端高德选点（可选）
 
 admin 地点表单的地图选点读 `NEXT_PUBLIC_AMAP_KEY` 与 `NEXT_PUBLIC_AMAP_SECURITY_CODE`
-（高德开放平台「Web 端(JS API)」key + 安全密钥，域名白名单填 admin.example.com 与 localhost:3000）。
+（高德开放平台「Web 端(JS API)」key + 安全密钥。白名单不支持 localhost/IP/端口：
+本地开发 key 白名单留空；生产另申 key 白名单填 admin.example.com）。
 Next.js 的 NEXT_PUBLIC_ 变量在构建期内联：本地开发写 `apps/admin/.env.local`；
 生产镜像构建需经 build args 注入（暂未接线——**未配 key 时表单自动退化为手动输入经纬度，
 不阻塞部署**，接线等确有生产建点需求再做）。
 ```
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/admin/app/places/amap-picker.tsx apps/admin/app/places/place-form.tsx docs/deploy.md
@@ -868,7 +869,7 @@ git commit -m "feat(admin): 高德地图选点——搜索定位/点击取点,�
 - Consumes: Task 1-5 全部交付物；dev 环境 ADMIN_TOKEN=`dev-admin-token`。
 - Produces: 走查通过的结论与截图；全量测试绿。
 
-- [ ] **Step 1: 起环境**
+- [x] **Step 1: 起环境**
 
 ```bash
 open -a Docker   # 若未在跑
@@ -877,7 +878,7 @@ pnpm --filter @zhixing/api dev &     # :8787
 pnpm --filter @zhixing/admin dev &   # :3000（NEXT_PUBLIC_API_URL 默认指 :8787）
 ```
 
-- [ ] **Step 2: 浏览器走查（Playwright MCP 或真人）**
+- [x] **Step 2: 浏览器走查（Playwright MCP 或真人）**
 
 1. 开 `http://localhost:3000`，顶部 token 栏填 `dev-admin-token` 保存。
 2. 进「地点库」：确认父级列与层级筛选正常。
@@ -888,7 +889,7 @@ pnpm --filter @zhixing/admin dev &   # :3000（NEXT_PUBLIC_API_URL 默认指 :87
 7. 层级筛选切「点位」→ 只剩点位行。截图存档。
 8. （仅当已配 `apps/admin/.env.local` 的高德 key）表单里搜「什刹海」→ 选结果 → 地图落 pin、坐标自动回填；点击地图他处 → 坐标更新。
 
-- [ ] **Step 3: 清理走查数据**
+- [x] **Step 3: 清理走查数据**
 
 ```bash
 docker exec zhixing-db-1 psql -U zhixing -d zhixing \
@@ -897,7 +898,7 @@ docker exec zhixing-db-1 psql -U zhixing -d zhixing \
 
 Expected: `DELETE 2`（父删子的 parentId 置 NULL 不阻删；走查地点未挂卡片/足迹）。
 
-- [ ] **Step 4: 全量回归**
+- [x] **Step 4: 全量回归**
 
 ```bash
 pnpm -C apps/api exec vitest run
@@ -906,6 +907,6 @@ pnpm -C apps/admin run build
 
 Expected: api 全绿（167 + 本计划新增 10 个）；admin 构建通过。
 
-- [ ] **Step 5: 收尾提交（如走查产生修复）**
+- [x] **Step 5: 收尾提交（如走查产生修复）**
 
 修复类改动按所属 Task 的 commit 风格单独提交；无修复则本 Task 无提交。

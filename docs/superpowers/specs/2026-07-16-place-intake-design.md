@@ -51,7 +51,7 @@
 ### 管理端 UI（apps/admin/app/places/page.tsx）
 
 - 只读表格升级：顶部"新建地点"按钮 + 每行"编辑"；表单字段：名称、层级（默认 POI）、父级选择（下拉，按名称过滤）、坐标、简介。
-- **地图选点组件**：高德 JS SDK——地名搜索定位 → 地图点击/拖 pin → 坐标回填。key 走 `NEXT_PUBLIC_AMAP_KEY`（高德开放平台免费 Web 端 key，域名白名单 admin.example.com + localhost:3000）。**未配 key 时退化为手动输入经纬度**，功能不断。
+- **地图选点组件**：高德 JS SDK——地名搜索定位 → 地图点击/拖 pin → 坐标回填。key 走 `NEXT_PUBLIC_AMAP_KEY`（高德开放平台免费 Web 端 key；白名单不支持 localhost/IP/端口——开发 key 白名单留空，生产 key 白名单填 admin.example.com）。**未配 key 时退化为手动输入经纬度**，功能不断。
 - 列表补"父级"列与层级筛选，建完即可核对。
 - 沿用现有架构：纯客户端 fetch（lib/api.ts）+ 朴素 CSS，无服务端数据访问。
 
