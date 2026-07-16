@@ -19,11 +19,13 @@ struct DraftGroup: Identifiable {
 }
 
 /// 按地点聚类；同地点内相邻照片间隔 > gap（默认 48h）拆成两段旅程
-/// haversineMeters/matchRadius/nearestPin 见 Core/GeoMatch.swift（与 LocationOnce 选点共享）
+/// haversineMeters/matchRadius/nearestPin/wgs2gcj 见 Core/GeoMatch.swift（与 LocationOnce 选点共享）
 func clusterAssets(_ assets: [AssetMeta], pins: [Pin], gap: TimeInterval = 48 * 3600) -> [DraftGroup] {
     var byPin: [String: (pin: Pin, assets: [AssetMeta])] = [:]
     for asset in assets {
-        guard let pin = nearestPin(lat: asset.lat, lng: asset.lng, pins: pins) else { continue }
+        // EXIF 是 WGS-84,pin 是 GCJ-02:只在匹配查询时转换;AssetMeta 原始坐标不动,上传仍存 WGS
+        let q = wgs2gcj(lat: asset.lat, lng: asset.lng)
+        guard let pin = nearestPin(lat: q.lat, lng: q.lng, pins: pins) else { continue }
         byPin[pin.id, default: (pin, [])].assets.append(asset)
     }
     var groups: [DraftGroup] = []

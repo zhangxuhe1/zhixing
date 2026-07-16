@@ -65,4 +65,4 @@ pnpm --filter @zhixing/pipeline batch -- --fill 3 --delay 4000
 - ESM everywhere (`"type": "module"`) + TS strict + NodeNext — relative imports must carry the `.js` suffix.
 - Uniform error shape `{ error: string, detail?: any }`; all body validation via zod, failures return 400 `invalid_body`.
 - Comments, docs, and commit messages are written in Chinese; commits follow conventional commits (e.g. `feat(api): ...`).
-- All Place lat/lng are GCJ-02 (Mars coordinates) — matches MapKit's mainland-China tiles and AMap picker natively; never convert. FootprintPhoto EXIF coords stay WGS-84 (private data, not rendered on public maps).
+- All Place lat/lng are GCJ-02 (Mars coordinates) — matches MapKit's mainland-China tiles and AMap picker natively; the display path never converts. Core Location GPS and photo EXIF coords are WGS-84: pass them through `wgs2gcj` (apps/ios/Zhixing/Core/GeoMatch.swift) before distance-matching against Places via `nearestPin` — never feed raw WGS-84 into it. FootprintPhoto EXIF coords are stored as WGS-84 (private data, not rendered on public maps).

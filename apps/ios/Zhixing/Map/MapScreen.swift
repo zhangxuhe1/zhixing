@@ -327,7 +327,9 @@ private struct PlacePickerSheet: View {
         defer { locating = false }
         do {
             let coordinate = try await LocationOnce.current()
-            if let pin = nearestPin(lat: coordinate.latitude, lng: coordinate.longitude, pins: pins) {
+            // Core Location 给的是 WGS-84,pin 是 GCJ-02:匹配前先转,否则系统性偏 100-700m
+            let q = wgs2gcj(lat: coordinate.latitude, lng: coordinate.longitude)
+            if let pin = nearestPin(lat: q.lat, lng: q.lng, pins: pins) {
                 onPick(pin)
             } else {
                 hint = "附近还没有收录的地点，试试搜索"

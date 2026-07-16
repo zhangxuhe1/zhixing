@@ -16,6 +16,15 @@ final class ClusterTests: XCTestCase {
         ISO8601DateFormatter().date(from: s)!
     }
 
+    /// EXIF 坐标是 WGS-84：从 GCJ 目标位置一阶反推 WGS 拍摄点（偏移场平滑，误差米级），
+    /// 模拟“真实拍摄于该地”的照片——clusterAssets 内部会 wgs2gcj 转回来匹配。
+    /// 境外点（如太平洋）wgs2gcj 恒等，反推也恒等，可统一使用。
+    func asset(_ id: String, _ iso: String, gcjLat: Double, gcjLng: Double) -> AssetMeta {
+        let g = wgs2gcj(lat: gcjLat, lng: gcjLng)
+        return AssetMeta(id: id, takenAt: date(iso),
+                         lat: 2 * gcjLat - g.lat, lng: 2 * gcjLng - g.lng)
+    }
+
     func testHaversineKnownDistance() {
         // 什刹海到北京市中心约 4.6km
         let d = haversineMeters(lat1: 39.9403, lng1: 116.383, lat2: 39.9042, lng2: 116.4074)
@@ -34,11 +43,11 @@ final class ClusterTests: XCTestCase {
 
     func testClusterSplitsByGapAndSkipsUnmatched() {
         let assets = [
-            AssetMeta(id: "a1", takenAt: date("2024-05-01T10:00:00Z"), lat: 39.9405, lng: 116.3838),
-            AssetMeta(id: "a2", takenAt: date("2024-05-01T12:00:00Z"), lat: 39.9401, lng: 116.3829),
-            AssetMeta(id: "a3", takenAt: date("2024-10-01T09:00:00Z"), lat: 39.9404, lng: 116.3833), // 隔 5 个月：拆段
-            AssetMeta(id: "b1", takenAt: date("2024-06-01T09:00:00Z"), lat: 36.6512, lng: 117.1201),
-            AssetMeta(id: "x1", takenAt: date("2024-07-01T09:00:00Z"), lat: 20.0, lng: 150.0),       // 无匹配：跳过
+            asset("a1", "2024-05-01T10:00:00Z", gcjLat: 39.9405, gcjLng: 116.3838),
+            asset("a2", "2024-05-01T12:00:00Z", gcjLat: 39.9401, gcjLng: 116.3829),
+            asset("a3", "2024-10-01T09:00:00Z", gcjLat: 39.9404, gcjLng: 116.3833), // 隔 5 个月：拆段
+            asset("b1", "2024-06-01T09:00:00Z", gcjLat: 36.6512, gcjLng: 117.1201),
+            asset("x1", "2024-07-01T09:00:00Z", gcjLat: 20.0, gcjLng: 150.0),       // 无匹配：跳过
         ]
         let groups = clusterAssets(assets, pins: pins)
         XCTAssertEqual(groups.count, 3) // 什刹海 5 月、什刹海 10 月、济南 6 月
