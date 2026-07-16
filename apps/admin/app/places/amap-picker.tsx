@@ -41,6 +41,9 @@ export function AMapPicker({ lat, lng, onPick }: {
   const markerRef = useRef<any>(null);
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
+  // 地图脚本异步加载完成时取"最新"坐标放初始 pin,而非挂载瞬间捕获的旧值
+  const posRef = useRef({ lat, lng });
+  posRef.current = { lat, lng };
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState<Poi[]>([]);
   const [error, setError] = useState("");
@@ -51,13 +54,14 @@ export function AMapPicker({ lat, lng, onPick }: {
     loadAMap()
       .then((AMap) => {
         if (disposed || !mapEl.current) return;
-        const hasInit = lat !== null && lng !== null;
+        const { lat: la, lng: ln } = posRef.current;
+        const hasInit = la !== null && ln !== null;
         const map = new AMap.Map(mapEl.current, {
           zoom: hasInit ? 15 : 4,
-          center: hasInit ? [lng, lat] : [105, 36],
+          center: hasInit ? [ln, la] : [105, 36],
         });
         mapRef.current = map;
-        if (hasInit) placeMarker(lng!, lat!);
+        if (hasInit) placeMarker(ln!, la!);
         map.on("click", (e: any) => {
           placeMarker(e.lnglat.getLng(), e.lnglat.getLat());
           onPickRef.current(e.lnglat.getLat(), e.lnglat.getLng());
@@ -69,9 +73,26 @@ export function AMapPicker({ lat, lng, onPick }: {
       mapRef.current?.destroy();
       mapRef.current = null;
     };
-    // 仅初始化一次:lat/lng 后续变化经 placeMarker 驱动,不重建地图
+    // 仅初始化一次,不重建地图;后续 lat/lng 变化由下方跟随 effect 同步 pin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 表单手输坐标 → 地图跟随核对。600ms 防抖:逐字输入的中间值(如"3"→"39")不惊动地图;
+  // 与 marker 现位置几乎重合(±1e-5°≈1m,地图侧点击/拖拽经 toFixed(6) 回流是这种情形)
+  // 则跳过,避免点完地图又被拉回居中。
+  useEffect(() => {
+    if (lat === null || lng === null) return;
+    const t = setTimeout(() => {
+      if (!mapRef.current) return;
+      const cur = markerRef.current?.getPosition();
+      if (cur && Math.abs(cur.getLat() - lat) < 1e-5 && Math.abs(cur.getLng() - lng) < 1e-5) {
+        return;
+      }
+      placeMarker(lng, lat);
+      mapRef.current.setZoomAndCenter(16, [lng, lat]);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [lat, lng]);
 
   function placeMarker(lngV: number, latV: number) {
     const map = mapRef.current;
