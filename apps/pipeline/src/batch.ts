@@ -1,7 +1,7 @@
 import { databaseUrl } from "./env.js";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import { createPrisma, type PrismaClient } from "@zhixing/db";
+import { createPrisma } from "@zhixing/db";
 import { generateCards } from "./generate.js";
 import { createLlm } from "./llm.js";
 import { CATEGORY_LABELS, type Category } from "./prompts.js";
@@ -20,20 +20,6 @@ export function pickJobs(
     }
   }
   return jobs;
-}
-
-/** batch 补卡的目标地点:只圈 ACTIVE——待审/驳回的用户申请点不消耗生成额度。 */
-export async function queryFillTargets(
-  prisma: PrismaClient,
-  city?: string,
-): Promise<Array<{ id: string; name: string }>> {
-  return prisma.place.findMany({
-    where: {
-      status: "ACTIVE",
-      ...(city ? { OR: [{ parent: { name: city } }, { name: city }] } : {}),
-    },
-    select: { id: true, name: true },
-  });
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,7 +50,10 @@ async function main() {
   }
   try {
     // 城市本身与其下街区都参与补卡
-    const places = await queryFillTargets(prisma, values.city);
+    const where = values.city
+      ? { OR: [{ parent: { name: values.city } }, { name: values.city }] }
+      : {};
+    const places = await prisma.place.findMany({ where, select: { id: true, name: true } });
     const counts = await prisma.card.groupBy({
       by: ["placeId"], where: { status: { not: "RETIRED" } }, _count: { _all: true },
     });

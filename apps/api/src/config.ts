@@ -11,9 +11,6 @@ export const config = {
   // 解析出真实客户端 IP（req.ip）——直连部署下必须保持默认关闭，否则客户端可
   // 伪造该头绕过按 IP 计数的限流。
   trustProxy: process.env.TRUST_PROXY === "1",
-  // 用户申请新地点的运营开关:前期数据不足默认开放,覆盖度够了置 "0" 关闭。
-  // iOS 经 /app-config 读它决定入口显隐;POST /places 服务端硬校验兜底。
-  placeSubmission: process.env.ZHIXING_PLACE_SUBMISSION !== "0",
   s3: {
     endpoint: process.env.S3_ENDPOINT ?? "http://localhost:9000",
     publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? process.env.S3_ENDPOINT ?? "http://localhost:9000",

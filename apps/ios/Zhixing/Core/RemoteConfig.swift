@@ -16,9 +16,6 @@ final class RemoteConfig {
     static let placeholderShareLandingUrl = "https://zhixing.app/share"
 
     private(set) var shareLandingUrl: String = RemoteConfig.placeholderShareLandingUrl
-    /// 用户申请新地点入口开关:服务端 /app-config 下发;取不到时默认开
-    /// (服务端 POST /places 有硬校验兜底,入口多显示不造成越权)。
-    private(set) var placeSubmission = true
     private var hasLoaded = false
 
     private let fetchConfig: () async throws -> RemoteAppConfig
@@ -38,7 +35,6 @@ final class RemoteConfig {
         guard !hasLoaded else { return }
         if let config = try? await fetchConfig() {
             shareLandingUrl = config.shareLandingUrl
-            placeSubmission = config.placeSubmission ?? true
             hasLoaded = true
         }
     }

@@ -64,33 +64,23 @@ enum LinkPlatform {
   OTHER
 }
 
-enum PlaceStatus {
-  ACTIVE // 官方/审核通过,全网可见
-  PENDING // 用户申请待审,仅本人可见
-  REJECTED // 审核未通过,仅本人可见(其上足迹保留私有)
-}
-
 model Place {
-  id          String      @id @default(cuid())
-  name        String
-  level       PlaceLevel
-  parentId    String?
-  parent      Place?      @relation("PlaceTree", fields: [parentId], references: [id])
-  children    Place[]     @relation("PlaceTree")
-  lat         Float
-  lng         Float
-  intro       String?
-  cards       Card[]
-  footprints  Footprint[]
-  links       PlaceLink[]
-  status      PlaceStatus @default(ACTIVE)
-  createdById String?
-  createdBy   User?       @relation("UserCreatedPlaces", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime    @default(now())
+  id         String      @id @default(cuid())
+  name       String
+  level      PlaceLevel
+  parentId   String?
+  parent     Place?      @relation("PlaceTree", fields: [parentId], references: [id])
+  children   Place[]     @relation("PlaceTree")
+  lat        Float
+  lng        Float
+  intro      String?
+  cards      Card[]
+  footprints Footprint[]
+  links      PlaceLink[]
+  createdAt  DateTime    @default(now())
 
   @@unique([name, parentId])
   @@index([level])
-  @@index([status])
 }
 
 // 地点外链(小红书/B 站等攻略帖):第一期仅管理员维护;独立表而非 JSON,
@@ -138,16 +128,15 @@ model CardBlock {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  nickname      String
-  createdAt     DateTime       @default(now())
-  footprints    Footprint[]
-  likes         Like[]
-  favorites     CardFavorite[]
-  reports       CardReport[]
-  trips         Trip[]
-  identities    Identity[]
-  createdPlaces Place[]        @relation("UserCreatedPlaces")
+  id         String         @id @default(cuid())
+  nickname   String
+  createdAt  DateTime       @default(now())
+  footprints Footprint[]
+  likes      Like[]
+  favorites  CardFavorite[]
+  reports    CardReport[]
+  trips      Trip[]
+  identities Identity[]
 }
 
 model Identity {

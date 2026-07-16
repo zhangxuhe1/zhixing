@@ -55,20 +55,3 @@ test("PlaceLink 往返:挂地点、级联删除", async () => {
   await prisma.place.delete({ where: { id: place.id } }); // onDelete: Cascade
   expect(await prisma.placeLink.count()).toBe(0);
 });
-
-test("Place.status 默认 ACTIVE;createdBy 用户删除后 SetNull", async () => {
-  const official = await prisma.place.create({
-    data: { name: "官方点", level: "DISTRICT", lat: 30, lng: 110 },
-  });
-  expect(official.status).toBe("ACTIVE");
-
-  const user = await prisma.user.create({ data: { nickname: "旅人" } });
-  const submitted = await prisma.place.create({
-    data: { name: "用户点", level: "POI", lat: 30, lng: 110, status: "PENDING", createdById: user.id },
-  });
-  expect(submitted.status).toBe("PENDING");
-
-  await prisma.user.delete({ where: { id: user.id } });
-  const after = await prisma.place.findUniqueOrThrow({ where: { id: submitted.id } });
-  expect(after.createdById).toBeNull(); // 点保留,归属清空
-});

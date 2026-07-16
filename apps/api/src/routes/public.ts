@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth.js";
-import { PUBLICLY_VISIBLE, placeVisibleTo } from "../visibility.js";
+import { PUBLICLY_VISIBLE } from "../visibility.js";
 import { cstParts } from "../time.js";
 
 const storiesQuerySchema = z.object({
@@ -66,9 +66,7 @@ export async function publicRoutes(app: FastifyInstance) {
     const q = storiesQuerySchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: "invalid_query", detail: q.error.flatten() });
 
-    const place = await app.prisma.place.findFirst({
-      where: { id, AND: [placeVisibleTo(req.userId)] },
-    });
+    const place = await app.prisma.place.findUnique({ where: { id } });
     if (!place) return reply.code(404).send({ error: "not_found" });
 
     const limit = q.data.limit ?? 20;
@@ -112,9 +110,7 @@ export async function publicRoutes(app: FastifyInstance) {
 
   app.get("/places/:id/photo-wall", { preHandler: requireUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const place = await app.prisma.place.findFirst({
-      where: { id, AND: [placeVisibleTo(req.userId)] },
-    });
+    const place = await app.prisma.place.findUnique({ where: { id } });
     if (!place) return reply.code(404).send({ error: "not_found" });
 
     const rows = await app.prisma.footprint.findMany({

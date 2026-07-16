@@ -55,7 +55,7 @@ export const FOOTPRINT_SELECT = {
   viewCount: true,
   tripId: true,
   createdAt: true,
-  place: { select: { id: true, name: true, status: true } },
+  place: { select: { id: true, name: true } },
   photos: { select: { id: true, takenAt: true } },
 } as const;
 
@@ -73,10 +73,6 @@ export async function footprintsRoutes(app: FastifyInstance) {
     const place = await app.prisma.place.findUnique({ where: { id: body.data.placeId } });
     if (!place) return reply.code(400).send({ error: "unknown_place" });
     const isPublic = body.data.visibility === "PUBLIC";
-    // 待审/驳回地点上的足迹不能申请公开——公开面"非 ACTIVE 地点永不可见"的规则由此保持绝对
-    if (isPublic && place.status !== "ACTIVE") {
-      return reply.code(400).send({ error: "place_pending" });
-    }
     const footprint = await app.prisma.footprint.create({
       data: {
         userId: req.userId,
@@ -107,13 +103,6 @@ export async function footprintsRoutes(app: FastifyInstance) {
     let publicRequestedAt = existing.publicRequestedAt;
 
     if (visibility === "PUBLIC") {
-      const place = await app.prisma.place.findUnique({
-        where: { id: existing.placeId },
-        select: { status: true },
-      });
-      if (place?.status !== "ACTIVE") {
-        return reply.code(400).send({ error: "place_pending" });
-      }
       // 分支 1：切到 PUBLIC（无论原值）→ 重新进审核队列
       reviewStatus = "PENDING";
       publicRequestedAt = new Date();

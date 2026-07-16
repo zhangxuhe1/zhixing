@@ -25,9 +25,6 @@ struct FootprintComposer: View {
     @State private var saving = false
     @State private var skipSummary: String?
 
-    /// 地点待审/驳回时禁公开:服务端会 400 place_pending,前端直接不给开。
-    private var placeAwaitingReview: Bool { pin.isAwaitingReview }
-
     #if targetEnvironment(macCatalyst)
     init(
         pin: Pin,
@@ -53,14 +50,7 @@ struct FootprintComposer: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("地点") {
-                    Text(pin.name)
-                    if placeAwaitingReview {
-                        Label("新地点审核中", systemImage: "hourglass")
-                            .font(.footnote)
-                            .foregroundStyle(ZXTheme.oldGold)
-                    }
-                }
+                Section("地点") { Text(pin.name) }
                 Section("照片") {
                     photoPickerControl
                 }
@@ -73,11 +63,7 @@ struct FootprintComposer: View {
                     // 足迹已创建（照片重试阶段）后锁定开关：此时「保存」只重试上传、不会再改可见性，
                     // 放任可改会静默吞掉用户意图；创建后的公开状态变更走 FootprintEditor。
                     Toggle("公开这条足迹", isOn: $isPublic)
-                        .disabled(createdFootprint != nil || placeAwaitingReview)
-                    if placeAwaitingReview {
-                        Text("新地点审核通过后，才能公开这里的足迹。")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
+                        .disabled(createdFootprint != nil)
                     if isPublic {
                         Text("提交前会再次确认；审核通过前，其他旅人暂时还看不到它。")
                             .font(.footnote).foregroundStyle(.secondary)

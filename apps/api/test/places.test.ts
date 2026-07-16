@@ -10,6 +10,21 @@ test("POST /admin/places 需要鉴权", async () => {
   expect(res.statusCode).toBe(401);
 });
 
+test("地点库保持受控：不暴露用户建点端点或远程开关", async () => {
+  const create = await app.inject({
+    method: "POST",
+    url: "/places",
+    payload: { name: "用户自定义地点", lat: 36.65, lng: 117.12 },
+  });
+  expect(create.statusCode).toBe(404);
+  expect(create.json()).toEqual({ error: "not_found" });
+  expect(await app.prisma.place.count()).toBe(0);
+
+  const remoteConfig = await app.inject({ method: "GET", url: "/app-config" });
+  expect(remoteConfig.statusCode).toBe(200);
+  expect(remoteConfig.json()).toEqual({ shareLandingUrl: expect.any(String) });
+});
+
 test("创建并查询地点树", async () => {
   const city = await app.inject({
     method: "POST",
@@ -28,7 +43,7 @@ test("创建并查询地点树", async () => {
   });
   expect(spot.statusCode).toBe(201);
 
-  const list = await app.inject({ method: "GET", url: `/places?parentId=${cityId}`, headers: ADMIN_AUTH });
+  const list = await app.inject({ method: "GET", url: `/places?parentId=${cityId}` });
   expect(list.json().map((p: { name: string }) => p.name)).toEqual(["什刹海"]);
 
   const detail = await app.inject({ method: "GET", url: `/places/${cityId}` });
@@ -65,16 +80,6 @@ test("GET /places/:id 返回从远到近的祖先链", async () => {
   ]);
   // 逐字段 DTO：不外传 createdAt/parentId 之外的内部字段
   expect(Object.keys(res.json()).sort()).toEqual(
-    ["ancestors", "id", "intro", "lat", "level", "links", "lng", "name", "status"].sort(),
+    ["ancestors", "id", "intro", "lat", "level", "links", "lng", "name"].sort(),
   );
-});
-
-test("app-config 下发地点申请开关;buildApp 可注入关闭", async () => {
-  const on = await app.inject({ method: "GET", url: "/app-config" });
-  expect(on.json().placeSubmission).toBe(true); // 测试默认开
-
-  const offApp = testApp({ placeSubmission: false });
-  const off = await offApp.inject({ method: "GET", url: "/app-config" });
-  expect(off.json().placeSubmission).toBe(false);
-  await offApp.close();
 });

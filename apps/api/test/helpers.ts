@@ -1,5 +1,5 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { buildApp, type BuildAppOpts } from "../src/app.js";
+import { buildApp } from "../src/app.js";
 
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? "postgresql://zhixing:zhixing@localhost:5433/zhixing_test";
@@ -28,14 +28,13 @@ export async function fakeAppleToken(sub: string, audience = "app.zhixing.ios") 
     .sign(applePair.privateKey);
 }
 
-export function testApp(overrides: Partial<BuildAppOpts> = {}) {
+export function testApp() {
   return buildApp({
     databaseUrl: TEST_DB_URL,
     appleJwks,
     devAuth: true,
     s3Bucket: TEST_S3_BUCKET,
     rateLimit: false,
-    ...overrides,
   });
 }
 

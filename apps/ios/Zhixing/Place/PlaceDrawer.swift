@@ -46,11 +46,6 @@ struct PlaceDrawer: View {
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
-                            if let status = placeDetail?.status, status != "ACTIVE" {
-                                Label(status == "PENDING" ? "审核中" : "未通过", systemImage: "hourglass")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(status == "PENDING" ? ZXTheme.oldGold : ZXTheme.cinnabar)
-                            }
                         }
                         Spacer()
                     }
