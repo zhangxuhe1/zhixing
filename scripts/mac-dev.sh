@@ -2,7 +2,7 @@
 # 启动完整的 Mac Catalyst Debug 环境：Postgres、MinIO、开发 API 和 App。
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 API_DIR="$ROOT/apps/api"
 IOS_DIR="$ROOT/apps/ios"
 DERIVED_DATA="$IOS_DIR/DerivedData/mac-dev"
@@ -15,7 +15,7 @@ API_RUNTIME_DIR="/tmp/zhixing-mac-dev-$(id -u)"
 API_LOG="$API_RUNTIME_DIR/api-dev.log"
 API_ERROR_LOG="$API_RUNTIME_DIR/api-dev-error.log"
 API_JOB_LABEL="app.zhixing.api-dev"
-API_RUNNER_VERSION=2
+API_RUNNER_VERSION=3
 NODE_BIN=$(node -p 'process.execPath' 2>/dev/null || true)
 TSX_CLI="$API_DIR/node_modules/tsx/dist/cli.mjs"
 
@@ -67,6 +67,53 @@ managed_api_needs_upgrade() {
 
   job_detail=$(launchctl print "gui/$(id -u)/$API_JOB_LABEL" 2>/dev/null) || return 1
   [[ "$job_detail" != *"ZHIXING_DEV_RUNNER_VERSION=$API_RUNNER_VERSION"* ]]
+}
+
+managed_api_pid() {
+  local job_detail=""
+  local pid=""
+
+  job_detail=$(launchctl print "gui/$(id -u)/$API_JOB_LABEL" 2>/dev/null) || return 1
+  pid=$(sed -n 's/^[[:space:]]*pid = \([0-9][0-9]*\)$/\1/p' <<< "$job_detail")
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$pid"
+}
+
+process_is_descendant_of() {
+  local child_pid="$1"
+  local ancestor_pid="$2"
+  local current_pid="$child_pid"
+  local parent_pid=""
+
+  [[ "$child_pid" =~ ^[0-9]+$ && "$ancestor_pid" =~ ^[0-9]+$ ]] || return 1
+
+  for _ in {1..64}; do
+    [[ "$current_pid" == "$ancestor_pid" ]] && return 0
+
+    parent_pid=$(ps -o ppid= -p "$current_pid" 2>/dev/null | tr -d '[:space:]')
+    [[ "$parent_pid" =~ ^[0-9]+$ ]] || return 1
+    [[ "$parent_pid" != "0" && "$parent_pid" != "$current_pid" ]] || return 1
+    current_pid="$parent_pid"
+  done
+
+  return 1
+}
+
+managed_api_owns_port() {
+  local job_pid=""
+  local listener_pids=""
+  local listener_pid=""
+
+  job_pid=$(managed_api_pid) || return 1
+  listener_pids=$(lsof -nP -tiTCP:"$API_PORT" -sTCP:LISTEN 2>/dev/null) || return 1
+  [[ -n "$listener_pids" ]] || return 1
+
+  # 同一进程可能同时监听 IPv4/IPv6；所有监听者都必须属于托管任务，
+  # 否则说明旧 watcher 或其他进程抢占了端口，不能复用当前健康响应。
+  for listener_pid in $listener_pids; do
+    [[ "$listener_pid" =~ ^[0-9]+$ ]] || return 1
+    process_is_descendant_of "$listener_pid" "$job_pid" || return 1
+  done
 }
 
 wait_for_api_port_release() {
@@ -178,6 +225,13 @@ start_api() {
     exit 1
   fi
 
+  if ! wait_for_command "本地 API 接管 ${API_PORT} 端口" 30 managed_api_owns_port; then
+    echo "❌ 本地 API 有响应，但监听进程不属于 ${API_JOB_LABEL} 托管任务。" >&2
+    echo "   API 日志：$API_LOG" >&2
+    tail -n 30 "$API_ERROR_LOG" >&2 || true
+    exit 1
+  fi
+
   local dev_auth_status
   dev_auth_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
     --max-time 2 --request POST "$API_BASE_URL/auth/dev" \
@@ -200,6 +254,11 @@ start_api() {
   echo "✅ 本地 API 可用（开发登录 + 数据查询）：$API_BASE_URL"
   echo "   API 日志：$API_LOG"
 }
+
+# 允许轻量回归测试 source 本文件，只加载函数而不启动服务或构建 App。
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
 
 for command in curl docker launchctl lsof node open pnpm ps xcodebuild xcodegen; do
   require_command "$command"
@@ -231,11 +290,20 @@ wait_for_command " MinIO 就绪" 30 \
   curl --silent --fail --max-time 2 http://localhost:9000/minio/health/live
 echo "✅ Postgres 和 MinIO 已就绪。"
 
-if api_is_ready && ! managed_api_needs_upgrade; then
+api_ready=0
+api_needs_upgrade=0
+api_owns_port=0
+api_is_ready && api_ready=1
+managed_api_needs_upgrade && api_needs_upgrade=1
+managed_api_owns_port && api_owns_port=1
+
+if ((api_ready == 1 && api_needs_upgrade == 0 && api_owns_port == 1)); then
   echo "✅ 本地 API 已完整就绪，复用现有进程：$API_BASE_URL"
 else
-  if managed_api_needs_upgrade; then
+  if ((api_needs_upgrade == 1)); then
     echo "♻️  本地 API 托管方式需要升级，正在重启一次…"
+  elif ((api_ready == 1 && api_owns_port == 0)); then
+    echo "♻️  本地 API 可访问，但 ${API_PORT} 监听进程不属于托管任务，正在清理旧 watcher…"
   else
     echo "♻️  本地 API 未通过完整检查，正在启动或修复…"
   fi
