@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { AMapPicker } from "./amap-picker";
 
 export type PlaceRow = {
   id: string; name: string; level: string; parentId: string | null;
@@ -93,6 +94,11 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
           ))}
         </select>
       </p>
+      <AMapPicker
+        lat={lat === "" || !Number.isFinite(Number(lat)) ? null : Number(lat)}
+        lng={lng === "" || !Number.isFinite(Number(lng)) ? null : Number(lng)}
+        onPick={(la, ln) => { setLat(la.toFixed(6)); setLng(ln.toFixed(6)); }}
+      />
       <p>
         <input placeholder="纬度 lat（GCJ-02）" value={lat}
           onChange={(e) => setLat(e.target.value)} style={{ width: 160 }} />{" "}

@@ -43,6 +43,15 @@
 - `MAIL_FROM`：发件人，格式「显示名 <地址>」，默认 `知行 <noreply@example.com>`；改用自有发信地址时一并改这里
 - 发信域名（`MAIL_FROM` 里 @ 后的域名）需要在 DNS 配好 SPF/DKIM，否则验证码邮件大概率被目标邮箱服务商（尤其 QQ/163/Gmail）打入垃圾箱或直接拒收
 
+## 管理端高德选点（可选）
+
+admin 地点表单的地图选点读 `NEXT_PUBLIC_AMAP_KEY` 与 `NEXT_PUBLIC_AMAP_SECURITY_CODE`
+（高德开放平台「Web 端(JS API)」key + 安全密钥。白名单不支持 localhost/IP/端口：
+本地开发 key 白名单留空；生产另申 key 白名单填 admin.example.com）。
+Next.js 的 NEXT_PUBLIC_ 变量在构建期内联：本地开发写 `apps/admin/.env.local`；
+生产镜像构建需经 build args 注入（暂未接线——**未配 key 时表单自动退化为手动输入经纬度，
+不阻塞部署**，接线等确有生产建点需求再做）。
+
 ## 部署前硬化清单（M1 终审建议，首次部署时执行）
 
 - [ ] 备份含照片：backup.sh 目前只 pg_dump——首次部署时把 minio-data 卷纳入备份（如 `docker run --rm -v zhixing_minio-data:/data -v $PWD/backups:/backup alpine tar czf /backup/minio-$(date +%Y%m%d).tar.gz /data`）
