@@ -49,8 +49,9 @@ admin 地点表单的地图选点读 `NEXT_PUBLIC_AMAP_KEY` 与 `NEXT_PUBLIC_AMA
 （高德开放平台「Web 端(JS API)」key + 安全密钥。白名单不支持 localhost/IP/端口：
 本地开发 key 白名单留空；生产另申 key 白名单填 admin.example.com）。
 Next.js 的 NEXT_PUBLIC_ 变量在构建期内联：本地开发写 `apps/admin/.env.local`；
-生产镜像构建需经 build args 注入（暂未接线——**未配 key 时表单自动退化为手动输入经纬度，
-不阻塞部署**，接线等确有生产建点需求再做）。
+生产在 `.env.production` 里配置这两个变量，compose 会经 build args 传给 admin 镜像构建
+（首次配置或改 key 后需 `docker compose -f compose.prod.yml --env-file .env.production up -d --build admin`
+重建镜像才生效）。**未配 key 时表单自动退化为手动输入经纬度，不阻塞部署**。
 
 ## 部署前硬化清单（M1 终审建议，首次部署时执行）
 

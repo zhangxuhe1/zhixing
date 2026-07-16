@@ -7,3 +7,4 @@ backups
 *.log
 .env
 .env.production
+**/.env.local

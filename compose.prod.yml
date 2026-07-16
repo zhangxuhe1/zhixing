@@ -73,6 +73,9 @@ services:
       dockerfile: apps/admin/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://api.${ZHIXING_DOMAIN}
+        # 高德选点 key（可选,构建期内联）:在 .env.production 配置;留空则表单退化手输坐标
+        NEXT_PUBLIC_AMAP_KEY: ${NEXT_PUBLIC_AMAP_KEY:-}
+        NEXT_PUBLIC_AMAP_SECURITY_CODE: ${NEXT_PUBLIC_AMAP_SECURITY_CODE:-}
     restart: unless-stopped
     # 仅绑宿主 127.0.0.1，供宿主层 Caddy 反代 admin.<域名>（容器内仍监听 3000）
     ports: ["127.0.0.1:8788:3000"]
