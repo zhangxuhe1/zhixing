@@ -40,6 +40,22 @@ final class FootprintDetailTests: XCTestCase {
         XCTAssertTrue(detail.contains(".appStores()"))
     }
 
+    /// 浏览器操控件契约（spec：2026-07-17-photo-grid-design.md 追记）：左右切换钮 + 首末页隐藏
+    /// + 统一高对比样式（thinMaterial 不得回潮）+ 悬停显隐仅限 Catalyst。
+    func testBrowserKeepsNavCloseAndHoverChrome() throws {
+        let browser = try source("Core/ZXPhotoBrowser.swift")
+
+        XCTAssertTrue(browser.contains("chevron.left"))
+        XCTAssertTrue(browser.contains("chevron.right"))
+        XCTAssertTrue(browser.contains("上一张"))
+        XCTAssertTrue(browser.contains("下一张"))
+        XCTAssertTrue(browser.contains("selection > 0"))
+        XCTAssertTrue(browser.contains("selection < photoIds.count - 1"))
+        XCTAssertTrue(browser.contains("targetEnvironment(macCatalyst)"))
+        XCTAssertTrue(browser.contains(".onHover"))
+        XCTAssertFalse(browser.contains(".thinMaterial"))
+    }
+
     /// 两处列表入口：点行必须推详情（NavigationLink），不得再直弹编辑器；
     /// 左滑删除保留；无障碍提示从"编辑"改为"查看"。
     func testListRowsPushDetailInsteadOfEditor() throws {
