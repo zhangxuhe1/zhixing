@@ -195,15 +195,7 @@ private struct StoryRow: View {
                 Text(text).font(.subheadline).lineLimit(3)
             }
             if !story.photos.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(story.photos) { photo in
-                            AuthedPhotoView(photoId: photo.id)
-                                .frame(width: 72, height: 72)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                }
+                ZXPhotoThumbRow(photoIds: story.photos.map(\.id))
             }
             HStack(spacing: 4) {
                 Button(action: onToggleLike) {

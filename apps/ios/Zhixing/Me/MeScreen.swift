@@ -184,15 +184,7 @@ struct FootprintRow: View {
                 Text(text).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
             }
             if !footprint.photos.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(footprint.photos) { photo in
-                            AuthedPhotoView(photoId: photo.id)
-                                .frame(width: 72, height: 72)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                }
+                ZXPhotoThumbRow(photoIds: footprint.photos.map(\.id))
             }
         }
         .padding(.vertical, 4)

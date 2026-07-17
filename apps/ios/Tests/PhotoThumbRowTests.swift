@@ -30,5 +30,19 @@ final class PhotoThumbRowTests: XCTestCase {
         XCTAssertFalse(component.contains("ScrollView"))
         XCTAssertTrue(component.contains(".accessibilityElement(children: .ignore)"))
         XCTAssertTrue(component.contains("照片，共 \\(photoIds.count) 张"))
+        // 身份不变量回归锁：瓦片身份必须绑照片 id（详见组件内注释），不得回退按位置。
+        XCTAssertTrue(component.contains("id: \\.element"))
+        XCTAssertFalse(component.contains("id: \\.offset"))
+    }
+
+    /// 两个列表行都必须用共用缩略行，不得回退横滑条。
+    func testListRowsUseThumbRowInsteadOfHorizontalStrip() throws {
+        let me = try source("Me/MeScreen.swift")
+        let stories = try source("Place/StoriesSection.swift")
+
+        XCTAssertTrue(me.contains("ZXPhotoThumbRow(photoIds: footprint.photos.map(\\.id))"))
+        XCTAssertTrue(stories.contains("ZXPhotoThumbRow(photoIds: story.photos.map(\\.id))"))
+        XCTAssertFalse(me.contains("ScrollView(.horizontal"))
+        XCTAssertFalse(stories.contains("ScrollView(.horizontal"))
     }
 }
