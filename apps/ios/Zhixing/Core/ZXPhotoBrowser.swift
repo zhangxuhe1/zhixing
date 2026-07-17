@@ -30,7 +30,7 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
         self.onClose = onClose
         self.bottomBar = bottomBar
         _selection = State(initialValue: startIndex)
-        _loader = State(initialValue: ZXBrowserPhotoLoader(photoIds: photoIds))
+        _loader = State(initialValue: ZXBrowserPhotoLoader(photoIds: photoIds, startIndex: startIndex))
     }
 
     var body: some View {

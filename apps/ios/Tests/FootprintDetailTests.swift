@@ -77,7 +77,8 @@ final class FootprintDetailTests: XCTestCase {
         let browser = try source("Core/ZXPhotoBrowser.swift")
 
         XCTAssertTrue(browser.contains(".overlay { pagePhoto(photoId) }"))
-        XCTAssertTrue(browser.contains("ZXBrowserPhotoLoader"))
+        // startIndex 必须传给 loader:init 同步种缓存,首帧即图(黑闪回归线)
+        XCTAssertTrue(browser.contains("ZXBrowserPhotoLoader(photoIds: photoIds, startIndex: startIndex)"))
         XCTAssertTrue(browser.contains("loader.focus(selection)"))
         XCTAssertFalse(browser.contains("AuthedPhotoView"))
         XCTAssertTrue(browser.contains("selection -= 1") && browser.contains("selection += 1"))

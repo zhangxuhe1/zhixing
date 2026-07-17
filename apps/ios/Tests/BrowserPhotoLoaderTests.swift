@@ -38,6 +38,7 @@ final class BrowserPhotoLoaderTests: XCTestCase {
         XCTFail("等待超时:\(what)")
     }
 
+    @MainActor
     private func makeLoader(
         count: Int, log: FetchLog, delayMs: Int = 0
     ) -> ZXBrowserPhotoLoader {
@@ -101,6 +102,26 @@ final class BrowserPhotoLoaderTests: XCTestCase {
         loader.retry("p1")
         await waitUntil("retry 后恢复") { loader.images["p1"] != nil }
         XCTAssertFalse(loader.failed.contains("p1"))
+    }
+
+    /// 首帧契约:构造时就得把起始窗口的缓存图同步种进 images——focus 挂在 .task,
+    /// 要等视图出现后才跑,首帧若查不到图,看图页打开仍旧黑底占位一闪(用户实测打回)。
+    @MainActor
+    func testInitSeedsStartWindowFromCacheSynchronously() {
+        let cachedImage = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
+            .image { ctx in
+                UIColor.green.setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+            }
+        for id in ["p4", "p5", "p6"] { ZXPhotoMemoryCache.shared.insert(cachedImage, for: id) }
+        let loader = ZXBrowserPhotoLoader(
+            photoIds: Self.ids(12), startIndex: 5,
+            fetch: { _ in Self.tinyPNG }, maxPixelSize: 64)
+        // 不 focus、不等待:init 返回时窗口内已缓存的图必须已就位
+        XCTAssertNotNil(loader.images["p5"])
+        XCTAssertNotNil(loader.images["p4"])
+        XCTAssertNotNil(loader.images["p6"])
+        XCTAssertNil(loader.images["p0"]) // 窗口外不种
     }
 
     /// 全局缓存命中必须零网络短路(宫格看过的照片点开全屏即现,首开黑闪的根治路径)。

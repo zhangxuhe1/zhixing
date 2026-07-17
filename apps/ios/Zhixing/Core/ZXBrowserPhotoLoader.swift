@@ -17,14 +17,23 @@ final class ZXBrowserPhotoLoader {
     /// 0 = 首次加载时按主屏推导(nonisolated init 里够不到 UIScreen)。
     private let maxPixelSizeOverride: CGFloat
 
-    nonisolated init(
+    /// init 走 MainActor(SwiftUI View 协议本身 MainActor 隔离,视图 init 里可同步构造)。
+    init(
         photoIds: [String],
+        startIndex: Int = 0,
         fetch: @escaping @Sendable (String) async throws -> Data = ZXBrowserPhotoLoader.defaultFetch,
         maxPixelSize: CGFloat = 0
     ) {
         self.photoIds = photoIds
         self.fetch = fetch
         self.maxPixelSizeOverride = maxPixelSize
+        // 起始窗口的缓存图必须在构造期同步就位:focus 挂在 .task、要等视图出现后才跑,
+        // 首帧若拿不到图,看图页打开仍是黑底占位一闪(用户实测打回过一次,勿回退)。
+        for i in Self.prefetchWindow(around: startIndex, count: photoIds.count) {
+            if let cached = ZXPhotoMemoryCache.shared.image(for: photoIds[i]) {
+                images[photoIds[i]] = cached
+            }
+        }
     }
 
     /// 预载优先级序:[i, i+1, i-1, i+2, i-2] 截断越界(先夹 index 再展开);纯函数可单测。
