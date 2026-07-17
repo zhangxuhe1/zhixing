@@ -57,9 +57,13 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
             TabView(selection: $selection) {
                 // 页身份绑照片 id：AuthedPhotoView 的 @State 图片缓存跟随视图身份
                 //（同 ZXPhotoThumbRow 的护栏理由）；photoIds 在浏览会话内不变，tag 用下标翻页。
+                // 页尺寸权威必须是 Color.clear（按页提案上报）而非照片自身：loaded 分支是
+                // scaledToFill，会上报覆盖尺寸，而 maxi frame 取 max(子, 提案)——宽照片的页
+                // 会超出分页视口、溢出压进邻页，出现"一屏各显示两张图一部分"（探针实证）；
+                // 同 PhotoWallSection.photoCell 的结论。
                 ForEach(Array(photoIds.enumerated()), id: \.element) { index, photoId in
-                    AuthedPhotoView(photoId: photoId)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Color.clear
+                        .overlay { AuthedPhotoView(photoId: photoId) }
                         .clipped()
                         .tag(index)
                 }
@@ -126,16 +130,15 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
         #endif
     }
 
+    // 按钮翻页必须无动画瞬切（也是 Preview/照片等 Mac 原生应用的惯例）：withAnimation 驱动
+    // selection 会与分页视图动画收尾时的"落页写回"竞态——连点时漂移/过冲、被打断的过渡
+    // 停在非整页位置（探针实证）；手势滑动的动画由 UIKit 自管，不受影响。
     private var prevButton: some View {
-        chromeButton(icon: "chevron.left", label: "上一张") {
-            withAnimation(.easeInOut(duration: 0.2)) { selection -= 1 }
-        }
+        chromeButton(icon: "chevron.left", label: "上一张") { selection -= 1 }
     }
 
     private var nextButton: some View {
-        chromeButton(icon: "chevron.right", label: "下一张") {
-            withAnimation(.easeInOut(duration: 0.2)) { selection += 1 }
-        }
+        chromeButton(icon: "chevron.right", label: "下一张") { selection += 1 }
     }
 
     private var closeButton: some View {

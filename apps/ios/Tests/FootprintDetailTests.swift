@@ -66,6 +66,19 @@ final class FootprintDetailTests: XCTestCase {
         XCTAssertTrue(browser.contains(".safeAreaInset(edge: .bottom)"))
     }
 
+    /// 分页两护栏（几何探针实证，勿回退）：
+    /// 1）页尺寸权威是 Color.clear + overlay + clipped——loaded 分支 scaledToFill 上报覆盖
+    ///    尺寸，maxi frame 会把页撑得比分页视口宽、溢出压进邻页（"一屏各显示两张图一部分"）；
+    /// 2）按钮翻页无动画瞬切——withAnimation 驱动 selection 与分页落页写回竞态，
+    ///    连点漂移/过冲、被打断的过渡停在非整页位置。
+    func testBrowserPagesSizedByProposalAndFlipWithoutAnimation() throws {
+        let browser = try source("Core/ZXPhotoBrowser.swift")
+
+        XCTAssertTrue(browser.contains(".overlay { AuthedPhotoView(photoId: photoId) }"))
+        XCTAssertTrue(browser.contains("selection -= 1") && browser.contains("selection += 1"))
+        XCTAssertFalse(browser.contains("withAnimation(.easeInOut(duration: 0.2)) { selection"))
+    }
+
     /// 两处列表入口：点行必须推详情（NavigationLink），不得再直弹编辑器；
     /// 左滑删除保留；无障碍提示从"编辑"改为"查看"。
     func testListRowsPushDetailInsteadOfEditor() throws {
