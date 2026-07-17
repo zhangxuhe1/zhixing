@@ -56,6 +56,16 @@ final class FootprintDetailTests: XCTestCase {
         XCTAssertFalse(browser.contains(".thinMaterial"))
     }
 
+    /// 无底栏（EmptyView 便捷构造）时绝不能装 safeAreaInset：内容为空视图的 safeAreaInset
+    /// 会给主内容提案 0 高并顶对齐（iOS 与 Catalyst 皆然，几何探针实证），
+    /// 左右切换/关闭钮全被压到顶部一条；带真实底栏的照片墙路径则必须保留 inset 语义。
+    func testBrowserSkipsSafeAreaInsetWhenNoBottomBar() throws {
+        let browser = try source("Core/ZXPhotoBrowser.swift")
+
+        XCTAssertTrue(browser.contains("BottomBar.self == EmptyView.self"))
+        XCTAssertTrue(browser.contains(".safeAreaInset(edge: .bottom)"))
+    }
+
     /// 两处列表入口：点行必须推详情（NavigationLink），不得再直弹编辑器；
     /// 左滑删除保留；无障碍提示从"编辑"改为"查看"。
     func testListRowsPushDetailInsteadOfEditor() throws {

@@ -31,6 +31,28 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
     }
 
     var body: some View {
+        pager
+            .preferredColorScheme(.dark)
+            .task {
+                // 开场亮相 1.5s 后交给悬停驱动；触屏端 chromeOpacity 恒为 1，无需计时。
+                guard Self.hoverDriven else { return }
+                try? await Task.sleep(for: .seconds(1.5))
+                withAnimation(.easeOut(duration: 0.4)) { chromeIntro = false }
+            }
+    }
+
+    /// BottomBar 为 EmptyView（足迹/故事详情的无底栏便捷构造）时绝不能装 safeAreaInset：
+    /// 内容解析为空视图的 safeAreaInset 会给主内容提案 0 高并顶对齐（iOS 与 Catalyst 皆然，
+    /// 几何探针实证），操控件全被压成顶部一条——照片仍满屏纯靠 TabView 宿主视图溢出绘制。
+    @ViewBuilder private var pager: some View {
+        if BottomBar.self == EmptyView.self {
+            core
+        } else {
+            core.safeAreaInset(edge: .bottom) { bottomBar(selection) }
+        }
+    }
+
+    private var core: some View {
         ZStack {
             TabView(selection: $selection) {
                 // 页身份绑照片 id：AuthedPhotoView 的 @State 图片缓存跟随视图身份
@@ -49,16 +71,6 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
             navChrome
         }
         .overlay(alignment: .topTrailing) { closeChrome }
-        .safeAreaInset(edge: .bottom) {
-            bottomBar(selection)
-        }
-        .preferredColorScheme(.dark)
-        .task {
-            // 开场亮相 1.5s 后交给悬停驱动；触屏端 chromeOpacity 恒为 1，无需计时。
-            guard Self.hoverDriven else { return }
-            try? await Task.sleep(for: .seconds(1.5))
-            withAnimation(.easeOut(duration: 0.4)) { chromeIntro = false }
-        }
     }
 
     /// 悬停显隐仅在有指针的 Catalyst 端启用；触屏没有 hover，常显是唯一正解。
