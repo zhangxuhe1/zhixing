@@ -30,20 +30,32 @@ struct PhotoWallSection: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .fullScreenCover(item: $browseSession) { session in
-            PhotoWallBrowser(
-                photos: session.photos, startIndex: session.startIndex,
-                onClose: { browseSession = nil },
-                onViewStory: { footprintId in
-                    pendingStoryTarget = StoryTarget(footprintId: footprintId)
+            ZXPhotoBrowser(
+                photoIds: session.photos.map(\.photoId), startIndex: session.startIndex,
+                onClose: { browseSession = nil }
+            ) { index in
+                Button {
+                    guard session.photos.indices.contains(index) else { return }
+                    pendingStoryTarget = StoryTarget(footprintId: session.photos[index].footprintId)
                     browseSession = nil // 先关全屏浏览；sheet 交给下面 onDisappear 接手
-                })
-                .onDisappear {
-                    if let pending = pendingStoryTarget {
-                        pendingStoryTarget = nil
-                        storyTarget = pending
-                    }
+                } label: {
+                    Text("查看故事")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
                 }
-                .appStores()
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                .background(.ultraThinMaterial)
+            }
+            .onDisappear {
+                if let pending = pendingStoryTarget {
+                    pendingStoryTarget = nil
+                    storyTarget = pending
+                }
+            }
+            .appStores()
         }
         .sheet(item: $storyTarget) { target in
             StoryDetailView(footprintId: target.footprintId)
@@ -158,65 +170,5 @@ struct PhotoWallSection: View {
     private struct StoryTarget: Identifiable {
         let footprintId: String
         var id: String { footprintId }
-    }
-}
-
-/// 全屏照片浏览器：TabView 分页；photos 已由外层保证是"跨组拍平"后的服务端原序，本视图不再重排。
-private struct PhotoWallBrowser: View {
-    let photos: [WallPhoto]
-    let onClose: () -> Void
-    let onViewStory: (String) -> Void
-
-    @State private var selection: Int
-
-    init(
-        photos: [WallPhoto], startIndex: Int,
-        onClose: @escaping () -> Void, onViewStory: @escaping (String) -> Void
-    ) {
-        self.photos = photos
-        self.onClose = onClose
-        self.onViewStory = onViewStory
-        _selection = State(initialValue: startIndex)
-    }
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            TabView(selection: $selection) {
-                ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
-                    AuthedPhotoView(photoId: photo.photoId)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                        .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .background(Color.black)
-            .ignoresSafeArea()
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 36, height: 36)
-                    .background(.thinMaterial, in: Circle())
-            }
-            .accessibilityLabel("关闭")
-            .padding()
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                guard photos.indices.contains(selection) else { return }
-                onViewStory(photos[selection].footprintId)
-            } label: {
-                Text("查看故事")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-            .background(.ultraThinMaterial)
-        }
-        .preferredColorScheme(.dark)
     }
 }
