@@ -23,7 +23,9 @@ struct ZXPhotoThumbRow: View {
         let visible = Array(photoIds.prefix(Self.maxVisible))
         let overflowCount = Self.overflow(total: photoIds.count)
         HStack(spacing: 6) {
-            ForEach(Array(visible.enumerated()), id: \.offset) { index, photoId in
+            // 瓦片身份必须绑定照片 id 而非位置：AuthedPhotoView 的 @State 图片缓存跟随视图身份，
+            // 按位置认身份会在照片删除/重排后让存活位置继续显示旧图（旧横滑条按 photo id，语义保持一致）。
+            ForEach(Array(visible.enumerated()), id: \.element) { index, photoId in
                 AuthedPhotoView(photoId: photoId)
                     .frame(width: 72, height: 72)
                     .overlay {
