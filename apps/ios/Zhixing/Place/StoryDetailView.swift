@@ -48,7 +48,9 @@ struct StoryDetailView: View {
                                     .lineSpacing(9)
                                     .textSelection(.enabled)
                         }
-                        ZXPhotoGrid(photoIds: story.photos.map(\.photoId)) { browseStart = BrowseStart(index: $0) }
+                        ZXPhotoGrid(photoIds: story.photos.map(\.photoId)) { index in
+                            zxInstantPresent { browseStart = BrowseStart(index: index) }
+                        }
                         Button { Task { await toggleLike(story) } } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: story.likedByMe ? "heart.fill" : "heart")
@@ -73,7 +75,7 @@ struct StoryDetailView: View {
                 .fullScreenCover(item: $browseStart) { start in
                     ZXPhotoBrowser(
                         photoIds: story.photos.map(\.photoId), startIndex: start.index,
-                        onClose: { browseStart = nil })
+                        onClose: { zxInstantPresent { browseStart = nil } })
                         .appStores()
                 }
             }

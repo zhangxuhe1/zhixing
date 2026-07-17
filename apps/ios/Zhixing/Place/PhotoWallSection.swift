@@ -32,12 +32,12 @@ struct PhotoWallSection: View {
         .fullScreenCover(item: $browseSession) { session in
             ZXPhotoBrowser(
                 photoIds: session.photos.map(\.photoId), startIndex: session.startIndex,
-                onClose: { browseSession = nil }
+                onClose: { zxInstantPresent { browseSession = nil } }
             ) { index in
                 Button {
                     guard session.photos.indices.contains(index) else { return }
                     pendingStoryTarget = StoryTarget(footprintId: session.photos[index].footprintId)
-                    browseSession = nil // 先关全屏浏览；sheet 交给下面 onDisappear 接手
+                    zxInstantPresent { browseSession = nil } // 先关全屏浏览；sheet 交给下面 onDisappear 接手
                 } label: {
                     Text("查看故事")
                         .font(.subheadline.weight(.semibold))
@@ -88,7 +88,7 @@ struct PhotoWallSection: View {
 
     private func photoCell(_ photo: WallPhoto, flatIndex: Int, flat: [WallPhoto]) -> some View {
         Button {
-            browseSession = BrowseSession(photos: flat, startIndex: flatIndex)
+            zxInstantPresent { browseSession = BrowseSession(photos: flat, startIndex: flatIndex) }
         } label: {
             // 方图的尺寸权威必须是外框而非 AuthedPhotoView 自身：其 loaded 分支是 scaledToFill，
             // 对 W×W 提案上报的是覆盖尺寸（如 4:3 图 → 1.33W×W）；直接 .aspectRatio(1,.fit) 只变换

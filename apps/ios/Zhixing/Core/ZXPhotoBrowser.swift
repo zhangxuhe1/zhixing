@@ -202,3 +202,13 @@ extension ZXPhotoBrowser where BottomBar == EmptyView {
         self.init(photoIds: photoIds, startIndex: startIndex, onClose: onClose) { _ in EmptyView() }
     }
 }
+
+/// 看图页的开与关必须无动画瞬切（Preview/Photos 的 Mac 原生惯例，触屏端同样受益）：
+/// fullScreenCover 的滑入/滑出过渡会在照片上方暴露一条封面黑底横带（探针录像实证），
+/// 内容首帧就绪也消不掉——各调用面开合看图页的状态变更一律经此包裹，黑闪整族消失
+///（FootprintDetailTests 契约把关）。
+func zxInstantPresent(_ mutate: () -> Void) {
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction, mutate)
+}

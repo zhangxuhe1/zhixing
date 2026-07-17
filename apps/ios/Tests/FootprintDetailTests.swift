@@ -85,6 +85,25 @@ final class FootprintDetailTests: XCTestCase {
         XCTAssertFalse(browser.contains("withAnimation(.easeInOut(duration: 0.2)) { selection"))
     }
 
+    /// 看图页开合必须无动画瞬切（Preview/Photos 的原生惯例）：fullScreenCover 的滑入/滑出
+    /// 过渡会在照片上方暴露一条封面黑底横带（探针录像实证），内容首帧就绪也消不掉——
+    /// 三个调用面的"开"与"关"一律经 zxInstantPresent 包裹（每个文件至少两处）。
+    func testBrowserPresentationIsInstantEverywhere() throws {
+        let browser = try source("Core/ZXPhotoBrowser.swift")
+        XCTAssertTrue(browser.contains("func zxInstantPresent"))
+        XCTAssertTrue(browser.contains("disablesAnimations = true"))
+
+        for file in [
+            "Footprint/FootprintDetailView.swift",
+            "Place/StoryDetailView.swift",
+            "Place/PhotoWallSection.swift",
+        ] {
+            let callSite = try source(file)
+            let uses = callSite.components(separatedBy: "zxInstantPresent").count - 1
+            XCTAssertGreaterThanOrEqual(uses, 2, "\(file) 开与关都要走 zxInstantPresent")
+        }
+    }
+
     /// 两处列表入口：点行必须推详情（NavigationLink），不得再直弹编辑器；
     /// 左滑删除保留；无障碍提示从"编辑"改为"查看"。
     func testListRowsPushDetailInsteadOfEditor() throws {

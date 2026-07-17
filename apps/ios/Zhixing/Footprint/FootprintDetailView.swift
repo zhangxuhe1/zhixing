@@ -55,7 +55,9 @@ struct FootprintDetailView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    ZXPhotoGrid(photoIds: current.photos.map(\.id)) { browseStart = BrowseStart(index: $0) }
+                    ZXPhotoGrid(photoIds: current.photos.map(\.id)) { index in
+                        zxInstantPresent { browseStart = BrowseStart(index: index) }
+                    }
                 }
                 .frame(maxWidth: 720, alignment: .leading)
                 .padding(.horizontal, 28)
@@ -81,7 +83,7 @@ struct FootprintDetailView: View {
         .fullScreenCover(item: $browseStart) { start in
             ZXPhotoBrowser(
                 photoIds: current.photos.map(\.id), startIndex: start.index,
-                onClose: { browseStart = nil })
+                onClose: { zxInstantPresent { browseStart = nil } })
                 .appStores()
         }
     }
