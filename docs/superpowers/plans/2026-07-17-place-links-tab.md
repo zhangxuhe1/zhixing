@@ -37,7 +37,7 @@
 - 不变：链接行样式（平台胶囊徽章+标题+右上箭头）、打开行为（iOS 应用内 Safari / Catalyst 系统浏览器、仅放行 https）原样保留。
 - 抽屉自身的静默 `loadDetail()` 不动（仍供头部路径文字与卡片详情位置兜底）。
 
-- [ ] **Step 1: 写失败的守卫测试**
+- [x] **Step 1: 写失败的守卫测试**
 
 在 `apps/ios/Tests/InteractionDesignTests.swift` 的 `InteractionDesignTests` 类内、最后一个测试方法之后追加：
 
@@ -65,7 +65,7 @@
     }
 ```
 
-- [ ] **Step 2: 跑单测确认失败**
+- [x] **Step 2: 跑单测确认失败**
 
 ```sh
 cd apps/ios && xcodegen generate
@@ -77,7 +77,7 @@ xcodebuild -project Zhixing.xcodeproj -scheme Zhixing \
 
 Expected: **FAIL**——`XCTUnwrap` 在 `case links = "网友攻略"` 一行抛错（枚举尚无该 case）。应用源码未动，编译必须成功；若编译失败说明测试写坏了，先修。
 
-- [ ] **Step 3: 整文件重写 PlaceLinksSection.swift**
+- [x] **Step 3: 整文件重写 PlaceLinksSection.swift**
 
 `apps/ios/Zhixing/Place/PlaceLinksSection.swift` 全文替换为：
 
@@ -186,7 +186,7 @@ private struct SafariView: UIViewControllerRepresentable {
 
 （链接行 Button、`open(_:)`、SafariItem/SafariView 与现文件逐字相同，只有外层从"接数组的 VStack 区块"换成"LoadStateView + ScrollView 的自足式 tab"。）
 
-- [ ] **Step 4: 改 PlaceDrawer.swift（三处）**
+- [x] **Step 4: 改 PlaceDrawer.swift（三处）**
 
 ① 枚举（原 14-19 行）：
 
@@ -242,7 +242,7 @@ private struct SafariView: UIViewControllerRepresentable {
 
 删除后 `ForEach(cards) { ... }` 的收尾直接接 `}`、`.padding(.horizontal, 16)`。`placeDetail` 仍被头部路径文字与 `drawerLocationText` 使用，静默 `loadDetail()` 一字不动。
 
-- [ ] **Step 5: 更新 Models.swift 两行过时注释**
+- [x] **Step 5: 更新 Models.swift 两行过时注释**
 
 `apps/ios/Zhixing/Core/Models.swift` 第 19 行：
 
@@ -268,11 +268,11 @@ private struct SafariView: UIViewControllerRepresentable {
     /// 旧服务端/缓存无此字段,可选容错;网友攻略分栏自行请求本接口,空数组与 nil 都进空态。
 ```
 
-- [ ] **Step 6: 跑单测确认通过**
+- [x] **Step 6: 跑单测确认通过**
 
 与 Step 2 相同命令。Expected: **PASS**（`Test Case ... passed`）。
 
-- [ ] **Step 7: 全量 iOS 回归**
+- [x] **Step 7: 全量 iOS 回归**
 
 ```sh
 cd ../.. && scripts/ios-test.sh
@@ -280,7 +280,7 @@ cd ../.. && scripts/ios-test.sh
 
 Expected: 全部测试通过（`** TEST SUCCEEDED **`）。重点关注 `InteractionDesignTests`（其余既有用例断言的 PlaceDrawer 片段——`requestComposeFootprint` 等——本次未动）与 `ModelsTests`（`PlaceDetail` 字段未动，应无波动）。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```sh
 git add apps/ios/Zhixing/Place/PlaceLinksSection.swift apps/ios/Zhixing/Place/PlaceDrawer.swift apps/ios/Zhixing/Core/Models.swift apps/ios/Tests/InteractionDesignTests.swift
