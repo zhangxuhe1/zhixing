@@ -381,3 +381,38 @@ scripts/mac-dev.sh
 git status --short   # 预期无未提交改动
 git log --oneline -4 # 预期 Task 1-3 三个 feat(ios) 提交在列
 ```
+
+---
+
+### Task 5(追加): 全屏浏览器操控件——左右切换、高对比关闭钮、Mac 悬停显隐
+
+用户 Mac 端自测反馈追加(spec 同日追记节)。改动集中在 `Core/ZXPhotoBrowser.swift`,三处调用点零改动。
+
+**Files:**
+- Modify: `apps/ios/Zhixing/Core/ZXPhotoBrowser.swift`
+- Modify: `apps/ios/Tests/FootprintDetailTests.swift`(追加 1 条用例)
+
+- [ ] **Step 1: 追加失败测试**(FootprintDetailTests 类内)
+
+```swift
+    /// 浏览器操控件契约(spec 追记):左右切换钮 + 首末页隐藏 + 统一高对比样式
+    ///(thinMaterial 不得回潮)+ 悬停显隐仅限 Catalyst。
+    func testBrowserKeepsNavCloseAndHoverChrome() throws {
+        let browser = try source("Core/ZXPhotoBrowser.swift")
+
+        XCTAssertTrue(browser.contains("chevron.left"))
+        XCTAssertTrue(browser.contains("chevron.right"))
+        XCTAssertTrue(browser.contains("上一张"))
+        XCTAssertTrue(browser.contains("下一张"))
+        XCTAssertTrue(browser.contains("selection > 0"))
+        XCTAssertTrue(browser.contains("selection < photoIds.count - 1"))
+        XCTAssertTrue(browser.contains("targetEnvironment(macCatalyst)"))
+        XCTAssertTrue(browser.contains(".onHover"))
+        XCTAssertFalse(browser.contains(".thinMaterial"))
+    }
+```
+
+- [ ] **Step 2: 跑 FootprintDetailTests 确认新用例红**
+- [ ] **Step 3: 改造 ZXPhotoBrowser**(统一 chromeButton 工厂;Catalyst 热区 + 开场亮相 + onHover 淡入淡出;触屏常显;首末页条件渲染;点按 withAnimation 翻页)
+- [ ] **Step 4: 跑 FootprintDetailTests + PhotoGridTests 全绿,再 scripts/ios-test.sh 全量**
+- [ ] **Step 5: 提交** `feat(ios): 全屏照片浏览器补左右切换与 Mac 悬停显隐操控件`
