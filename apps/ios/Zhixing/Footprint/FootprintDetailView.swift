@@ -55,16 +55,7 @@ struct FootprintDetailView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    // 身份绑照片 id（AuthedPhotoView @State 缓存跟随视图身份，同 ZXPhotoThumbRow 护栏）。
-                    ForEach(Array(current.photos.enumerated()), id: \.element.id) { index, photo in
-                        Button { browseStart = BrowseStart(index: index) } label: {
-                            AuthedPhotoView(photoId: photo.id)
-                                .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("第 \(index + 1) 张照片，共 \(current.photos.count) 张，点按全屏查看")
-                    }
+                    ZXPhotoGrid(photoIds: current.photos.map(\.id)) { browseStart = BrowseStart(index: $0) }
                 }
                 .frame(maxWidth: 720, alignment: .leading)
                 .padding(.horizontal, 28)

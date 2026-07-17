@@ -32,4 +32,12 @@ final class PhotoGridTests: XCTestCase {
         XCTAssertFalse(component.contains("足迹"))
         XCTAssertFalse(component.contains("故事"))
     }
+
+    /// 足迹详情必须用共用宫格，整宽横幅写法（minHeight: 220）不得回潮。
+    func testFootprintDetailUsesGridInsteadOfBanner() throws {
+        let detail = try source("Footprint/FootprintDetailView.swift")
+
+        XCTAssertTrue(detail.contains("ZXPhotoGrid(photoIds: current.photos.map(\\.id))"))
+        XCTAssertFalse(detail.contains("minHeight: 220"))
+    }
 }
