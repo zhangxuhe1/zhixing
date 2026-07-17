@@ -42,4 +42,16 @@ final class PhotoMemoryCacheTests: XCTestCase {
         XCTAssertTrue(source.contains("downsampledImage"))
         XCTAssertFalse(source.contains("UIImage(data: data)"))
     }
+
+    /// 契约:看图页 loader 同样必须查/写全局缓存(命中零网络、解码反哺)。
+    func testBrowserLoaderConsultsCache() throws {
+        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let source = try String(
+            contentsOf: testsDirectory.deletingLastPathComponent()
+                .appendingPathComponent("Zhixing/Core/ZXBrowserPhotoLoader.swift"),
+            encoding: .utf8)
+
+        XCTAssertTrue(source.contains("ZXPhotoMemoryCache.shared.image(for:"))
+        XCTAssertTrue(source.contains("ZXPhotoMemoryCache.shared.insert("))
+    }
 }

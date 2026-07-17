@@ -4,6 +4,12 @@ import XCTest
 /// 看图页邻页预载加载器(spec:2026-07-17-photo-browser-preload-design.md):
 /// 窗口纯函数、只拉窗口内缺失项、在途去重、窗口滑动淘汰、失败进 failed、retry 重拉。
 final class BrowserPhotoLoaderTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // loader 会查/写全局缓存,逐用例清空保证隔离
+        ZXPhotoMemoryCache.shared.removeAll()
+    }
+
     /// 记录 fetch 调用的线程安全日志;可按 id 定制失败。
     private actor FetchLog {
         private(set) var ids: [String] = []
@@ -95,6 +101,23 @@ final class BrowserPhotoLoaderTests: XCTestCase {
         loader.retry("p1")
         await waitUntil("retry 后恢复") { loader.images["p1"] != nil }
         XCTAssertFalse(loader.failed.contains("p1"))
+    }
+
+    /// 全局缓存命中必须零网络短路(宫格看过的照片点开全屏即现,首开黑闪的根治路径)。
+    @MainActor
+    func testCacheHitShortCircuitsFetch() async {
+        let log = FetchLog()
+        let cachedImage = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
+            .image { ctx in
+                UIColor.blue.setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+            }
+        for id in ["p0", "p1", "p2"] { ZXPhotoMemoryCache.shared.insert(cachedImage, for: id) }
+        let loader = makeLoader(count: 3, log: log)
+        loader.focus(0)
+        await waitUntil("缓存命中就位") { loader.images.count == 3 }
+        let fetched = await log.ids
+        XCTAssertTrue(fetched.isEmpty) // 全命中 → 零网络
     }
 
     @MainActor

@@ -55,8 +55,14 @@ final class ZXBrowserPhotoLoader {
 
     private func load(_ photoId: String) {
         guard images[photoId] == nil, inflight[photoId] == nil, !failed.contains(photoId) else { return }
+        // 全局缓存命中零网络短路:宫格看过的照片点开全屏即现(首开黑闪的根治路径)
+        if let cached = ZXPhotoMemoryCache.shared.image(for: photoId) {
+            images[photoId] = cached
+            return
+        }
         let fetch = self.fetch
-        let maxPixelSize = maxPixelSizeOverride > 0 ? maxPixelSizeOverride : Self.screenMaxPixelSize()
+        let maxPixelSize = maxPixelSizeOverride > 0
+            ? maxPixelSizeOverride : ZXPhotoMemoryCache.displayMaxPixelSize()
         inflight[photoId] = Task {
             var image: UIImage?
             do {
@@ -73,6 +79,8 @@ final class ZXBrowserPhotoLoader {
             guard !Task.isCancelled else { return }
             if let image {
                 images[photoId] = image
+                // 反哺全局缓存:预载的邻页让宫格与下次打开也直接命中
+                ZXPhotoMemoryCache.shared.insert(image, for: photoId)
             } else {
                 failed.insert(photoId)
             }
@@ -87,10 +95,4 @@ final class ZXBrowserPhotoLoader {
         return data
     }
 
-    /// 解码目标:主屏长边×scale,夹在 [2048, 4096]——上限防 5K 全屏内存失控,下限保常规窗口清晰。
-    private static func screenMaxPixelSize() -> CGFloat {
-        let bounds = UIScreen.main.bounds
-        let longest = max(bounds.width, bounds.height) * UIScreen.main.scale
-        return min(max(longest, 2048), 4096)
-    }
 }
