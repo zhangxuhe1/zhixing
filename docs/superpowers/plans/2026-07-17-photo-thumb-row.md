@@ -28,7 +28,7 @@
 - Consumes: `AuthedPhotoView(photoId: String)`（已存在，`Footprint/AuthedPhotoView.swift`：loaded 分支 `scaledToFill`，依赖外部 frame+clip 约束尺寸；失败态自带重试按钮）。
 - Produces（Task 2 依赖）: `struct ZXPhotoThumbRow: View`，初始化 `ZXPhotoThumbRow(photoIds: [String])`；`ZXPhotoThumbRow.maxVisible: Int`（= 4）；`ZXPhotoThumbRow.overflow(total: Int) -> Int?`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `apps/ios/Tests/PhotoThumbRowTests.swift`，完整内容：
 
@@ -69,12 +69,12 @@ final class PhotoThumbRowTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `scripts/ios-test.sh`
 Expected: **编译失败**，报 `cannot find 'ZXPhotoThumbRow' in scope`（组件尚不存在，属预期的红灯）。
 
-- [ ] **Step 3: 写组件实现**
+- [x] **Step 3: 写组件实现**
 
 新建 `apps/ios/Zhixing/Core/ZXPhotoThumbRow.swift`，完整内容：
 
@@ -125,12 +125,12 @@ struct ZXPhotoThumbRow: View {
 
 注意 `.overlay` 在 `.clipShape` 之前：遮罩与 `scaledToFill` 的出血一起被圆角裁掉。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `scripts/ios-test.sh`
 Expected: `** TEST SUCCEEDED **`，新增 3 条用例全绿，既有用例不受影响。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/ios/Zhixing/Core/ZXPhotoThumbRow.swift apps/ios/Tests/PhotoThumbRowTests.swift
@@ -150,7 +150,7 @@ git commit -m "feat(ios): 新增宫格封顶 +N 缩略行组件 ZXPhotoThumbRow"
 - Consumes: Task 1 的 `ZXPhotoThumbRow(photoIds: [String])`；`Footprint.photos: [FootprintPhotoMeta]` 与 `Story.photos: [StoryPhoto]`（两者元素均有 `id: String`，`StoryPhoto.id` 是 `photoId` 的计算属性——`.map(\.id)` 对两者都成立）。
 - Produces: 无新接口；两个列表行的照片区从此只经 `ZXPhotoThumbRow` 渲染。
 
-- [ ] **Step 1: 追加失败测试**
+- [x] **Step 1: 追加失败测试**
 
 在 `PhotoThumbRowTests` 类末尾（`testComponentKeepsTileSpecAndAccessibility` 之后）追加：
 
@@ -167,12 +167,12 @@ git commit -m "feat(ios): 新增宫格封顶 +N 缩略行组件 ZXPhotoThumbRow"
     }
 ```
 
-- [ ] **Step 2: 跑测试确认新用例失败**
+- [x] **Step 2: 跑测试确认新用例失败**
 
 Run: `scripts/ios-test.sh`
 Expected: 仅 `testListRowsUseThumbRowInsteadOfHorizontalStrip` 失败（两处仍是横滑条），其余全绿。
 
-- [ ] **Step 3: 替换 MeScreen 的照片条**
+- [x] **Step 3: 替换 MeScreen 的照片条**
 
 `apps/ios/Zhixing/Me/MeScreen.swift` 中 `FootprintRow.body` 里，把这一块：
 
@@ -198,7 +198,7 @@ Expected: 仅 `testListRowsUseThumbRowInsteadOfHorizontalStrip` 失败（两处�
             }
 ```
 
-- [ ] **Step 4: 替换 StoriesSection 的照片条**
+- [x] **Step 4: 替换 StoriesSection 的照片条**
 
 `apps/ios/Zhixing/Place/StoriesSection.swift` 故事行里，把这一块：
 
@@ -224,12 +224,12 @@ Expected: 仅 `testListRowsUseThumbRowInsteadOfHorizontalStrip` 失败（两处�
             }
 ```
 
-- [ ] **Step 5: 跑测试确认全绿**
+- [x] **Step 5: 跑测试确认全绿**
 
 Run: `scripts/ios-test.sh`
 Expected: `** TEST SUCCEEDED **`，含新增 4 条用例在内全量通过。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/ios/Zhixing/Me/MeScreen.swift apps/ios/Zhixing/Place/StoriesSection.swift apps/ios/Tests/PhotoThumbRowTests.swift
@@ -242,7 +242,7 @@ git commit -m "feat(ios): 最近足迹与旅人故事照片条换用宫格封顶
 
 **Files:** 无代码改动；纯人工验证。
 
-- [ ] **Step 1: 起后端与模拟器跑真实数据走查**
+- [x] **Step 1: 起后端与模拟器跑真实数据走查**
 
 依次确认（用户库里已有"香港 12 张模拟照片"的测试足迹）：
 1. 「我的知行 → 最近足迹」：12 张的足迹显示 4 格，第 4 格遮罩「+8」；2 张的足迹（爨底下村）显示 2 格无遮罩。
