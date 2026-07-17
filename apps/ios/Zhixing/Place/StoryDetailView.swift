@@ -9,6 +9,7 @@ struct StoryDetailView: View {
     @State private var isLiking = false
     @State private var likeError: String?
     @State private var likeErrorToken = 0
+    @State private var browseStart: BrowseStart?
 
     init(story: Story) {
         footprintId = story.footprintId
@@ -47,11 +48,7 @@ struct StoryDetailView: View {
                                     .lineSpacing(9)
                                     .textSelection(.enabled)
                         }
-                        ForEach(story.photos) { photo in
-                            AuthedPhotoView(photoId: photo.id)
-                                .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
-                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        }
+                        ZXPhotoGrid(photoIds: story.photos.map(\.photoId)) { browseStart = BrowseStart(index: $0) }
                         Button { Task { await toggleLike(story) } } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: story.likedByMe ? "heart.fill" : "heart")
@@ -72,6 +69,12 @@ struct StoryDetailView: View {
                         .padding(.vertical, 28)
                         .frame(maxWidth: .infinity)
                     }
+                }
+                .fullScreenCover(item: $browseStart) { start in
+                    ZXPhotoBrowser(
+                        photoIds: story.photos.map(\.photoId), startIndex: start.index,
+                        onClose: { browseStart = nil })
+                        .appStores()
                 }
             }
             .navigationTitle("旅人故事")
@@ -130,5 +133,12 @@ struct StoryDetailView: View {
                 if likeErrorToken == token { likeError = nil }
             }
         }
+    }
+
+    /// 全屏浏览起点：下标装箱成 Identifiable 供 .fullScreenCover(item:) 使用
+    ///（同 FootprintDetailView.BrowseStart）。
+    private struct BrowseStart: Identifiable {
+        let index: Int
+        var id: Int { index }
     }
 }

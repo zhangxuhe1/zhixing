@@ -40,4 +40,16 @@ final class PhotoGridTests: XCTestCase {
         XCTAssertTrue(detail.contains("ZXPhotoGrid(photoIds: current.photos.map(\\.id))"))
         XCTAssertFalse(detail.contains("minHeight: 220"))
     }
+
+    /// 公开故事详情：宫格 + 点图全屏（fullScreenCover + appStores 惯例——Catalyst modal
+    /// 宿主不继承环境），整宽横幅不得回潮。
+    func testStoryDetailUsesGridAndFullScreenBrowser() throws {
+        let story = try source("Place/StoryDetailView.swift")
+
+        XCTAssertTrue(story.contains("ZXPhotoGrid(photoIds: story.photos.map(\\.photoId))"))
+        XCTAssertTrue(story.contains("ZXPhotoBrowser("))
+        XCTAssertTrue(story.contains(".fullScreenCover"))
+        XCTAssertTrue(story.contains(".appStores()"))
+        XCTAssertFalse(story.contains("minHeight: 220"))
+    }
 }
