@@ -19,6 +19,8 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
     @State private var hoverPrev = false
     @State private var hoverNext = false
     @State private var hoverClose = false
+    // 邻页预载加载器:随看图页生命周期,关闭即整体释放(内存缓存不落盘)
+    @State private var loader: ZXBrowserPhotoLoader
 
     init(
         photoIds: [String], startIndex: Int, onClose: @escaping () -> Void,
@@ -28,6 +30,7 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
         self.onClose = onClose
         self.bottomBar = bottomBar
         _selection = State(initialValue: startIndex)
+        _loader = State(initialValue: ZXBrowserPhotoLoader(photoIds: photoIds))
     }
 
     var body: some View {
@@ -39,6 +42,8 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
                 try? await Task.sleep(for: .seconds(1.5))
                 withAnimation(.easeOut(duration: 0.4)) { chromeIntro = false }
             }
+            .task { loader.focus(selection) }
+            .onChange(of: selection) { loader.focus(selection) }
     }
 
     /// BottomBar 为 EmptyView（足迹/故事详情的无底栏便捷构造）时绝不能装 safeAreaInset：
@@ -55,15 +60,14 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
     private var core: some View {
         ZStack {
             TabView(selection: $selection) {
-                // 页身份绑照片 id：AuthedPhotoView 的 @State 图片缓存跟随视图身份
-                //（同 ZXPhotoThumbRow 的护栏理由）；photoIds 在浏览会话内不变，tag 用下标翻页。
-                // 页尺寸权威必须是 Color.clear（按页提案上报）而非照片自身：loaded 分支是
-                // scaledToFill，会上报覆盖尺寸，而 maxi frame 取 max(子, 提案)——宽照片的页
-                // 会超出分页视口、溢出压进邻页，出现"一屏各显示两张图一部分"（探针实证）；
+                // 页身份绑照片 id（tag 用下标翻页）；photoIds 在浏览会话内不变。
+                // 页尺寸权威必须是 Color.clear（按页提案上报）而非照片自身：pagePhoto 已载
+                // 分支是 scaledToFill，会上报覆盖尺寸，而 maxi frame 取 max(子, 提案)——宽照片
+                // 的页会超出分页视口、溢出压进邻页，出现"一屏各显示两张图一部分"（探针实证）；
                 // 同 PhotoWallSection.photoCell 的结论。
                 ForEach(Array(photoIds.enumerated()), id: \.element) { index, photoId in
                     Color.clear
-                        .overlay { AuthedPhotoView(photoId: photoId) }
+                        .overlay { pagePhoto(photoId) }
                         .clipped()
                         .tag(index)
                 }
@@ -75,6 +79,23 @@ struct ZXPhotoBrowser<BottomBar: View>: View {
             navChrome
         }
         .overlay(alignment: .topTrailing) { closeChrome }
+    }
+
+    /// 页照片三态：已载（loader 预解码，翻页即"图换图"）/ 在途占位 / 失败可重试。
+    /// 占位与失败样式沿用私密照片视图的既有语言，但数据一律走 loader——
+    /// 绕开 loader 直连旧照片视图会退回"翻到才加载"的空窗（契约测试把关）。
+    @ViewBuilder private func pagePhoto(_ photoId: String) -> some View {
+        if let image = loader.images[photoId] {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else if loader.failed.contains(photoId) {
+            Button { loader.retry(photoId) } label: {
+                Rectangle().fill(.quaternary)
+                    .overlay(Image(systemName: "arrow.clockwise").foregroundStyle(.secondary))
+            }
+            .buttonStyle(.plain)
+        } else {
+            Rectangle().fill(.quaternary).overlay(ProgressView().controlSize(.small))
+        }
     }
 
     /// 悬停显隐仅在有指针的 Catalyst 端启用；触屏没有 hover，常显是唯一正解。
