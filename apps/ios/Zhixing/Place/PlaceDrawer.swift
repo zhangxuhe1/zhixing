@@ -11,9 +11,10 @@ struct PlaceDrawer: View {
     @State private var section: DrawerSection = .cards
     @State private var placeDetail: PlaceDetail?
 
-    /// 三段式 tab：风物卡（M1 落地）/ 旅人故事（I4）/ 旅人镜头（本任务，I5）。
+    /// 四段式 tab：风物卡（M1 落地）/ 网友攻略（原风物卡底部区块升级）/ 旅人故事（I4）/ 旅人镜头（I5）。
     private enum DrawerSection: String, CaseIterable, Hashable {
         case cards = "风物卡"
+        case links = "网友攻略"
         case stories = "旅人故事"
         case photos = "旅人镜头"
     }
@@ -111,6 +112,8 @@ struct PlaceDrawer: View {
         switch section {
         case .cards:
             cardsContent
+        case .links:
+            PlaceLinksSection(placeId: pin.id)
         case .stories:
             StoriesSection(placeId: pin.id, onComposeFootprint: requestComposeFootprint)
         case .photos:
@@ -162,10 +165,6 @@ struct PlaceDrawer: View {
                         .zxSurface(radius: 17, padding: 16)
                     }
                     .buttonStyle(.plain)
-                }
-                if let links = placeDetail?.links, !links.isEmpty {
-                    PlaceLinksSection(links: links)
-                        .padding(.top, 6)
                 }
                 }
                 .padding(.horizontal, 16)

@@ -62,4 +62,26 @@ final class InteractionDesignTests: XCTestCase {
         XCTAssertTrue(drawer.contains("private func requestComposeFootprint()"))
         XCTAssertTrue(drawer.contains("onComposeFootprint()"))
     }
+
+    func testPlaceLinksIsAStandaloneDrawerSection() throws {
+        let drawer = try source("Place/PlaceDrawer.swift")
+        let links = try source("Place/PlaceLinksSection.swift")
+
+        // 四段分栏,网友攻略紧随风物卡之后
+        let cards = try XCTUnwrap(drawer.range(of: "case cards = \"风物卡\""))
+        let guides = try XCTUnwrap(drawer.range(of: "case links = \"网友攻略\""))
+        let stories = try XCTUnwrap(drawer.range(of: "case stories = \"旅人故事\""))
+        XCTAssertTrue(cards.lowerBound < guides.lowerBound)
+        XCTAssertTrue(guides.lowerBound < stories.lowerBound)
+
+        // 抽屉以 placeId 装配自足式分栏;风物卡列表不再拼接链接区块
+        XCTAssertTrue(drawer.contains("PlaceLinksSection(placeId: pin.id)"))
+        XCTAssertFalse(drawer.contains("PlaceLinksSection(links:"))
+
+        // 自足式加载:失败可见可重试(LoadStateView),空态与失败分离
+        XCTAssertTrue(links.contains("LoadState<[PlaceLink]>"))
+        XCTAssertTrue(links.contains("LoadStateView(state: state, retry:"))
+        XCTAssertTrue(links.contains("ZXSectionEmptyState"))
+        XCTAssertTrue(links.contains("攻略还在收集中"))
+    }
 }

@@ -16,14 +16,14 @@ struct PlaceAncestor: Codable, Hashable {
     let level: String
 }
 
-/// `GET /places/:id` 的地点详情:抽屉头部路径与后续攻略区共用。
+/// `GET /places/:id` 的地点详情:抽屉头部路径与网友攻略分栏共用。
 struct PlaceDetail: Codable {
     let id: String
     let name: String
     let level: String
     let intro: String?
     let ancestors: [PlaceAncestor]
-    /// 旧服务端/缓存无此字段,可选容错;空数组与 nil 均不渲染攻略区。
+    /// 旧服务端/缓存无此字段,可选容错;网友攻略分栏自行请求本接口,空数组与 nil 都进空态。
     let links: [PlaceLink]?
 
     /// 从远到近的位置路径:"山东省 · 济南市";链顶(无祖先)为 nil,不渲染。
