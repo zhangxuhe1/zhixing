@@ -26,4 +26,17 @@ final class FootprintDetailTests: XCTestCase {
         XCTAssertTrue(browser.contains("id: \\.element"))
         XCTAssertFalse(browser.contains("id: \\.offset"))
     }
+
+    /// 详情页契约：编辑入口在工具栏、照片可全屏浏览、公开足迹显示获赞/浏览统计、
+    /// 编辑弹层内删除后等弹层收起再退栈（串行接手，同 PhotoWallSection 惯例）、modal 挂 appStores。
+    func testDetailKeepsEditEntryBrowserAndStats() throws {
+        let detail = try source("Footprint/FootprintDetailView.swift")
+
+        XCTAssertTrue(detail.contains("FootprintEditor(footprint:"))
+        XCTAssertTrue(detail.contains("ZXPhotoBrowser("))
+        XCTAssertTrue(detail.contains(".fullScreenCover"))
+        XCTAssertTrue(detail.contains("获赞") && detail.contains("浏览"))
+        XCTAssertTrue(detail.contains(".onDisappear"))
+        XCTAssertTrue(detail.contains(".appStores()"))
+    }
 }
