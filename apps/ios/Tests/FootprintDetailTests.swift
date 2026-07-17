@@ -39,4 +39,19 @@ final class FootprintDetailTests: XCTestCase {
         XCTAssertTrue(detail.contains(".onDisappear"))
         XCTAssertTrue(detail.contains(".appStores()"))
     }
+
+    /// 两处列表入口：点行必须推详情（NavigationLink），不得再直弹编辑器；
+    /// 左滑删除保留；无障碍提示从"编辑"改为"查看"。
+    func testListRowsPushDetailInsteadOfEditor() throws {
+        let me = try source("Me/MeScreen.swift")
+        let myMap = try source("Me/MyMapScreen.swift")
+
+        XCTAssertTrue(me.contains("NavigationLink { FootprintDetailView(footprint:"))
+        XCTAssertTrue(myMap.contains("NavigationLink { FootprintDetailView(footprint:"))
+        XCTAssertFalse(me.contains("FootprintEditor"))
+        XCTAssertFalse(myMap.contains("FootprintEditor"))
+        XCTAssertTrue(me.contains(".onDelete"))
+        XCTAssertTrue(myMap.contains("查看这段足迹"))
+        XCTAssertFalse(myMap.contains("编辑这段足迹"))
+    }
 }

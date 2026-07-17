@@ -4,7 +4,6 @@ struct MeScreen: View {
     @Environment(SessionStore.self) private var session
     @Environment(FootprintStore.self) private var store
     @State private var showImport = false
-    @State private var editingFootprint: Footprint?
     @State private var deleteError: String?
 
     var body: some View {
@@ -45,10 +44,9 @@ struct MeScreen: View {
                             .listRowBackground(Color.clear)
                     }
                     ForEach(store.footprints) { fp in
-                        Button { editingFootprint = fp } label: {
+                        NavigationLink { FootprintDetailView(footprint: fp) } label: {
                             FootprintRow(footprint: fp)
                         }
-                        .buttonStyle(.plain)
                     }
                     .onDelete { indexSet in
                         let targets = indexSet.map { store.footprints[$0] } // 删除前按索引快照，避免边删边移位
@@ -89,7 +87,6 @@ struct MeScreen: View {
             #if !targetEnvironment(macCatalyst)
             .sheet(isPresented: $showImport) { AlbumImportScreen().appStores() }
             #endif
-            .sheet(item: $editingFootprint) { fp in FootprintEditor(footprint: fp).appStores() }
             .task { await store.load() }
             .alert(
                 "删除失败", isPresented: Binding(

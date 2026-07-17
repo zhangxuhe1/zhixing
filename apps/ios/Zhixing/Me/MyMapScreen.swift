@@ -189,7 +189,6 @@ private struct FootprintPlaceSheet: View {
     let pin: Pin
     @Environment(\.dismiss) private var dismiss
     @Environment(FootprintStore.self) private var store
-    @State private var editingFootprint: Footprint?
 
     private var footprints: [Footprint] {
         store.footprints.filter { $0.placeId == pin.id }
@@ -217,11 +216,10 @@ private struct FootprintPlaceSheet: View {
 
                 Section("足迹") {
                     ForEach(footprints) { footprint in
-                        Button { editingFootprint = footprint } label: {
+                        NavigationLink { FootprintDetailView(footprint: footprint) } label: {
                             FootprintRow(footprint: footprint)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("编辑这段足迹")
+                        .accessibilityHint("查看这段足迹")
                     }
                 }
             }
@@ -233,9 +231,6 @@ private struct FootprintPlaceSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
                 }
-            }
-            .sheet(item: $editingFootprint) { footprint in
-                FootprintEditor(footprint: footprint).appStores()
             }
         }
     }
