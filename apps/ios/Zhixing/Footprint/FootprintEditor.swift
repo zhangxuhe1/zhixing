@@ -9,23 +9,57 @@ enum PublicityConfirmationCopy {
 
 /// 从 MeScreen 行点击进入：编辑文字/日期/公开开关。
 /// PATCH 请求体只携带真正发生变更的字段——尤其 visibility：开关没动就绝不回传（服务端行为地雷，见 FootprintStore.update）。
+/// Catalyst 下全部表单状态提升为 Binding（Composer 先例）：选图舞步会关闭本 sheet，
+/// @State 留在 sheet 内就会随视图销毁丢草稿——状态由 FootprintDetailView 持有并注入。
 struct FootprintEditor: View {
     let footprint: Footprint
     @Environment(\.dismiss) private var dismiss
     @Environment(FootprintStore.self) private var store
 
+    #if targetEnvironment(macCatalyst)
+    @Binding private var text: String
+    @Binding private var date: Date
+    @Binding private var isPublic: Bool
+    @Binding private var errorMessage: String?
+    /// 照片分区的事务式草稿：编辑期间所有增删排只落草稿，保存时按差量分段提交（spec §4）。
+    @Binding private var draft: FootprintPhotoDraft
+    /// 点"+"发起选图舞步（detail 侧关 sheet→开全窗图库→收起重开）；Int 为当前剩余可加张数。
+    private let onChoosePhotos: (Int) -> Void
+    /// 悬停中的照片格 id：✕ 删除角标仅悬停显现（Mac 原生惯例）。
+    @State private var hoveredPhotoId: String?
+    #else
     @State private var text: String
     @State private var date: Date
     @State private var isPublic: Bool
-    @State private var saving = false
     @State private var errorMessage: String?
-    @State private var pendingConfirmation: PendingConfirmation?
     /// 照片分区的事务式草稿：编辑期间所有增删排只落草稿，保存时按差量分段提交（spec §4）。
     @State private var draft: FootprintPhotoDraft
     @State private var pickerItems: [PhotosPickerItem] = []
+    #endif
+    @State private var saving = false
+    @State private var pendingConfirmation: PendingConfirmation?
     /// 保存后有坏图被跳过时的点名文案（镜像 Composer：非 nil 弹「部分照片未能上传」，点「好」才 dismiss）。
     @State private var skipSummary: String?
 
+    #if targetEnvironment(macCatalyst)
+    init(
+        footprint: Footprint,
+        text: Binding<String>,
+        date: Binding<Date>,
+        isPublic: Binding<Bool>,
+        draft: Binding<FootprintPhotoDraft>,
+        error: Binding<String?>,
+        onChoosePhotos: @escaping (Int) -> Void
+    ) {
+        self.footprint = footprint
+        _text = text
+        _date = date
+        _isPublic = isPublic
+        _draft = draft
+        _errorMessage = error
+        self.onChoosePhotos = onChoosePhotos
+    }
+    #else
     init(footprint: Footprint) {
         self.footprint = footprint
         _text = State(initialValue: footprint.text ?? "")
@@ -33,6 +67,7 @@ struct FootprintEditor: View {
         _isPublic = State(initialValue: footprint.visibility == "PUBLIC")
         _draft = State(initialValue: FootprintPhotoDraft(original: footprint.photos))
     }
+    #endif
 
     private enum PendingConfirmation: Identifiable, Equatable {
         case makePublic
@@ -166,6 +201,8 @@ struct FootprintEditor: View {
         } message: { message in
             Text(message)
         }
+        // Catalyst 下选图结果的装载在 FootprintDetailView 侧（sheet 关闭期间 picker 返回也要能装上）。
+        #if !targetEnvironment(macCatalyst)
         .onChange(of: pickerItems) { _, newItems in
             guard !newItems.isEmpty else { return }
             Task {
@@ -183,6 +220,7 @@ struct FootprintEditor: View {
                 }
             }
         }
+        #endif
     }
 
     /// 保存按钮启用条件：字段 diff 或照片草稿任一有变更。
@@ -287,7 +325,23 @@ struct FootprintEditor: View {
             .overlay(alignment: .bottomTrailing) {
                 if case .local = entry { pendingUploadBadge }
             }
-            .overlay(alignment: .topTrailing) { removeBadge(id: entry.id) }
+            .overlay(alignment: .topTrailing) {
+                // Catalyst：✕ 角标悬停显现（Mac 原生惯例，右键 contextMenu 兜底）；iOS 常显。
+                #if targetEnvironment(macCatalyst)
+                if hoveredPhotoId == entry.id { removeBadge(id: entry.id) }
+                #else
+                removeBadge(id: entry.id)
+                #endif
+            }
+            #if targetEnvironment(macCatalyst)
+            .onHover { hovering in
+                if hovering {
+                    hoveredPhotoId = entry.id
+                } else if hoveredPhotoId == entry.id {
+                    hoveredPhotoId = nil
+                }
+            }
+            #endif
             .contextMenu {
                 Button("设为封面") { draft.moveToFront(id: entry.id) }
                 Button("删除", role: .destructive) { draft.remove(id: entry.id) }
@@ -331,7 +385,7 @@ struct FootprintEditor: View {
             .padding(4)
     }
 
-    /// 右上 ✕ 删除角标：本任务两端常显；Catalyst 悬停显隐在 Task 8 收窄。
+    /// 右上 ✕ 删除角标：iOS 常显；Catalyst 由 photoCell 的 .onHover 控制显隐。
     private func removeBadge(id: String) -> some View {
         Button {
             draft.remove(id: id)
@@ -361,9 +415,15 @@ struct FootprintEditor: View {
         .buttonStyle(.plain)
         .accessibilityLabel("添加照片")
         #else
-        // Catalyst 的系统图库必须从窗口根层呈现（Composer 先例），Task 8 接 onChoosePhotos；
-        // 本任务先渲染不可点的占位，避免 Catalyst 上出现按了没反应的死按钮假象。
-        PhotoAddCellLabel().opacity(0.4)
+        // Catalyst 的系统图库必须从窗口根层呈现（Composer 先例）：点"+"只回调 onChoosePhotos，
+        // 由 FootprintDetailView 记录 limit、关本 sheet、开全窗图库、收起后重开编辑器。
+        Button {
+            onChoosePhotos(draft.remainingQuota)
+        } label: {
+            PhotoAddCellLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("添加照片")
         #endif
     }
 }

@@ -39,4 +39,17 @@ final class FootprintEditorPhotoTests: XCTestCase {
         XCTAssertTrue(editor.contains(".disabled(saving)"))
         XCTAssertTrue(editor.contains("guard !saving"))
     }
+
+    /// Catalyst 选图舞步(Task 8):系统图库必须从详情页根层呈现(.presentation 全窗样式,
+    /// MapScreen↔Composer 先例),选张上限用提升到 detail 侧的 editorPickerLimit;
+    /// 编辑器侧 Catalyst 分支通过 onChoosePhotos 回调发起舞步,✕ 删除角标悬停显隐(.onHover)。
+    func testCatalystPickerLiftingAndHoverMarkers() throws {
+        let detail = try source("Footprint/FootprintDetailView.swift")
+        let editor = try source("Footprint/FootprintEditor.swift")
+
+        XCTAssertTrue(detail.contains(".photosPickerStyle(.presentation)"))
+        XCTAssertTrue(detail.contains("maxSelectionCount: editorPickerLimit"))
+        XCTAssertTrue(editor.contains("onChoosePhotos"))
+        XCTAssertTrue(editor.contains(".onHover"))
+    }
 }
