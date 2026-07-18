@@ -119,6 +119,8 @@ struct FootprintEditor: View {
             }
             .scrollContentBackground(.hidden)
             .background(ZXTheme.canvas)
+            // 保存链路多个 await 悬挂点期间草稿不得被篡改：③ 迭代的是快照、④ 实时读取
+            // reorderNeeded/finalPhotoIds,中途增删排会与服务端集合脱节——整个 Form 锁死。
             .disabled(saving)
             .navigationTitle("编辑足迹")
             .navigationBarTitleDisplayMode(.inline)
@@ -297,7 +299,8 @@ struct FootprintEditor: View {
             // 视觉槽位——两个方向都等价于「被拖照片落到目标格的槽位」。
             // 这与 SwiftUI onMove 的 pre-removal toOffset 约定不同，勿混用。
             .dropDestination(for: String.self) { ids, _ in
-                guard let id = ids.first, id != entry.id else { return false }
+                // 保存期间显式拒收落点：.disabled 对拖放手势的拦截不可依赖,补一道硬闸。
+                guard !saving, let id = ids.first, id != entry.id else { return false }
                 draft.move(id: id, toIndex: index)
                 return true
             }

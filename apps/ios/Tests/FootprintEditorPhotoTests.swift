@@ -35,5 +35,8 @@ final class FootprintEditorPhotoTests: XCTestCase {
         XCTAssertTrue(editor.contains("sanitized: false"))
         XCTAssertTrue(editor.contains("markRemoved"))
         XCTAssertFalse(editor.contains("takenAt:"))
+        // 保存期间整表锁交互:多个 await 悬挂点期间草稿不得被篡改,否则 ③ 快照/④ 实时读取脱节。
+        XCTAssertTrue(editor.contains(".disabled(saving)"))
+        XCTAssertTrue(editor.contains("guard !saving"))
     }
 }
