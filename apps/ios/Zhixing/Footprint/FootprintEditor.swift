@@ -137,12 +137,13 @@ struct FootprintEditor: View {
         NavigationStack {
             Form {
                 Section("地点") { Text(footprint.place.name) }
-                Section("照片") { photoSection }
+                // 分区顺序与详情页一致：先文字后照片（撰写器同此序）。
                 Section("这一刻") {
                     TextField("写点什么（可选）", text: $text, axis: .vertical)
                         .lineLimit(4 ... 8)
                     DatePicker("日期", selection: $date, displayedComponents: .date)
                 }
+                Section("照片") { photoSection }
                 Section("公开") {
                     Toggle("公开这条足迹", isOn: $isPublic)
                     if let badge = footprint.publishBadge {

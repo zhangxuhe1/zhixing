@@ -51,13 +51,14 @@ struct FootprintComposer: View {
         NavigationStack {
             Form {
                 Section("地点") { Text(pin.name) }
-                Section("照片") {
-                    photoPickerControl
-                }
+                // 分区顺序与详情页/编辑器一致：先文字后照片。
                 Section("这一刻") {
                     TextField("写点什么（可选）", text: $text, axis: .vertical)
                         .lineLimit(4 ... 8)
                     DatePicker("日期", selection: $date, displayedComponents: .date)
+                }
+                Section("照片") {
+                    photoPickerControl
                 }
                 Section("公开") {
                     // 足迹已创建（照片重试阶段）后锁定开关：此时「保存」只重试上传、不会再改可见性，
