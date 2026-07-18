@@ -1,6 +1,9 @@
-# M1 内容灌入 Runbook（TestFlight 前执行）
+# 内容运营手册（地点库与风物卡）
 
 前提：`pnpm db:up`；`.env` 配好 GEMINI_API_KEY（联网检索）；`docker compose` 的 db 在跑。
+后台地址以本地 http://localhost:3000 为例（生产环境替换为线上 admin 地址）。
+
+## 一、首次灌入（M1 Runbook，TestFlight 前执行，已完成）
 
 1. 导入地点库：
    pnpm --filter @zhixing/pipeline import-places     # 北京 16 点（幂等）
@@ -20,4 +23,47 @@
    - 总卡数 ≥ 80；北京每点 ≥5；六地每点 ≥3；省会每城 ≥3
    - 「AI 整理·待复核」标识由 iOS 端展示，M1 不要求全部人工复核（规格书 §3.2）
 
-成本记录：每张卡 1 次检索 + 1 次成稿调用；失败会跳过，重跑 batch 幂等补齐。
+## 二、日常维护（三个循环）
+
+batch 是唯一需要记住的补卡命令：它扫描**全部地点**（含后台手工新建的），统计每地
+未下架卡数，对不足 `--fill` 目标的地点自动生成补齐，分类按 习俗/吃食/方言/掌故/
+地名由来 轮转。幂等、可随时重跑，失败的卡下次重跑补上。
+
+    pnpm --filter @zhixing/pipeline batch -- --fill 3 --delay 4000
+    # 可选：--city 北京市（只补该市及其下属点）；--limit N（本次最多生成 N 张）；--no-web-search
+
+1. **新增地点 → 补卡**：后台「地点」页（/places）新建，高德选点（坐标已是 GCJ-02，
+   直接入库）→ 跑一次 batch，新地点会被自动补到目标卡数。
+   注意：管线按**地点名**匹配地点，重名时命中哪个不确定——新建时避免与现有地点重名。
+2. **复核 / 下架 → 自动补缺**：后台「风物卡」页（/cards）按地点通读，质量标准同上
+   第 4 步；合格的「标记已复核」（AI_GENERATED → REVIEWED），不合格的「下架」
+   （RETIRED），下次 batch 自动补足缺口。
+   注意：下架的语义是**停止分发，不是撤回**——地点页立即不再返回该卡，但已收藏该卡
+   的用户仍能从收藏列表打开全文（详情接口不过滤 RETIRED）。内容有硬伤需彻底撤回时，
+   目前只能直接改库，或等后续实现硬删除。
+3. **按需补内容**：后台「搜索缺失」页（/search-misses）沉淀了"用户搜了但库里没有"
+   的词，按次数倒序——高频词值得补的，先按循环 1 建地点，batch 会跟着把卡配齐。
+   不盲目铺量，按真实需求补（规格书的原则）。
+
+## 三、手工建卡 / 改卡（后台暂无表单，直接调 API）
+
+人工撰写精品卡、修正 AI 稿错别字等场景走 admin API，凭 ADMIN_TOKEN
+（dev 默认 dev-admin-token）：
+
+    # 新建（category 取 CUSTOMS/FOOD/DIALECT/ANECDOTE/PLACE_NAME 之一）
+    curl -X POST http://localhost:8787/admin/cards \
+      -H "Authorization: Bearer dev-admin-token" -H "Content-Type: application/json" \
+      -d '{"placeId":"<地点id>","category":"ANECDOTE","title":"……",
+           "sources":["……"],"blocks":[{"type":"TEXT","text":"……"}]}'
+
+    # 修改（title / sources / blocks 任选；传 blocks 时整组替换、顺序即数组顺序）
+    curl -X PATCH http://localhost:8787/admin/cards/<卡id> \
+      -H "Authorization: Bearer dev-admin-token" -H "Content-Type: application/json" \
+      -d '{"title":"新标题"}'
+
+地点 id 可在后台地点详情页 URL 中拿到。状态流转（复核/下架）用后台按钮即可，
+无需调 API。
+
+## 成本记录
+
+每张卡 1 次检索 + 1 次成稿调用；失败会跳过，重跑 batch 幂等补齐。

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Zhixing (知行) — "a map of China with stories". Two content layers: a **culture layer** (风物卡 "feature cards": AI-generated, human-reviewed) and a **footprint layer** (user footprints, private by default, publishable via review). Product spec: docs/superpowers/specs/2026-07-06-zhixing-design.md; M2 design: docs/superpowers/specs/2026-07-07-m2-design.md; milestone implementation plans live in docs/superpowers/plans/ (checkbox-driven, task by task; finished milestones are tagged: m0 / m1-server / m1-ios). Ops runbooks: docs/content-ops.md (content ingestion), docs/deploy.md (VPS deployment), docs/testflight.md (TestFlight release).
+Zhixing (知行) — "a map of China with stories". Two content layers: a **culture layer** (风物卡 "feature cards": AI-generated, human-reviewed) and a **footprint layer** (user footprints, private by default, publishable via review). Product spec: docs/superpowers/specs/2026-07-06-zhixing-design.md; M2 design: docs/superpowers/specs/2026-07-07-m2-design.md; milestone implementation plans live in docs/superpowers/plans/ (checkbox-driven, task by task; finished milestones are tagged: m0 / m1-server / m1-ios). Ops runbooks: docs/content-ops.md (content ingestion & ongoing ops), docs/deploy.md (VPS deployment), docs/testflight.md (TestFlight release).
 
 pnpm monorepo (Node >= 22; pnpm pinned to 10.34.4 — do not touch the packageManager field in package.json):
 
