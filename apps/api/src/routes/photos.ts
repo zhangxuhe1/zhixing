@@ -28,6 +28,9 @@ const photoMetaSchema = z.object({
   lng: z.coerce.number().min(-180).max(180).optional(),
 });
 
+/** 重排 body：不加 min(1)——0 张足迹 + 空数组是合法的 204 no-op。 */
+const reorderSchema = z.object({ photoIds: z.array(z.string()) });
+
 function fieldValue(fields: MultipartFields, name: string): string | undefined {
   const f = fields[name];
   const single = Array.isArray(f) ? f[0] : f;
@@ -144,6 +147,47 @@ export async function photosRoutes(app: FastifyInstance) {
     } catch (err) {
       app.log.warn({ err, mediaUrl: photo.mediaUrl }, "照片对象清理失败，留下孤儿对象");
     }
+    return reply.code(204).send();
+  });
+
+  // 全量排列语义：photoIds 必须与该足迹现存照片集合完全相等，换来的是
+  // "校验即防越权+天然幂等"——集合相等保证每个 id 都属于本足迹（不可能借重排
+  // 改到别人照片的 orderIndex），且同一排列重放只是把相同值再写一遍，天然幂等。
+  // 全程不触碰 reviewStatus / publicRequestedAt：排序不回审（spec §3 宽松重审
+  // 策略——集合未变、仅展示序变化，未引入未审内容，无须重新过审）。
+  app.put("/footprints/:id/photos/order", { preHandler: requireUser }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = reorderSchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "invalid_body", detail: body.error.flatten() });
+    }
+    // 属主判定镜像上传路由：足迹不存在或非属主一律 404，不泄露足迹是否存在。
+    const footprint = await app.prisma.footprint.findUnique({ where: { id } });
+    if (!footprint || footprint.userId !== req.userId) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+    const { photoIds } = body.data;
+    const existing = await app.prisma.footprintPhoto.findMany({
+      where: { footprintId: footprint.id },
+      select: { id: true },
+    });
+    // 集合相等判定：去重后长度 = 原长 = 现存数，且每个现存 id 都在集合中
+    // （无重复、无缺失、无多余）。0 张足迹 + 空数组自然通过，204 no-op。
+    const idSet = new Set(photoIds);
+    const setMatches =
+      idSet.size === photoIds.length &&
+      photoIds.length === existing.length &&
+      existing.every((p) => idSet.has(p.id));
+    if (!setMatches) {
+      return reply.code(400).send({ error: "invalid_body", detail: "photo_set_mismatch" });
+    }
+    // 事务内按数组下标批量写 orderIndex，要么全部生效要么全不生效，
+    // 不会留下"排到一半"的中间序。集合校验已保证每个 id 都属于该足迹。
+    await app.prisma.$transaction(
+      photoIds.map((photoId, i) =>
+        app.prisma.footprintPhoto.update({ where: { id: photoId }, data: { orderIndex: i } }),
+      ),
+    );
     return reply.code(204).send();
   });
 }

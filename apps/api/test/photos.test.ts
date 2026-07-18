@@ -389,6 +389,144 @@ test("宽松重审策略：PUBLIC+APPROVED 足迹删照片不回审（reviewStat
   expect(after.publicRequestedAt).toEqual(before.publicRequestedAt);
 });
 
+/** 直插 DB 造 n 张有序照片（orderIndex=插入序），免走 MinIO 上传，返回 id 按序。 */
+async function seedOrderedPhotos(fpId: string, n: number): Promise<string[]> {
+  const ids: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const p = await app.prisma.footprintPhoto.create({
+      data: { footprintId: fpId, mediaUrl: `photos/${fpId}/seed-${i}.png`, orderIndex: i },
+    });
+    ids.push(p.id);
+  }
+  return ids;
+}
+
+async function myPhotoIds(fpId: string, headers: Record<string, string>): Promise<string[]> {
+  const mine = await app.inject({ method: "GET", url: "/me/footprints", headers });
+  const fp = mine.json().find((f: { id: string }) => f.id === fpId);
+  return fp.photos.map((p: { id: string }) => p.id);
+}
+
+test("全量重排：3 张倒序 PUT → 204，/me/footprints 序=新序；同排列再 PUT 幂等", async () => {
+  const alice = await userAuth(app, "aliceReorder");
+  const fpId = await makeFootprint(alice.headers);
+  const ids = await seedOrderedPhotos(fpId, 3);
+
+  const reversed = [...ids].reverse();
+  const res = await app.inject({
+    method: "PUT", url: `/footprints/${fpId}/photos/order`,
+    headers: alice.headers, payload: { photoIds: reversed },
+  });
+  expect(res.statusCode).toBe(204);
+  expect(await myPhotoIds(fpId, alice.headers)).toEqual(reversed);
+
+  // 幂等：同一排列再 PUT，仍 204，序不变。
+  const again = await app.inject({
+    method: "PUT", url: `/footprints/${fpId}/photos/order`,
+    headers: alice.headers, payload: { photoIds: reversed },
+  });
+  expect(again.statusCode).toBe(204);
+  expect(await myPhotoIds(fpId, alice.headers)).toEqual(reversed);
+});
+
+test("集合不等三连：缺一张 / 多陌生 id / 含重复 id → 400 photo_set_mismatch，DB 序不变", async () => {
+  const alice = await userAuth(app, "aliceMismatch");
+  const fpId = await makeFootprint(alice.headers);
+  const ids = await seedOrderedPhotos(fpId, 3);
+
+  const badSets = [
+    [ids[2], ids[0]],                       // 缺一张
+    [ids[2], ids[1], ids[0], "stranger-id"], // 多一个陌生 id
+    [ids[2], ids[1], ids[1]],               // 含重复 id（去重后长度 < 原长）
+  ];
+  for (const photoIds of badSets) {
+    const res = await app.inject({
+      method: "PUT", url: `/footprints/${fpId}/photos/order`,
+      headers: alice.headers, payload: { photoIds },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "invalid_body", detail: "photo_set_mismatch" });
+  }
+  // 三次非法请求都不该动库里顺序。
+  expect(await myPhotoIds(fpId, alice.headers)).toEqual(ids);
+});
+
+test("非属主重排 → 404；足迹不存在 → 404", async () => {
+  const alice = await userAuth(app, "aliceReorderOwn");
+  const bob = await userAuth(app, "bobReorderOwn");
+  const fpId = await makeFootprint(alice.headers);
+  const ids = await seedOrderedPhotos(fpId, 2);
+
+  const res = await app.inject({
+    method: "PUT", url: `/footprints/${fpId}/photos/order`,
+    headers: bob.headers, payload: { photoIds: [...ids].reverse() },
+  });
+  expect(res.statusCode).toBe(404);
+  expect(res.json().error).toBe("not_found");
+  expect(await myPhotoIds(fpId, alice.headers)).toEqual(ids);
+
+  const missing = await app.inject({
+    method: "PUT", url: "/footprints/nonexistent-fp/photos/order",
+    headers: alice.headers, payload: { photoIds: [] },
+  });
+  expect(missing.statusCode).toBe(404);
+  expect(missing.json().error).toBe("not_found");
+});
+
+test("宽松重审：PUBLIC+APPROVED 足迹重排不回审，公开 stories 序跟随新序", async () => {
+  const alice = await userAuth(app, "aliceReorderPub");
+  const viewer = await userAuth(app, "viewerReorderPub");
+  const place = await app.prisma.place.create({
+    data: { name: "重排不回审测试地", level: "DISTRICT", lat: 4, lng: 4 },
+  });
+  const fp = await app.prisma.footprint.create({
+    data: {
+      userId: alice.user.id, placeId: place.id, date: new Date("2026-05-01T10:00:00.000Z"),
+      visibility: "PUBLIC", reviewStatus: "APPROVED",
+      publicRequestedAt: new Date("2020-01-01T00:00:00.000Z"),
+    },
+  });
+  const ids = await seedOrderedPhotos(fp.id, 3);
+  const before = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fp.id } });
+
+  const reversed = [...ids].reverse();
+  const res = await app.inject({
+    method: "PUT", url: `/footprints/${fp.id}/photos/order`,
+    headers: alice.headers, payload: { photoIds: reversed },
+  });
+  expect(res.statusCode).toBe(204);
+
+  // spec §3 宽松重审：排序只变展示序、集合未变，不触发回审。
+  const after = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fp.id } });
+  expect(after.reviewStatus).toBe("APPROVED");
+  expect(after.publicRequestedAt).toEqual(before.publicRequestedAt);
+
+  // 公开面跟随：stories 照片序 = 新序。
+  const stories = await app.inject({
+    method: "GET", url: `/places/${place.id}/stories`, headers: viewer.headers,
+  });
+  const story = stories.json().items.find((i: { footprintId: string }) => i.footprintId === fp.id);
+  expect(story.photos.map((p: { photoId: string }) => p.photoId)).toEqual(reversed);
+});
+
+test("0 张足迹 + photoIds: [] → 204 no-op；body 非法 → 400 invalid_body", async () => {
+  const alice = await userAuth(app, "aliceReorderEmpty");
+  const fpId = await makeFootprint(alice.headers);
+
+  const res = await app.inject({
+    method: "PUT", url: `/footprints/${fpId}/photos/order`,
+    headers: alice.headers, payload: { photoIds: [] },
+  });
+  expect(res.statusCode).toBe(204);
+
+  const bad = await app.inject({
+    method: "PUT", url: `/footprints/${fpId}/photos/order`,
+    headers: alice.headers, payload: { photoIds: "not-an-array" },
+  });
+  expect(bad.statusCode).toBe(400);
+  expect(bad.json().error).toBe("invalid_body");
+});
+
 test("超过 15MB → 413（fastify-multipart 文件大小限制固化）", async () => {
   const { headers } = await userAuth(app);
   const fpId = await makeFootprint(headers);
