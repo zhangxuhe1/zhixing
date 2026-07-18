@@ -5,10 +5,18 @@ import { requireAdmin } from "../auth.js";
 
 const levelEnum = z.enum(["PROVINCE", "CITY", "DISTRICT", "POI"]);
 
+const ancestorSchema = z.object({
+  name: z.string().trim().min(1),
+  level: z.enum(["PROVINCE", "CITY"]),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+});
+
 const createPlaceSchema = z.object({
   name: z.string().min(1),
   level: levelEnum,
   parentId: z.string().nullish(),
+  ancestors: z.array(ancestorSchema).min(1).max(2).optional(),
   lat: z.number(),
   lng: z.number(),
   intro: z.string().optional(),
@@ -60,28 +68,86 @@ async function reachesSelf(
   return false;
 }
 
+// 祖先链 find-or-create:链顶在前([省] 或 [省,市];直辖市/特区只传单个省级节点)。
+// 只复用不修改——同名命中时不动既有节点的 level/坐标;新建时坐标缺省回落到子点位
+// 坐标(必在正确行政区内,后续可在管理端修正)。并发竞态:非链顶撞 P2002 用
+// name_parentId 回查;链顶无 unique(NULL≠NULL)不加锁,窄竞态下的重复链顶可改父收敛。
+async function resolveAncestors(
+  prisma: FastifyInstance["prisma"],
+  ancestors: z.infer<typeof ancestorSchema>[],
+  fallback: { lat: number; lng: number },
+): Promise<string> {
+  let parentId: string | null = null;
+  for (const a of ancestors) {
+    const found = await prisma.place.findFirst({
+      where: { name: a.name, parentId }, select: { id: true },
+    });
+    if (found) { parentId = found.id; continue; }
+    try {
+      const created = await prisma.place.create({
+        data: {
+          name: a.name, level: a.level, parentId,
+          lat: a.lat ?? fallback.lat, lng: a.lng ?? fallback.lng,
+        },
+        select: { id: true },
+      });
+      parentId = created.id;
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002" && parentId !== null
+      ) {
+        const raced = await prisma.place.findUnique({
+          where: { name_parentId: { name: a.name, parentId } }, select: { id: true },
+        });
+        if (raced) { parentId = raced.id; continue; }
+      }
+      throw err;
+    }
+  }
+  // zod min(1) 保证至少一跳,循环后必非 null
+  return parentId!;
+}
+
 export async function adminPlacesRoutes(app: FastifyInstance) {
   // 自 places.ts 迁入:管理员建点(官方录入)。加固:父级存在性与重名显式预检——
   // @@unique([name,parentId]) 在 parentId 为 NULL 时不生效(Postgres NULL≠NULL),
   // 且 FK/unique 违约直接抛会变 500,这里收敛为 400/409 业务错误。
+  // 可选 ancestors(与非空 parentId 互斥):高德识别出的省市链,经 resolveAncestors
+  // 幂等挂链后作为最终 parentId,管理端由此免手工维护省市树。
   app.post("/admin/places", { preHandler: requireAdmin }, async (req, reply) => {
     const body = createPlaceSchema.safeParse(req.body);
     if (!body.success) {
       return reply.code(400).send({ error: "invalid_body", detail: body.error.flatten() });
     }
-    const parentId = body.data.parentId ?? null;
-    if (parentId !== null) {
+    const { ancestors, ...data } = body.data;
+    let parentId = data.parentId ?? null;
+    if (ancestors) {
+      // 两种父级来源互斥,避免"听谁的"歧义
+      if (parentId !== null) return reply.code(400).send({ error: "conflicting_parent" });
+      if (
+        ancestors[0].level !== "PROVINCE" ||
+        (ancestors.length === 2 &&
+          (ancestors[1].level !== "CITY" || ancestors[1].name === ancestors[0].name))
+      ) {
+        return reply.code(400).send({ error: "invalid_ancestors" });
+      }
+      // 后续重名 409 时已建的省市节点会留下——本就是合法行政区节点,重试直接复用
+      parentId = await resolveAncestors(app.prisma, ancestors, {
+        lat: data.lat, lng: data.lng,
+      });
+    } else if (parentId !== null) {
       const parent = await app.prisma.place.findUnique({
         where: { id: parentId }, select: { id: true },
       });
       if (!parent) return reply.code(400).send({ error: "unknown_parent" });
     }
     const dup = await app.prisma.place.findFirst({
-      where: { name: body.data.name, parentId }, select: { id: true },
+      where: { name: data.name, parentId }, select: { id: true },
     });
     if (dup) return reply.code(409).send({ error: "duplicate_name" });
     try {
-      const place = await app.prisma.place.create({ data: { ...body.data, parentId } });
+      const place = await app.prisma.place.create({ data: { ...data, parentId } });
       return reply.code(201).send(place);
     } catch (err) {
       // 预检与写入之间的并发竞态兜底

@@ -148,3 +148,122 @@ test("PATCH：改名/改父撞已有同名 409 duplicate_name", async () => {
   expect(res.statusCode).toBe(409);
   expect(res.json()).toEqual({ error: "duplicate_name" });
 });
+
+test("POST /admin/places + ancestors：全新省市链自动创建并逐级挂接；祖先缺坐标回落点位坐标", async () => {
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "芙蓉街", level: "POI", lat: 36.665, lng: 117.023,
+      ancestors: [
+        { name: "山东省", level: "PROVINCE", lat: 36.67, lng: 117.02 },
+        { name: "济南市", level: "CITY" },
+      ],
+    },
+  });
+  expect(res.statusCode).toBe(201);
+  const prov = await app.prisma.place.findFirstOrThrow({ where: { name: "山东省" } });
+  const city = await app.prisma.place.findFirstOrThrow({ where: { name: "济南市" } });
+  expect(prov).toMatchObject({ level: "PROVINCE", parentId: null, lat: 36.67, lng: 117.02 });
+  expect(city).toMatchObject({ level: "CITY", parentId: prov.id, lat: 36.665, lng: 117.023 });
+  expect(res.json()).toMatchObject({ name: "芙蓉街", parentId: city.id });
+  expect(await app.prisma.place.count()).toBe(3);
+});
+
+test("POST + ancestors：已有节点只复用不修改，level/坐标原样保留", async () => {
+  const { prov, city } = await seedTree(app);
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "宽厚里", level: "POI", lat: 36.66, lng: 117.03,
+      ancestors: [
+        { name: "山东省", level: "PROVINCE", lat: 1, lng: 2 },
+        { name: "济南市", level: "CITY", lat: 3, lng: 4 },
+      ],
+    },
+  });
+  expect(res.statusCode).toBe(201);
+  expect(res.json().parentId).toBe(city.id);
+  const provAfter = await app.prisma.place.findUniqueOrThrow({ where: { id: prov.id } });
+  const cityAfter = await app.prisma.place.findUniqueOrThrow({ where: { id: city.id } });
+  expect(provAfter).toMatchObject({ level: "PROVINCE", lat: 36.67, lng: 117.02 });
+  expect(cityAfter).toMatchObject({ level: "CITY", lat: 36.65, lng: 117.12 });
+  expect(await app.prisma.place.count()).toBe(4); // seedTree 3 个 + 新点位
+});
+
+test("POST + ancestors：直辖市单省级节点成链顶", async () => {
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "什刹海", level: "POI", lat: 39.9403, lng: 116.383,
+      ancestors: [{ name: "北京市", level: "PROVINCE" }],
+    },
+  });
+  expect(res.statusCode).toBe(201);
+  const bj = await app.prisma.place.findFirstOrThrow({ where: { name: "北京市" } });
+  expect(bj).toMatchObject({ level: "PROVINCE", parentId: null });
+  expect(res.json().parentId).toBe(bj.id);
+});
+
+test("POST + ancestors：与非空 parentId 同给 400 conflicting_parent，不产生写入", async () => {
+  const { city } = await seedTree(app);
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "宽厚里", level: "POI", lat: 36.66, lng: 117.03, parentId: city.id,
+      ancestors: [{ name: "山东省", level: "PROVINCE" }],
+    },
+  });
+  expect(res.statusCode).toBe(400);
+  expect(res.json()).toEqual({ error: "conflicting_parent" });
+  expect(await app.prisma.place.count()).toBe(3);
+});
+
+test("POST + ancestors：链序非法/两级同名 400 invalid_ancestors；空数组 400 invalid_body", async () => {
+  const cityFirst = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "点", level: "POI", lat: 1, lng: 2,
+      ancestors: [{ name: "济南市", level: "CITY" }],
+    },
+  });
+  expect(cityFirst.statusCode).toBe(400);
+  expect(cityFirst.json()).toEqual({ error: "invalid_ancestors" });
+
+  const sameName = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "点", level: "POI", lat: 1, lng: 2,
+      ancestors: [
+        { name: "北京市", level: "PROVINCE" },
+        { name: "北京市", level: "CITY" },
+      ],
+    },
+  });
+  expect(sameName.statusCode).toBe(400);
+  expect(sameName.json()).toEqual({ error: "invalid_ancestors" });
+
+  const empty = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: { name: "点", level: "POI", lat: 1, lng: 2, ancestors: [] },
+  });
+  expect(empty.statusCode).toBe(400);
+  expect(empty.json().error).toBe("invalid_body");
+  expect(await app.prisma.place.count()).toBe(0);
+});
+
+test("POST + ancestors：解析后同父重名仍 409，省市不重复建", async () => {
+  await seedTree(app); // 济南市下已有 芙蓉街
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "芙蓉街", level: "POI", lat: 36.665, lng: 117.023,
+      ancestors: [
+        { name: "山东省", level: "PROVINCE" },
+        { name: "济南市", level: "CITY" },
+      ],
+    },
+  });
+  expect(res.statusCode).toBe(409);
+  expect(res.json()).toEqual({ error: "duplicate_name" });
+  expect(await app.prisma.place.count()).toBe(3);
+});
