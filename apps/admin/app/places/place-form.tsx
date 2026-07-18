@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { AMapPicker, type AdminRegion } from "./amap-picker";
+import { AMapPicker, type AdminRegion, type ZXCenter } from "./amap-picker";
 
 export type PlaceRow = {
   id: string; name: string; level: string; parentId: string | null;
@@ -33,6 +33,17 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
   // 显式退出位:点"不挂链"或亲手选"链顶"置真,仅"恢复自动挂链"按钮置假——
   // 不用清 region 表达退出,否则迟到的逆编码回调/拖 pin 会复活已明确拒绝的挂链
   const [chainOff, setChainOff] = useState(false);
+  // 当前生效坐标的同步基准(state 是异步的,选点回调紧随 onPick 同 tick 到达):
+  // 地图选点写入,手输坐标清空;onRegion 回调坐标对不上基准即视为过期丢弃
+  const coordsRef = useRef<ZXCenter | null>(null);
+
+  function acceptRegion(r: AdminRegion | null, at: ZXCenter) {
+    if (r !== null) {
+      const c = coordsRef.current;
+      if (!c || Math.abs(c.lat - at.lat) > 1e-5 || Math.abs(c.lng - at.lng) > 1e-5) return;
+    }
+    setRegion(r);
+  }
 
   // 单一构造:链数组即提交载荷,提示文案由它派生。区县/点位挂[省,市?];层级选"市"
   // 挂[省](否则建市落成链顶,与省下同名市擦肩成重复);省自身即链顶不挂。
@@ -129,8 +140,11 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
       <AMapPicker
         lat={lat === "" || !Number.isFinite(Number(lat)) ? null : Number(lat)}
         lng={lng === "" || !Number.isFinite(Number(lng)) ? null : Number(lng)}
-        onPick={(la, ln) => { setLat(la.toFixed(6)); setLng(ln.toFixed(6)); }}
-        onRegion={mode === "create" ? setRegion : undefined}
+        onPick={(la, ln) => {
+          coordsRef.current = { lat: la, lng: ln };
+          setLat(la.toFixed(6)); setLng(ln.toFixed(6));
+        }}
+        onRegion={mode === "create" ? acceptRegion : undefined}
       />
       {chain && (
         <p style={{ color: "#087" }}>
@@ -145,11 +159,14 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
         </small></p>
       )}
       <p>
-        {/* 手输坐标使 region 失效:坐标已是新位置、省市还是旧位置的,宁可清掉降级手选 */}
+        {/* 手输坐标使 region 失效并清坐标基准:坐标已是新位置、省市还是旧位置的,
+            宁可清掉降级手选;基准清空后在途/迟到的区域回调全部对不上号被丢弃 */}
         <input placeholder="纬度 lat（GCJ-02）" value={lat}
-          onChange={(e) => { setLat(e.target.value); setRegion(null); }} style={{ width: 160 }} />{" "}
+          onChange={(e) => { setLat(e.target.value); setRegion(null); coordsRef.current = null; }}
+          style={{ width: 160 }} />{" "}
         <input placeholder="经度 lng（GCJ-02）" value={lng}
-          onChange={(e) => { setLng(e.target.value); setRegion(null); }} style={{ width: 160 }} />
+          onChange={(e) => { setLng(e.target.value); setRegion(null); coordsRef.current = null; }}
+          style={{ width: 160 }} />
       </p>
       <p>
         <textarea placeholder="简介（可空）" value={intro}

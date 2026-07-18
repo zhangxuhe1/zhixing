@@ -87,7 +87,8 @@ async function resolveAncestors(
 ): Promise<string> {
   let parentId: string | null = null;
   for (const a of ancestors) {
-    const found = await prisma.place.findFirst({
+    // 显式标注断开循环推断(where.parentId ← 本变量 ← found.id),否则 TS7022
+    const found: { id: string } | null = await prisma.place.findFirst({
       where: { name: a.name, parentId }, select: { id: true },
     });
     if (found) { parentId = found.id; continue; }
@@ -95,7 +96,7 @@ async function resolveAncestors(
       if (parentId !== null) {
         // 补挂:多个同名链顶取最老者(最可能挂着存量内容);reachesSelf 防跨请求
         // 互挂成环——树环会让 trips 的 resolveCity 死循环,命中则放弃收编退回新建
-        const legacy = await prisma.place.findFirst({
+        const legacy: { id: string } | null = await prisma.place.findFirst({
           where: { name: a.name, parentId: null },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: { id: true },
@@ -111,7 +112,7 @@ async function resolveAncestors(
       if (a.lat === undefined || a.lng === undefined) {
         throw new AncestorCoordsError(a.name);
       }
-      const created = await prisma.place.create({
+      const created: { id: string } = await prisma.place.create({
         data: { name: a.name, level: a.level, parentId, lat: a.lat, lng: a.lng },
         select: { id: true },
       });
@@ -122,7 +123,7 @@ async function resolveAncestors(
         err.code === "P2002" && parentId !== null
       ) {
         // create 撞已有,或收编 update 撞并发新建:都按 name_parentId 回查复用
-        const raced = await prisma.place.findUnique({
+        const raced: { id: string } | null = await prisma.place.findUnique({
           where: { name_parentId: { name: a.name, parentId } }, select: { id: true },
         });
         if (raced) { parentId = raced.id; continue; }
@@ -178,6 +179,26 @@ export async function adminPlacesRoutes(app: FastifyInstance) {
       where: { name: data.name, parentId }, select: { id: true },
     });
     if (dup) return reply.code(409).send({ error: "duplicate_name" });
+    // 目标收编:建"市"且有父级时,同名遗留链顶就是这座市本身——按补挂语义收编并
+    // 应用本次提交的坐标/简介(等价于管理员编辑该市),绝不劈出重复市。祖先跳的
+    // 收编在 resolveAncestors 里,这里补上"目标即是市"的最后一个口子。
+    if (data.level === "CITY" && parentId !== null) {
+      const legacy = await app.prisma.place.findFirst({
+        where: { name: data.name, parentId: null },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true },
+      });
+      if (legacy && !(await reachesSelf(app.prisma, legacy.id, parentId))) {
+        const adopted = await app.prisma.place.update({
+          where: { id: legacy.id },
+          data: {
+            parentId, level: "CITY", lat: data.lat, lng: data.lng,
+            ...(data.intro !== undefined ? { intro: data.intro } : {}),
+          },
+        });
+        return reply.code(201).send(adopted);
+      }
+    }
     try {
       const place = await app.prisma.place.create({ data: { ...data, parentId } });
       return reply.code(201).send(place);

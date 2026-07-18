@@ -335,6 +335,58 @@ test("链顶跳只复用不收编不升级：遗留 CITY 链顶按省级提交�
   expect(await app.prisma.place.count()).toBe(2);
 });
 
+test("目标收编：挂链建市撞同名遗留链顶——收编为目标本身并应用本次坐标，不建重复市", async () => {
+  const legacy = await app.prisma.place.create({
+    data: { name: "济南市", level: "CITY", lat: 36.65, lng: 117.12, intro: "老简介" },
+  });
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: {
+      name: "济南市", level: "CITY", lat: 36.651, lng: 117.121, intro: "泉城",
+      ancestors: [{ name: "山东省", level: "PROVINCE", lat: 36.67, lng: 117.02 }],
+    },
+  });
+  expect(res.statusCode).toBe(201);
+  const prov = await app.prisma.place.findFirstOrThrow({ where: { name: "山东省" } });
+  expect(res.json()).toMatchObject({
+    id: legacy.id, parentId: prov.id, level: "CITY",
+    lat: 36.651, lng: 117.121, intro: "泉城",
+  });
+  expect(await app.prisma.place.findMany({ where: { name: "济南市" } })).toHaveLength(1);
+  expect(await app.prisma.place.count()).toBe(2);
+});
+
+test("目标收编：手选父级建市同样收编同名遗留链顶", async () => {
+  const prov = await app.prisma.place.create({
+    data: { name: "山东省", level: "PROVINCE", lat: 36.67, lng: 117.02 },
+  });
+  const legacy = await app.prisma.place.create({
+    data: { name: "济南市", level: "CITY", lat: 36.65, lng: 117.12 },
+  });
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: { name: "济南市", level: "CITY", parentId: prov.id, lat: 36.651, lng: 117.121 },
+  });
+  expect(res.statusCode).toBe(201);
+  expect(res.json()).toMatchObject({ id: legacy.id, parentId: prov.id });
+  expect(await app.prisma.place.count()).toBe(2);
+});
+
+test("目标收编：省下已有同名市时 409 优先，遗留链顶不动", async () => {
+  const { prov } = await seedTree(app); // 山东省→济南市→芙蓉街
+  const legacy = await app.prisma.place.create({
+    data: { name: "济南市", level: "CITY", lat: 36.66, lng: 117.13 },
+  });
+  const res = await app.inject({
+    method: "POST", url: "/admin/places", headers: ADMIN_AUTH,
+    payload: { name: "济南市", level: "CITY", parentId: prov.id, lat: 36.651, lng: 117.121 },
+  });
+  expect(res.statusCode).toBe(409);
+  expect(res.json()).toEqual({ error: "duplicate_name" });
+  const untouched = await app.prisma.place.findUniqueOrThrow({ where: { id: legacy.id } });
+  expect(untouched.parentId).toBeNull();
+});
+
 test("name 统一 trim：建点名首尾空白入库前剔除，空白差异不再绕过重名预检", async () => {
   const { city } = await seedTree(app);
   const res = await app.inject({

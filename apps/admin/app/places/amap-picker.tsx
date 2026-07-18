@@ -78,7 +78,8 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
   lat: number | null;
   lng: number | null;
   onPick: (lat: number, lng: number) => void;
-  onRegion?: (region: AdminRegion | null) => void;
+  /** at 为产生该 region 的坐标:表单据此丢弃与当前坐标不符的过期回调 */
+  onRegion?: (region: AdminRegion | null, at: ZXCenter) => void;
 }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -165,9 +166,9 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
   }
 
   // 同步回传 region,并异步补齐省市行政中心(同一序号内二次回传富化结果)
-  function emitRegion(region: AdminRegion | null) {
+  function emitRegion(region: AdminRegion | null, at: ZXCenter) {
     const seq = ++regionSeqRef.current;
-    onRegionRef.current?.(region);
+    onRegionRef.current?.(region, at);
     if (!region || !window.AMap?.DistrictSearch) return;
     const provP = districtCenter(region.provinceName, "province");
     const cityP = region.cityName
@@ -179,7 +180,7 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
         ...region,
         ...(prov ? { provinceCenter: prov } : {}),
         ...(city ? { cityCenter: city } : {}),
-      });
+      }, at);
     });
   }
 
@@ -187,19 +188,20 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
   function resolveRegion(lngV: number, latV: number) {
     if (!onRegionRef.current) return;
     const seq = ++regionSeqRef.current;
+    const at = { lat: latV, lng: lngV };
     if (!window.AMap?.Geocoder) {
       // 旧脚本缓存等场景插件缺失:显式置空,不能让 region 静默冻结在上一次的值
-      onRegionRef.current(null);
+      onRegionRef.current(null, at);
       return;
     }
     new window.AMap.Geocoder().getAddress([lngV, latV], (status: string, result: any) => {
       if (seq !== regionSeqRef.current) return;
       if (status !== "complete" || !result?.regeocode) {
-        onRegionRef.current?.(null);
+        onRegionRef.current?.(null, at);
         return;
       }
       const comp = result.regeocode.addressComponent ?? {};
-      emitRegion(toRegion(comp.province, comp.city));
+      emitRegion(toRegion(comp.province, comp.city), at);
     });
   }
 
@@ -229,7 +231,7 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
     mapRef.current?.setZoomAndCenter(16, [p.lng, p.lat]);
     placeMarker(p.lng, p.lat);
     onPickRef.current(p.lat, p.lng);
-    emitRegion(p.region);
+    emitRegion(p.region, { lat: p.lat, lng: p.lng });
     setResults([]);
   }
 
