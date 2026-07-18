@@ -77,6 +77,12 @@ final class APIClient {
         _ = try await raw(path: path, method: "PUT", body: nil, contentType: nil)
     }
 
+    /// 带 JSON body、不关心响应体，只要求 2xx（如照片重排 `PUT /footprints/:id/photos/order`，服务端回 204）。
+    func put(_ path: String, json: some Encodable) async throws {
+        _ = try await raw(path: path, method: "PUT",
+                          body: try Self.encoder.encode(json), contentType: "application/json")
+    }
+
     func patch<T: Decodable>(_ path: String, json: some Encodable) async throws -> T {
         try await send(path: path, method: "PATCH",
                        body: try Self.encoder.encode(json), contentType: "application/json")

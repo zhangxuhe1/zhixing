@@ -126,6 +126,36 @@ final class APIClientMethodTests: XCTestCase {
         XCTAssertEqual(sentJSON?["text"] as? String, "hi")
     }
 
+    /// 带 JSON body 的 put(_:json:)：照片重排 PUT /footprints/:id/photos/order 依赖此方法，
+    /// 服务端回 204 无响应体。载荷直接用 FootprintStore.ReorderBody，顺带钉住 body 的键结构。
+    @MainActor
+    func testPutWithJSONSendsBodyAndSucceedsOn2xx() async throws {
+        StubURLProtocol.stub = .init(status: 204, body: Data())
+        try await APIClient.shared.put(
+            "/footprints/f1/photos/order",
+            json: FootprintStore.ReorderBody(photoIds: ["a", "b"]))
+        XCTAssertEqual(StubURLProtocol.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(StubURLProtocol.lastRequest?.value(forHTTPHeaderField: "content-type"), "application/json")
+        let sentJSON = try JSONSerialization.jsonObject(with: StubURLProtocol.lastBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(sentJSON?["photoIds"] as? [String], ["a", "b"])
+    }
+
+    @MainActor
+    func testPutWithJSONThrowsOnNon2xx() async {
+        StubURLProtocol.stub = .init(status: 400, body: Data("invalid_body".utf8))
+        do {
+            try await APIClient.shared.put(
+                "/footprints/f1/photos/order",
+                json: FootprintStore.ReorderBody(photoIds: ["a", "b"]))
+            XCTFail("应抛出错误")
+        } catch let APIError.status(code, body) {
+            XCTAssertEqual(code, 400)
+            XCTAssertTrue(body.contains("invalid_body"))
+        } catch {
+            XCTFail("错误类型不符：\(error)")
+        }
+    }
+
     @MainActor
     func testPatchThrowsOnNon2xx() async {
         StubURLProtocol.stub = .init(status: 400, body: Data("invalid_body".utf8))

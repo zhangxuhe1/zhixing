@@ -85,10 +85,14 @@ final class FootprintStore {
     /// `sanitized` 语义与直通/重编码的取舍见 `preparedPhotoUploadData`——刻意不给默认值：
     /// 这是隐私攸关的决定，每个新调用点都必须显式声明自己的字节来源是否已脱敏（EXIF-free），
     /// 免得未来路径顺手省参数、又把带 GPS 的原图直通上去。
+    /// 返回服务端落库后的照片元数据（编辑器需要新照片的 id 参与排序）；`@discardableResult`
+    /// 让 Composer/AlbumImporter 等不关心返回值的既有调用点零改动。
+    /// 注意：本方法不动本地 `footprints` 数组——编辑器保存序列末尾统一 `await load()` 刷新（Composer 先例）。
+    @discardableResult
     func uploadPhoto(
         footprintId: String, imageData: Data, sanitized: Bool,
         takenAt: Date? = nil, lat: Double? = nil, lng: Double? = nil
-    ) async throws {
+    ) async throws -> FootprintPhotoMeta {
         guard let jpeg = preparedPhotoUploadData(imageData, sanitized: sanitized) else {
             throw PhotoTranscodeError()
         }
@@ -96,9 +100,10 @@ final class FootprintStore {
         if let takenAt { fields["takenAt"] = ISO8601DateFormatter().string(from: takenAt) }
         if let lat { fields["lat"] = String(lat) }
         if let lng { fields["lng"] = String(lng) }
-        let _: FootprintPhotoMeta = try await APIClient.shared.upload(
+        let meta: FootprintPhotoMeta = try await APIClient.shared.upload(
             "/footprints/\(footprintId)/photos",
             file: jpeg, filename: "photo.jpg", mime: "image/jpeg", fields: fields)
+        return meta
     }
 
     /// 服务端删除失败就不再假装删了——之前的实现无论成败都本地移除，会让用户以为删除成功、
@@ -109,6 +114,26 @@ final class FootprintStore {
         if let s: Stats = try? await APIClient.shared.get("/me/stats") {
             stats = s
         }
+    }
+
+    /// 删除单张照片（DELETE /photos/:id，服务端回 204）。
+    /// 不动本地 `footprints` 数组——编辑器保存序列末尾统一 `await load()` 刷新（Composer 先例），
+    /// 避免此处手工同步嵌套的 photos 列表与服务端状态产生分歧。
+    func deletePhoto(id: String) async throws {
+        try await APIClient.shared.delete("/photos/\(id)")
+    }
+
+    /// PUT `/footprints/:id/photos/order` 请求体。
+    /// 不是私有类型——测试需要直接构造它来钉住编码后的键结构（UpdateBody 先例）。
+    struct ReorderBody: Encodable {
+        let photoIds: [String]
+    }
+
+    /// 照片重排（PUT /footprints/:id/photos/order，服务端回 204）。
+    /// 不动本地 `footprints` 数组——编辑器保存序列末尾统一 `await load()` 刷新（Composer 先例）。
+    func reorderPhotos(footprintId: String, photoIds: [String]) async throws {
+        try await APIClient.shared.put(
+            "/footprints/\(footprintId)/photos/order", json: ReorderBody(photoIds: photoIds))
     }
 
     func reset() {
