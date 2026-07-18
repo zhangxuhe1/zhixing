@@ -92,3 +92,4 @@ iOS:`scripts/ios-test.sh`(模拟器 Busy 瞬态失败属环境抖动,重跑即�
 - **不做保存回滚**:多操作天然非原子;编辑器保留现场可重试已足够,容错水平与 Composer 对齐。
 - **宽松重审**(§3):不引入未审内容的操作不重审,避免"调个顺序就掉出公开地图"。
 - **上限放宽 12**(2026-07-18 走查追记):用户拍板将单条足迹照片上限由 9 放宽至 12;双端各提取命名常量(api photos.ts `FOOTPRINT_PHOTO_LIMIT` / iOS `ZXLimit.footprintPhotos`),测试以字面量 12/13 钉住产品值;TripShareScreen 分享九宫格的 9 为独立渲染/内存约束,不随动。正文各处"9"以本条为准。
+- **拖拽改自绘手势**(2026-07-18 走查追记):§4 设想的 `.draggable`/`.dropDestination` 在 Form(=List)行内不受 SwiftUI 支持(整卡 lift、落点不回调,Apple 论坛 730367),走查实锤后改为纯手势重排:Catalyst 按住即拖(右键菜单保留),触屏长按起拖——触屏长按菜单让位于起拖,删除靠常显 ✕、设为封面靠拖到首位;几何换算抽 `PhotoGridReorderMath` 纯函数单测。拖拽中不自动滚动为已知限制。
