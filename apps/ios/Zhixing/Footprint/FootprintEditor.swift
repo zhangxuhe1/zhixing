@@ -43,6 +43,12 @@ struct FootprintEditor: View {
     @State private var pendingConfirmation: PendingConfirmation?
     /// 保存后有坏图被跳过时的点名文案（镜像 Composer：非 nil 弹「部分照片未能上传」，点「好」才 dismiss）。
     @State private var skipSummary: String?
+    /// 自绘拖拽重排的瞬时手势状态：sheet 关闭即弃，两端都无需提升为 Binding（Catalyst 亦同）。
+    @State private var draggingPhotoId: String?
+    @State private var dragStartIndex: Int?
+    @State private var dragTranslation: CGSize = .zero
+    /// LazyVGrid 实测出的方格边长（几何换算的输入；0 = 尚未量到，手势直接拒活）。
+    @State private var gridCellSide: CGFloat = 0
 
     #if targetEnvironment(macCatalyst)
     init(
@@ -318,21 +324,32 @@ struct FootprintEditor: View {
 
     // MARK: - 照片分区（3 列宫格：删除 / 设为封面 / 拖拽排序 / 补传）
 
-    private static let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
+    /// 宫格几何单源：列数与间距同时喂给 LazyVGrid 和 PhotoGridReorderMath，两处不同源会让落槽换算漂移。
+    private static let gridColumnCount = 3
+    private static let gridSpacing: CGFloat = 4
+    private static let gridColumns = Array(
+        repeating: GridItem(.flexible(), spacing: gridSpacing), count: gridColumnCount)
 
     @ViewBuilder
     private var photoSection: some View {
-        LazyVGrid(columns: Self.gridColumns, spacing: 4) {
-            // 身份绑 entry.id（拖拽重排后 offset 身份会错乱复用视图，严禁绑 offset）；
-            // index 只作 dropDestination 的落点下标用。
-            ForEach(Array(draft.entries.enumerated()), id: \.element.id) { index, entry in
-                photoCell(entry: entry, index: index)
+        LazyVGrid(columns: Self.gridColumns, spacing: Self.gridSpacing) {
+            // 身份绑 entry.id（拖拽重排后 offset 身份会错乱复用视图，严禁绑 offset）。
+            ForEach(draft.entries) { entry in
+                photoCell(entry)
             }
             if draft.remainingQuota > 0 {
                 addCell
             }
         }
         .padding(.vertical, 4)
+        // 量出方格边长喂给拖拽几何换算：3 列等宽，总宽扣除列间距后均分。
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { updateGridCellSide(width: geo.size.width) }
+                    .onChange(of: geo.size.width) { _, width in updateGridCellSide(width: width) }
+            }
+        )
         // 满额时"+"格不再渲染，必须留一行解释，否则消失会被误读为 bug（走查反馈①）。
         if draft.remainingQuota == 0 {
             Text("照片最多 \(ZXLimit.footprintPhotos) 张，删除后可继续添加")
@@ -341,11 +358,12 @@ struct FootprintEditor: View {
         }
     }
 
-    private func photoCell(entry: PhotoDraftEntry, index: Int) -> some View {
+    private func photoCell(_ entry: PhotoDraftEntry) -> some View {
         // 方图的尺寸权威必须是外框而非图本身：scaledToFill 的图对 W×W 提案上报覆盖尺寸，
         // 直接 .aspectRatio(1, .fit) 只变换提案、clipped 在超大边界上等于没裁——
         // Color.clear 按格宽上报方形提案、图作 overlay、溢出才真正被裁（PhotoWallSection 踩坑约定）。
-        Color.clear
+        let isDragging = draggingPhotoId == entry.id
+        return Color.clear
             .aspectRatio(1, contentMode: .fit)
             .overlay { cellPhoto(entry) }
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -368,23 +386,101 @@ struct FootprintEditor: View {
                     hoveredPhotoId = nil
                 }
             }
-            #endif
+            // 右键菜单仅 Catalyst 保留：iOS 触屏的长按已让位于起拖手势（与长按菜单竞争识别
+            // 必然抖动），触屏侧删除靠常显 ✕、设为封面 = 拖到首格。
             .contextMenu {
                 Button("设为封面") { draft.moveToFront(id: entry.id) }
                 Button("删除", role: .destructive) { draft.remove(id: entry.id) }
             }
-            .draggable(entry.id)
-            // 拖拽落点坐标约定：draft.move 是「先摘除再插入」，toIndex 取的是摘除后坐标系的下标。
-            // 直接传本格现序下标 index 时：从后往前拖（from > index）摘除不影响 index；
-            // 从前往后拖（from < index）目标格摘除后左移一位，插到 index 恰好占据目标格原来的
-            // 视觉槽位——两个方向都等价于「被拖照片落到目标格的槽位」。
-            // 这与 SwiftUI onMove 的 pre-removal toOffset 约定不同，勿混用。
-            .dropDestination(for: String.self) { ids, _ in
-                // 保存期间显式拒收落点：.disabled 对拖放手势的拦截不可依赖,补一道硬闸。
-                guard !saving, let id = ids.first, id != entry.id else { return false }
-                draft.move(id: id, toIndex: index)
-                return true
+            #endif
+            // 被拖格的拾起反馈：轻微放大 + 阴影 + 压过邻格；offset 直接取值（不参与 withAnimation），
+            // 位移分量即时跟手、槽位补偿分量随重排动画过渡，两相抵消恰好钉在手指下。
+            .scaleEffect(isDragging ? 1.05 : 1)
+            .shadow(color: .black.opacity(isDragging ? 0.25 : 0), radius: isDragging ? 5 : 0, y: isDragging ? 2 : 0)
+            .offset(liftOffset(for: entry))
+            .zIndex(isDragging ? 1 : 0)
+            .gesture(reorderGesture(for: entry))
+    }
+
+    // MARK: - 自绘拖拽重排（几何换算见 PhotoGridReorderMath）
+
+    // 为什么自绘：Transferable 拖放（.draggable/.dropDestination）在 Form(=List) 行内不受
+    // SwiftUI 支持——lift 会快照整个 cell、行内落点永不回调（Apple 论坛 730367），只能绕开
+    // 系统拖放会话。target 基于手势起点的绝对几何换算，直接就是 draft.move 的最终落位
+    // （先摘除再插入，两个拖动方向都落在钳制后的 toIndex）。
+    // 已知限制：拖拽中不自动滚动（≤12 张最多 4 行，编辑器窗口通常整宫格可见）。
+
+    #if targetEnvironment(macCatalyst)
+    /// Catalyst：按住即拖（Mac 原生惯例；点击拖动不会触发滚动，右键菜单是独立识别器互不干扰）。
+    /// minimumDistance 4pt 兜住 ✕ 按钮的点击微位移。
+    private func reorderGesture(for entry: PhotoDraftEntry) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { handleDragChanged(entry: entry, translation: $0.translation) }
+            .onEnded { _ in endDrag() }
+    }
+    #else
+    /// iOS 触屏：长按 0.25s 起拖（主屏幕重排惯例），快速滑动仍走 Form 滚动。
+    private func reorderGesture(for entry: PhotoDraftEntry) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(coordinateSpace: .global))
+            .onChanged { value in
+                guard case .second(true, let drag?) = value else { return }
+                handleDragChanged(entry: entry, translation: drag.translation)
             }
+            .onEnded { _ in endDrag() }
+    }
+    #endif
+
+    /// 拖动换算与实时重排。保存期硬闸沿用 Task 7 教训：.disabled 拦不住已在途的手势，
+    /// 必须在手势路径里显式拒，否则保存链路 ③/④ 的快照会与草稿脱节。
+    private func handleDragChanged(entry: PhotoDraftEntry, translation: CGSize) {
+        guard !saving, gridCellSide > 0 else { return }
+        if draggingPhotoId != entry.id {
+            draggingPhotoId = entry.id
+            dragStartIndex = draft.entries.firstIndex { $0.id == entry.id }
+        }
+        dragTranslation = translation
+        guard let startIndex = dragStartIndex,
+              let currentIndex = draft.entries.firstIndex(where: { $0.id == entry.id })
+        else { return }
+        let target = reorderMath.targetIndex(
+            startIndex: startIndex, translation: translation, count: draft.entries.count)
+        if target != currentIndex {
+            withAnimation(.snappy(duration: 0.25)) {
+                draft.move(id: entry.id, toIndex: target)
+            }
+        }
+    }
+
+    /// 手势结束统一清场（长按完成但未位移即结束的分支同样走这里）。
+    /// 顺序在拖动中已实时落进草稿，无需提交步；带动画清场让被拖格滑回槽位、缩放阴影同步退场。
+    private func endDrag() {
+        withAnimation(.snappy(duration: 0.25)) {
+            draggingPhotoId = nil
+            dragStartIndex = nil
+            dragTranslation = .zero
+        }
+    }
+
+    /// 被拖格的实时显示偏移（其余格子恒为 .zero）。
+    private func liftOffset(for entry: PhotoDraftEntry) -> CGSize {
+        guard draggingPhotoId == entry.id,
+              let startIndex = dragStartIndex,
+              let currentIndex = draft.entries.firstIndex(where: { $0.id == entry.id })
+        else { return .zero }
+        return reorderMath.liftOffset(
+            startIndex: startIndex, currentIndex: currentIndex, translation: dragTranslation)
+    }
+
+    private var reorderMath: PhotoGridReorderMath {
+        PhotoGridReorderMath(
+            cellSide: gridCellSide, spacing: Self.gridSpacing, columns: Self.gridColumnCount)
+    }
+
+    /// 3 列等宽：总宽扣除 (列数−1) 道列间距后均分，量得的边长供几何换算使用。
+    private func updateGridCellSide(width: CGFloat) {
+        gridCellSide = (width - CGFloat(Self.gridColumnCount - 1) * Self.gridSpacing)
+            / CGFloat(Self.gridColumnCount)
     }
 
     @ViewBuilder

@@ -1,8 +1,9 @@
 import XCTest
 @testable import Zhixing
 
-/// 编辑器照片分区的契约（spec：2026-07-18 足迹照片编辑 §4/§5）：
-/// 宫格定框必须走 Color.clear 写法、拖拽排序用 draggable/dropDestination、
+/// 编辑器照片分区的契约（spec：2026-07-18 足迹照片编辑 §4/§5 + §7 追记）：
+/// 宫格定框必须走 Color.clear 写法、拖拽排序用自绘手势 + PhotoGridReorderMath
+/// （Transferable 拖放在 Form(=List) 行内不可用，Apple 论坛 730367，严禁回退）、
 /// 上传显式声明字节未脱敏（sanitized: false）且不许携带任何照片 meta（takenAt/lat/lng），
 /// 保存链路必须接入草稿的进度固化（markRemoved 等），部分失败重试不重复已成步骤。
 /// 源码断言惯例，先例 PhotoGridTests。
@@ -14,14 +15,22 @@ final class FootprintEditorPhotoTests: XCTestCase {
         return try String(contentsOf: sourceURL, encoding: .utf8)
     }
 
-    /// 宫格与交互标记：定框 Color.clear（PhotoWallSection 踩坑约定）、拖拽两件套、
-    /// 封面菜单项；格子身份严禁绑 offset（拖拽重排后 offset 身份会错乱复用视图）。
+    /// 宫格与交互标记：定框 Color.clear（PhotoWallSection 踩坑约定）、自绘手势重排——
+    /// Catalyst 即拖 DragGesture、iOS 触屏长按分叉 LongPressGesture、换算走 PhotoGridReorderMath、
+    /// 被拖格 zIndex 压层、拖动路径显式硬闸（guard !saving + 量宽就绪，.disabled 拦不住在途手势）；
+    /// 死修饰符 .draggable/.dropDestination 不得回潮（List 行内不可用是换实现的根因）；
+    /// 封面菜单项保留（Catalyst 右键）；格子身份严禁绑 offset（拖拽重排后 offset 身份会错乱复用视图）。
     func testGridFramingAndDragMarkers() throws {
         let editor = try source("Footprint/FootprintEditor.swift")
 
         XCTAssertTrue(editor.contains("Color.clear"))
-        XCTAssertTrue(editor.contains(".draggable("))
-        XCTAssertTrue(editor.contains(".dropDestination("))
+        XCTAssertTrue(editor.contains("DragGesture("))
+        XCTAssertTrue(editor.contains("LongPressGesture("))
+        XCTAssertTrue(editor.contains("PhotoGridReorderMath"))
+        XCTAssertTrue(editor.contains("guard !saving, gridCellSide > 0"))
+        XCTAssertTrue(editor.contains(".zIndex("))
+        XCTAssertFalse(editor.contains(".draggable("))
+        XCTAssertFalse(editor.contains(".dropDestination("))
         XCTAssertTrue(editor.contains("\"设为封面\""))
         XCTAssertFalse(editor.contains("id: \\.offset"))
     }
