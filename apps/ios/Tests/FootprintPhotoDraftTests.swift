@@ -141,6 +141,21 @@ final class FootprintPhotoDraftTests: XCTestCase {
         XCTAssertFalse(draft.hasChanges)
     }
 
+    // 迟到 append(全部上传固化之后又落进一张 local):finalPhotoIds 立即回到 nil——
+    // 编辑器保存链路的兜底(③ 后 pendingAdditions 非空即报错留守)与 ④ 的 nil 闸都依赖此性质。
+    func testLateAppendAfterUploadsConsolidatedMakesFinalPhotoIdsNilAgain() {
+        var draft = FootprintPhotoDraft(original: [meta("a")])
+        let l1 = localDraft()
+        draft.append(l1)
+        draft.markUploaded(draftId: l1.id, meta: meta("n"))
+        XCTAssertEqual(draft.finalPhotoIds, ["a", "n"])
+
+        let late = localDraft()
+        draft.append(late)
+        XCTAssertNil(draft.finalPhotoIds)
+        XCTAssertEqual(draft.pendingAdditions, [late])
+    }
+
     // 9 张满额:remainingQuota=0(下限 0,不为负)。
     func testFullQuotaIsZero() {
         let metas = (1...9).map { meta("p\($0)") }

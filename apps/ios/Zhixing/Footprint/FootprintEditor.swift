@@ -25,6 +25,9 @@ struct FootprintEditor: View {
     @Binding private var draft: FootprintPhotoDraft
     /// 点"+"发起选图舞步（detail 侧关 sheet→开全窗图库→收起重开）；Int 为当前剩余可加张数。
     private let onChoosePhotos: (Int) -> Void
+    /// 保存中标志同样提升到 detail 侧：舞步先于保存发起时，装载 Task 可与重开后的保存并发，
+    /// detail 侧要靠它拒收保存期间迟到的 append（否则错过 ③ 的上传快照、成功 dismiss 即丢图）。
+    @Binding private var saving: Bool
     /// 悬停中的照片格 id：✕ 删除角标仅悬停显现（Mac 原生惯例）。
     @State private var hoveredPhotoId: String?
     #else
@@ -35,8 +38,8 @@ struct FootprintEditor: View {
     /// 照片分区的事务式草稿：编辑期间所有增删排只落草稿，保存时按差量分段提交（spec §4）。
     @State private var draft: FootprintPhotoDraft
     @State private var pickerItems: [PhotosPickerItem] = []
-    #endif
     @State private var saving = false
+    #endif
     @State private var pendingConfirmation: PendingConfirmation?
     /// 保存后有坏图被跳过时的点名文案（镜像 Composer：非 nil 弹「部分照片未能上传」，点「好」才 dismiss）。
     @State private var skipSummary: String?
@@ -49,6 +52,7 @@ struct FootprintEditor: View {
         isPublic: Binding<Bool>,
         draft: Binding<FootprintPhotoDraft>,
         error: Binding<String?>,
+        saving: Binding<Bool>,
         onChoosePhotos: @escaping (Int) -> Void
     ) {
         self.footprint = footprint
@@ -57,6 +61,7 @@ struct FootprintEditor: View {
         _isPublic = isPublic
         _draft = draft
         _errorMessage = error
+        _saving = saving
         self.onChoosePhotos = onChoosePhotos
     }
     #else
@@ -208,11 +213,18 @@ struct FootprintEditor: View {
             Task {
                 var skipped = 0
                 for item in newItems {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        draft.append(LocalPhotoDraft(id: UUID(), data: data))
-                    } else {
+                    guard let data = try? await item.loadTransferable(type: Data.self) else {
                         skipped += 1 // 本地读不出字节：跳过继续，不整队卡死（Composer 先例）
+                        continue
                     }
+                    // iCloud 卸载图的装载可迟到数秒，append 落在保存链路 ③ 快照之后会错过上传、
+                    // 成功 dismiss 即静默丢图——保存期间装载完成的一律不入草稿，计入跳过明示用户
+                    //（取简：不做暂存重放；performSave 里另有 pendingAdditions 兜底双保险）。
+                    guard !saving else {
+                        skipped += 1
+                        continue
+                    }
+                    draft.append(LocalPhotoDraft(id: UUID(), data: data))
                 }
                 pickerItems = []
                 if skipped > 0 {
@@ -267,6 +279,14 @@ struct FootprintEditor: View {
                     draft.markSkipped(draftId: local.id)
                     skippedIndices.append(index + 1)
                 }
+            }
+            // ③.5 结构性兜底：若迟到装载还是绕过闸门落进了草稿（append 晚于 ③ 的快照），
+            // 这些照片本轮没有上传，静默 dismiss 就是丢图——报错留守编辑器，由用户再次保存补传。
+            // 此时 finalPhotoIds 必为 nil（entries 含 local），④ 的 nil 闸同样不会误发 PUT。
+            guard draft.pendingAdditions.isEmpty else {
+                errorMessage = "有新选的照片尚未上传，请再次保存"
+                await store.load() // 已成功的删/传仍要反映到本地列表，不因留守而搁置刷新
+                return
             }
             // ④ 顺序偏离「删/增后的自然序」才发 PUT；entries 仍有 local 时 finalPhotoIds 为 nil，禁发。
             if draft.reorderNeeded, let photoIds = draft.finalPhotoIds {

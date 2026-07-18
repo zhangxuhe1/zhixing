@@ -1,7 +1,7 @@
 import XCTest
 @testable import Zhixing
 
-/// 编辑器照片分区的契约（spec：2026-07-16 足迹照片编辑 §4/§5）：
+/// 编辑器照片分区的契约（spec：2026-07-18 足迹照片编辑 §4/§5）：
 /// 宫格定框必须走 Color.clear 写法、拖拽排序用 draggable/dropDestination、
 /// 上传显式声明字节未脱敏（sanitized: false）且不许携带任何照片 meta（takenAt/lat/lng），
 /// 保存链路必须接入草稿的进度固化（markRemoved 等），部分失败重试不重复已成步骤。
@@ -38,6 +38,20 @@ final class FootprintEditorPhotoTests: XCTestCase {
         // 保存期间整表锁交互:多个 await 悬挂点期间草稿不得被篡改,否则 ③ 快照/④ 实时读取脱节。
         XCTAssertTrue(editor.contains(".disabled(saving)"))
         XCTAssertTrue(editor.contains("guard !saving"))
+    }
+
+    /// 丢图窗口封堵（终审 Finding）：iCloud 卸载图的 loadTransferable 可迟到数秒，append 落在
+    /// 保存链路 ③ 快照之后会错过上传、成功 dismiss 即静默丢图。两道闸都要在：
+    /// ① 装载 Task 保存期间拒收——编辑器内联 guard !saving else、detail 侧 guard !editorSaving；
+    /// ② performSave 的结构性兜底——③ 后 pendingAdditions 仍非空即报错留守编辑器，禁止 dismiss。
+    func testLateLoadGuardAndSaveBackstopMarkers() throws {
+        let editor = try source("Footprint/FootprintEditor.swift")
+        let detail = try source("Footprint/FootprintDetailView.swift")
+
+        XCTAssertTrue(editor.contains("guard !saving else"))
+        XCTAssertTrue(editor.contains("guard draft.pendingAdditions.isEmpty"))
+        XCTAssertTrue(editor.contains("有新选的照片尚未上传，请再次保存"))
+        XCTAssertTrue(detail.contains("guard !editorSaving"))
     }
 
     /// Catalyst 选图舞步(Task 8):系统图库必须从详情页根层呈现(.presentation 全窗样式,

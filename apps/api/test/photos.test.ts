@@ -350,7 +350,12 @@ test("非属主删照片 → 404 且行还在;不存在的 photoId → 404", asy
   });
   const photoId = up.json().id as string;
 
-  // 删除仅属主可为——即便照片在公开面可读，非属主删一律 404。
+  // 把足迹置为 PUBLIC+APPROVED（直写 DB，同文件宽松重审用例先例）：
+  // 删除仅属主可为——即便照片确已在公开面可读，非属主删一律 404。
+  await app.prisma.footprint.update({
+    where: { id: fpId },
+    data: { visibility: "PUBLIC", reviewStatus: "APPROVED" },
+  });
   const res = await app.inject({ method: "DELETE", url: `/photos/${photoId}`, headers: bob.headers });
   expect(res.statusCode).toBe(404);
   expect(res.json().error).toBe("not_found");

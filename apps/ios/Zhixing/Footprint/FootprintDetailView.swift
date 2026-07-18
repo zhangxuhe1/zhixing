@@ -21,6 +21,9 @@ struct FootprintDetailView: View {
     @State private var editorIsPublic = false
     @State private var editorError: String?
     @State private var editorDraft = FootprintPhotoDraft(original: [])
+    /// 编辑器保存中标志（提升，Composer 状态提升同款）：舞步装载 Task 可与重开后的保存并发，
+    /// 本视图的装载回调要靠它拒收保存期间迟到的 append（错过上传快照即丢图）。
+    @State private var editorSaving = false
     @State private var editorPickerItems: [PhotosPickerItem] = []
     @State private var showEditorPhotoPicker = false
     /// 点"+"时刻的 draft.remainingQuota 快照：sheet 关闭期间 draft 不变，快照即权威上限。
@@ -129,11 +132,17 @@ struct FootprintDetailView: View {
             Task {
                 var skipped = 0
                 for item in newItems {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        editorDraft.append(LocalPhotoDraft(id: UUID(), data: data))
-                    } else {
+                    guard let data = try? await item.loadTransferable(type: Data.self) else {
                         skipped += 1 // 本地读不出字节：跳过继续，不整队卡死（Composer 先例）
+                        continue
                     }
+                    // 编辑器 sheet 重开后保存可与本 Task 并发（iCloud 装载迟到数秒）：保存期间
+                    // 落 append 会错过上传快照、成功 dismiss 即丢图——与编辑器内联装载同一道闸。
+                    guard !editorSaving else {
+                        skipped += 1
+                        continue
+                    }
+                    editorDraft.append(LocalPhotoDraft(id: UUID(), data: data))
                 }
                 editorPickerItems = []
                 if skipped > 0 {
@@ -155,6 +164,7 @@ struct FootprintDetailView: View {
             isPublic: $editorIsPublic,
             draft: $editorDraft,
             error: $editorError,
+            saving: $editorSaving,
             onChoosePhotos: requestEditorPhotoPicker
         )
         #else
@@ -183,6 +193,7 @@ struct FootprintDetailView: View {
         editorIsPublic = fp.visibility == "PUBLIC"
         editorError = nil
         editorDraft = FootprintPhotoDraft(original: fp.photos)
+        editorSaving = false
         editorPickerItems = []
         showEditorPhotoPicker = false
         editorPickerLimit = 9
@@ -196,6 +207,7 @@ struct FootprintDetailView: View {
         editorIsPublic = false
         editorError = nil
         editorDraft = FootprintPhotoDraft(original: [])
+        editorSaving = false
         editorPickerItems = []
         showEditorPhotoPicker = false
         editorPickerLimit = 9
