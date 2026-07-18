@@ -583,3 +583,28 @@ Expected: 全 PASS。
 git add docs/content-ops.md docs/superpowers/plans/2026-07-18-admin-place-ancestors.md
 git commit -m "docs(ops): 手工建点补 ancestors 自动挂链用法；勾选实施计划"
 ```
+
+---
+
+## 评审修订（2026-07-18 多代理评审后追加）
+
+10 视角评审 + 3 项裁决后落实的修订（详见 commit 记录）：
+
+- **补挂收编**：resolveAncestors 增加遗留链顶收编分支——市级跳在省下找不到时，按
+  `createdAt+id` 取最老的同名无父级节点，改 parentId+level 收编（与 import-regions
+  补挂同语义），不再创建重复市；reachesSelf 防跨请求互挂成环；收编写入在 P2002
+  兜底之内，竞态收敛为复用。链顶跳保持只复用不升级（import-places 重跑职责）。
+- **创建必须带坐标**：新建省/市祖先缺 lat/lng 返回 400 `ancestor_coords_required`
+  ——iOS nearestPin 按 距离/半径 打分（市 30km/点位 3km），市落在点位坐标上会永远
+  抢赢点位，静默毒化相册导入与"使用当前位置"。前端经 AMap.DistrictSearch 异步补齐
+  行政中心坐标。
+- **name 统一 trim**：create/patch 的 name 与 ancestors 一致 trim，空白差异不再
+  绕过重名预检。
+- **前端状态机**：区域解析加序号（乱序/迟到的逆编码按序丢弃，pickPoi/手输坐标接管
+  均作废在途解析）；"不挂链"改为显式 chainOff 粘滞位（亲手选"链顶"同置位，恢复
+  按钮显式复位）；手输坐标使 region 失效；层级选"市"时挂 [省] 链（防重复链顶市）；
+  提示尾缀随层级；Geocoder 缺失显式回传 null。
+- **裁定不改**：命名业务错误码保留（unknown_parent/cyclic_parent 先例 + 独立 UI
+  文案）；P2002 内层回查保留（透明化解竞态优于误导性 409）；非 201 留下已建/已收编
+  省市（修复性写入，注释与文档已声明）；省直辖县逆编码路径拍平为 [省]（已知取舍，
+  POI 搜索路径不受影响）。

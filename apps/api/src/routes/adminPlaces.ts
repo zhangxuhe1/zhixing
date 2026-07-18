@@ -13,7 +13,7 @@ const ancestorSchema = z.object({
 });
 
 const createPlaceSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
   level: levelEnum,
   parentId: z.string().nullish(),
   ancestors: z.array(ancestorSchema).min(1).max(2).optional(),
@@ -24,7 +24,7 @@ const createPlaceSchema = z.object({
 
 const patchPlaceSchema = z
   .object({
-    name: z.string().min(1),
+    name: z.string().trim().min(1),
     level: levelEnum,
     parentId: z.string().nullable(),
     lat: z.number(),
@@ -68,14 +68,22 @@ async function reachesSelf(
   return false;
 }
 
+// 创建新祖先必须省市各带完整坐标:iOS 照片匹配按 距离/半径 打分(市级半径 30km),
+// 新市若落在点位坐标上会永远抢赢点位本身,静默毒化整片匹配——宁可显式报错。
+class AncestorCoordsError extends Error {
+  constructor(public ancestorName: string) {
+    super("ancestor_coords_required");
+  }
+}
+
 // 祖先链 find-or-create:链顶在前([省] 或 [省,市];直辖市/特区只传单个省级节点)。
-// 只复用不修改——同名命中时不动既有节点的 level/坐标;新建时坐标缺省回落到子点位
-// 坐标(必在正确行政区内,后续可在管理端修正)。并发竞态:非链顶撞 P2002 用
-// name_parentId 回查;链顶无 unique(NULL≠NULL)不加锁,窄竞态下的重复链顶可改父收敛。
+// 命中同名节点只复用不修改;唯一的写入例外是"补挂"——同名遗留链顶(老库/手工把市
+// 建成无父级)收编到省下,与 import-regions 的迁移分支同语义:只改 parentId+level,
+// 坐标不动,不建重复市。并发竞态:创建或收编撞 name_parentId 唯一约束时回查复用;
+// 链顶无该约束(NULL≠NULL)不加锁,窄竞态下的重复链顶由补挂按最老优先逐步收敛。
 async function resolveAncestors(
   prisma: FastifyInstance["prisma"],
   ancestors: z.infer<typeof ancestorSchema>[],
-  fallback: { lat: number; lng: number },
 ): Promise<string> {
   let parentId: string | null = null;
   for (const a of ancestors) {
@@ -84,11 +92,27 @@ async function resolveAncestors(
     });
     if (found) { parentId = found.id; continue; }
     try {
+      if (parentId !== null) {
+        // 补挂:多个同名链顶取最老者(最可能挂着存量内容);reachesSelf 防跨请求
+        // 互挂成环——树环会让 trips 的 resolveCity 死循环,命中则放弃收编退回新建
+        const legacy = await prisma.place.findFirst({
+          where: { name: a.name, parentId: null },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true },
+        });
+        if (legacy && !(await reachesSelf(prisma, legacy.id, parentId))) {
+          await prisma.place.update({
+            where: { id: legacy.id }, data: { parentId, level: a.level },
+          });
+          parentId = legacy.id;
+          continue;
+        }
+      }
+      if (a.lat === undefined || a.lng === undefined) {
+        throw new AncestorCoordsError(a.name);
+      }
       const created = await prisma.place.create({
-        data: {
-          name: a.name, level: a.level, parentId,
-          lat: a.lat ?? fallback.lat, lng: a.lng ?? fallback.lng,
-        },
+        data: { name: a.name, level: a.level, parentId, lat: a.lat, lng: a.lng },
         select: { id: true },
       });
       parentId = created.id;
@@ -97,6 +121,7 @@ async function resolveAncestors(
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === "P2002" && parentId !== null
       ) {
+        // create 撞已有,或收编 update 撞并发新建:都按 name_parentId 回查复用
         const raced = await prisma.place.findUnique({
           where: { name_parentId: { name: a.name, parentId } }, select: { id: true },
         });
@@ -132,10 +157,17 @@ export async function adminPlacesRoutes(app: FastifyInstance) {
       ) {
         return reply.code(400).send({ error: "invalid_ancestors" });
       }
-      // 后续重名 409 时已建的省市节点会留下——本就是合法行政区节点,重试直接复用
-      parentId = await resolveAncestors(app.prisma, ancestors, {
-        lat: data.lat, lng: data.lng,
-      });
+      // 后续重名 409 时已建/已收编的省市节点会留下——本就是合法修复性写入,重试直接复用
+      try {
+        parentId = await resolveAncestors(app.prisma, ancestors);
+      } catch (err) {
+        if (err instanceof AncestorCoordsError) {
+          return reply.code(400).send({
+            error: "ancestor_coords_required", detail: { name: err.ancestorName },
+          });
+        }
+        throw err;
+      }
     } else if (parentId !== null) {
       const parent = await app.prisma.place.findUnique({
         where: { id: parentId }, select: { id: true },

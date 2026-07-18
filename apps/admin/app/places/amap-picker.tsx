@@ -20,7 +20,7 @@ function loadAMap(): Promise<any> {
       // 安全密钥必须在脚本加载前挂到 window,否则 PlaceSearch 等服务报 INVALID_USER_SCODE
       if (SECURITY) window._AMapSecurityConfig = { securityJsCode: SECURITY };
       const s = document.createElement("script");
-      s.src = `https://webapi.amap.com/maps?v=2.0&key=${KEY}&plugin=AMap.PlaceSearch,AMap.Geocoder`;
+      s.src = `https://webapi.amap.com/maps?v=2.0&key=${KEY}&plugin=AMap.PlaceSearch,AMap.Geocoder,AMap.DistrictSearch`;
       s.onload = () => resolve(window.AMap);
       s.onerror = () => reject(new Error("高德地图脚本加载失败"));
       document.head.appendChild(s);
@@ -31,8 +31,17 @@ function loadAMap(): Promise<any> {
 
 type Poi = { name: string; address: string; lat: number; lng: number; region: AdminRegion | null };
 
-/** cityName 为 null:直辖市/特区(市名=省名)或省直辖(市名为空),链上只有省级节点 */
-export type AdminRegion = { provinceName: string; cityName: string | null };
+export type ZXCenter = { lat: number; lng: number };
+
+/** cityName 为 null:直辖市/特区(市名=省名)或省直辖(市名为空),链上只有省级节点。
+ *  center 是行政中心坐标(DistrictSearch 异步补齐):服务端创建新省市必须带坐标——
+ *  否则新市会落在点位坐标上,毒化 iOS 照片匹配的距离/半径打分 */
+export type AdminRegion = {
+  provinceName: string;
+  cityName: string | null;
+  provinceCenter?: ZXCenter;
+  cityCenter?: ZXCenter;
+};
 
 // 高德空字段可能是 "" 或 [],统一收敛成 trim 后字符串
 function str(v: unknown): string {
@@ -44,6 +53,25 @@ function toRegion(provinceRaw: unknown, cityRaw: unknown): AdminRegion | null {
   if (!province) return null;
   const city = str(cityRaw);
   return { provinceName: province, cityName: city && city !== province ? city : null };
+}
+
+// 行政区名 → 行政中心坐标(GCJ-02);查不到返回 null,由服务端拦截无坐标创建兜底
+function districtCenter(name: string, level: "province" | "city"): Promise<ZXCenter | null> {
+  return new Promise((resolve) => {
+    new window.AMap.DistrictSearch({ level, subdistrict: 0, extensions: "base" }).search(
+      name,
+      (status: string, result: any) => {
+        const c = result?.districtList?.[0]?.center;
+        const lat = typeof c?.getLat === "function" ? c.getLat() : c?.lat;
+        const lng = typeof c?.getLng === "function" ? c.getLng() : c?.lng;
+        resolve(
+          status === "complete" && Number.isFinite(lat) && Number.isFinite(lng)
+            ? { lat, lng }
+            : null,
+        );
+      },
+    );
+  });
 }
 
 export function AMapPicker({ lat, lng, onPick, onRegion }: {
@@ -59,7 +87,9 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
   onPickRef.current = onPick;
   const onRegionRef = useRef(onRegion);
   onRegionRef.current = onRegion;
-  const geocoderRef = useRef<any>(null);
+  // 区域解析序号:每次同步回传或坐标接管自增,在途异步结果按序号丢弃——
+  // 防止乱序/迟到的逆编码把 region 打回旧位置(坐标已换、省市却是上一处的)
+  const regionSeqRef = useRef(0);
   // 地图脚本异步加载完成时取"最新"坐标放初始 pin,而非挂载瞬间捕获的旧值
   const posRef = useRef({ lat, lng });
   posRef.current = { lat, lng };
@@ -108,6 +138,8 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
       if (cur && Math.abs(cur.getLat() - lat) < 1e-5 && Math.abs(cur.getLng() - lng) < 1e-5) {
         return;
       }
+      // 手输坐标接管:作废在途的区域解析,避免旧位置的逆编码结果迟到复活
+      regionSeqRef.current++;
       placeMarker(lng, lat);
       mapRef.current.setZoomAndCenter(16, [lng, lat]);
     }, 600);
@@ -132,17 +164,42 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
     }
   }
 
+  // 同步回传 region,并异步补齐省市行政中心(同一序号内二次回传富化结果)
+  function emitRegion(region: AdminRegion | null) {
+    const seq = ++regionSeqRef.current;
+    onRegionRef.current?.(region);
+    if (!region || !window.AMap?.DistrictSearch) return;
+    const provP = districtCenter(region.provinceName, "province");
+    const cityP = region.cityName
+      ? districtCenter(region.cityName, "city")
+      : Promise.resolve(null);
+    Promise.all([provP, cityP]).then(([prov, city]) => {
+      if (seq !== regionSeqRef.current) return;
+      onRegionRef.current?.({
+        ...region,
+        ...(prov ? { provinceCenter: prov } : {}),
+        ...(city ? { cityCenter: city } : {}),
+      });
+    });
+  }
+
   // 地图点选/拖 pin 没有 POI 语境,用逆地理编码反查省市;失败回传 null 让表单降级手选
   function resolveRegion(lngV: number, latV: number) {
-    if (!onRegionRef.current || !window.AMap?.Geocoder) return;
-    geocoderRef.current ??= new window.AMap.Geocoder();
-    geocoderRef.current.getAddress([lngV, latV], (status: string, result: any) => {
+    if (!onRegionRef.current) return;
+    const seq = ++regionSeqRef.current;
+    if (!window.AMap?.Geocoder) {
+      // 旧脚本缓存等场景插件缺失:显式置空,不能让 region 静默冻结在上一次的值
+      onRegionRef.current(null);
+      return;
+    }
+    new window.AMap.Geocoder().getAddress([lngV, latV], (status: string, result: any) => {
+      if (seq !== regionSeqRef.current) return;
       if (status !== "complete" || !result?.regeocode) {
         onRegionRef.current?.(null);
         return;
       }
       const comp = result.regeocode.addressComponent ?? {};
-      onRegionRef.current?.(toRegion(comp.province, comp.city));
+      emitRegion(toRegion(comp.province, comp.city));
     });
   }
 
@@ -172,7 +229,7 @@ export function AMapPicker({ lat, lng, onPick, onRegion }: {
     mapRef.current?.setZoomAndCenter(16, [p.lng, p.lat]);
     placeMarker(p.lng, p.lat);
     onPickRef.current(p.lat, p.lng);
-    onRegionRef.current?.(p.region);
+    emitRegion(p.region);
     setResults([]);
   }
 
