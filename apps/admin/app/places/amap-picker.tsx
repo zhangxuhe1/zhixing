@@ -20,7 +20,7 @@ function loadAMap(): Promise<any> {
       // 安全密钥必须在脚本加载前挂到 window,否则 PlaceSearch 等服务报 INVALID_USER_SCODE
       if (SECURITY) window._AMapSecurityConfig = { securityJsCode: SECURITY };
       const s = document.createElement("script");
-      s.src = `https://webapi.amap.com/maps?v=2.0&key=${KEY}&plugin=AMap.PlaceSearch`;
+      s.src = `https://webapi.amap.com/maps?v=2.0&key=${KEY}&plugin=AMap.PlaceSearch,AMap.Geocoder`;
       s.onload = () => resolve(window.AMap);
       s.onerror = () => reject(new Error("高德地图脚本加载失败"));
       document.head.appendChild(s);
@@ -29,18 +29,37 @@ function loadAMap(): Promise<any> {
   return loader;
 }
 
-type Poi = { name: string; address: string; lat: number; lng: number };
+type Poi = { name: string; address: string; lat: number; lng: number; region: AdminRegion | null };
 
-export function AMapPicker({ lat, lng, onPick }: {
+/** cityName 为 null:直辖市/特区(市名=省名)或省直辖(市名为空),链上只有省级节点 */
+export type AdminRegion = { provinceName: string; cityName: string | null };
+
+// 高德空字段可能是 "" 或 [],统一收敛成 trim 后字符串
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function toRegion(provinceRaw: unknown, cityRaw: unknown): AdminRegion | null {
+  const province = str(provinceRaw);
+  if (!province) return null;
+  const city = str(cityRaw);
+  return { provinceName: province, cityName: city && city !== province ? city : null };
+}
+
+export function AMapPicker({ lat, lng, onPick, onRegion }: {
   lat: number | null;
   lng: number | null;
   onPick: (lat: number, lng: number) => void;
+  onRegion?: (region: AdminRegion | null) => void;
 }) {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
+  const onRegionRef = useRef(onRegion);
+  onRegionRef.current = onRegion;
+  const geocoderRef = useRef<any>(null);
   // 地图脚本异步加载完成时取"最新"坐标放初始 pin,而非挂载瞬间捕获的旧值
   const posRef = useRef({ lat, lng });
   posRef.current = { lat, lng };
@@ -65,6 +84,7 @@ export function AMapPicker({ lat, lng, onPick }: {
         map.on("click", (e: any) => {
           placeMarker(e.lnglat.getLng(), e.lnglat.getLat());
           onPickRef.current(e.lnglat.getLat(), e.lnglat.getLng());
+          resolveRegion(e.lnglat.getLng(), e.lnglat.getLat());
         });
       })
       .catch((e) => setError(String(e)));
@@ -103,6 +123,7 @@ export function AMapPicker({ lat, lng, onPick }: {
       marker.on("dragend", () => {
         const pos = marker.getPosition();
         onPickRef.current(pos.getLat(), pos.getLng());
+        resolveRegion(pos.getLng(), pos.getLat());
       });
       markerRef.current = marker;
       map.add(marker);
@@ -111,9 +132,23 @@ export function AMapPicker({ lat, lng, onPick }: {
     }
   }
 
+  // 地图点选/拖 pin 没有 POI 语境,用逆地理编码反查省市;失败回传 null 让表单降级手选
+  function resolveRegion(lngV: number, latV: number) {
+    if (!onRegionRef.current || !window.AMap?.Geocoder) return;
+    geocoderRef.current ??= new window.AMap.Geocoder();
+    geocoderRef.current.getAddress([lngV, latV], (status: string, result: any) => {
+      if (status !== "complete" || !result?.regeocode) {
+        onRegionRef.current?.(null);
+        return;
+      }
+      const comp = result.regeocode.addressComponent ?? {};
+      onRegionRef.current?.(toRegion(comp.province, comp.city));
+    });
+  }
+
   function search() {
     if (!window.AMap || !keyword.trim()) return;
-    new window.AMap.PlaceSearch({ pageSize: 5 }).search(
+    new window.AMap.PlaceSearch({ pageSize: 5, extensions: "all" }).search(
       keyword.trim(),
       (status: string, result: any) => {
         if (status !== "complete") {
@@ -126,6 +161,7 @@ export function AMapPicker({ lat, lng, onPick }: {
           result.poiList.pois.map((p: any) => ({
             name: p.name, address: p.address || "",
             lat: p.location.lat, lng: p.location.lng,
+            region: toRegion(p.pname, p.cityname),
           })),
         );
       },
@@ -136,6 +172,7 @@ export function AMapPicker({ lat, lng, onPick }: {
     mapRef.current?.setZoomAndCenter(16, [p.lng, p.lat]);
     placeMarker(p.lng, p.lat);
     onPickRef.current(p.lat, p.lng);
+    onRegionRef.current?.(p.region);
     setResults([]);
   }
 
