@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { AMapPicker } from "./amap-picker";
+import { AMapPicker, type AdminRegion } from "./amap-picker";
 
 export type PlaceRow = {
   id: string; name: string; level: string; parentId: string | null;
@@ -29,6 +29,16 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
   const [parentFilter, setParentFilter] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [region, setRegion] = useState<AdminRegion | null>(null);
+
+  // 自动挂链仅在:新建 + 未手动选父级 + 层级为区县/点位 时启用
+  const chainNames =
+    mode === "create" && region !== null && parentId === "" &&
+    (level === "POI" || level === "DISTRICT")
+      ? region.cityName === null
+        ? [region.provinceName]
+        : [region.provinceName, region.cityName]
+      : null;
 
   // 父级候选:排除 POI(叶子不能当父)与自身,按名称过滤;已选中项恒保留,否则 select
   // 显示会与实际提交值脱节。选自身后代由服务端 cyclic_parent 兜底。
@@ -46,10 +56,15 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
     try {
       if (mode === "create") {
         // POST 的 intro 是 optional 非 nullable:空值必须省略字段而非传 null
+        // 挂链时 ancestors 与 parentId 互斥:链首省、链次市,由服务端幂等 find-or-create
+        const ancestors = chainNames?.map((n, i) => ({
+          name: n, level: i === 0 ? "PROVINCE" : "CITY",
+        }));
         await api("/admin/places", {
           method: "POST",
           body: JSON.stringify({
-            name: name.trim(), level, parentId: parentId || null,
+            name: name.trim(), level,
+            ...(ancestors ? { ancestors } : { parentId: parentId || null }),
             lat: Number(lat), lng: Number(lng),
             intro: intro.trim() === "" ? undefined : intro.trim(),
           }),
@@ -70,6 +85,8 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
       if (msg.includes("duplicate_name")) setError("同一父级下已有同名地点");
       else if (msg.includes("cyclic_parent")) setError("父级不能选自己或自己的后代");
       else if (msg.includes("unknown_parent")) setError("父级地点不存在，刷新后重试");
+      else if (msg.includes("conflicting_parent")) setError("父级与自动挂链冲突，请重试");
+      else if (msg.includes("invalid_ancestors")) setError("自动挂链数据异常，请手动选择父级");
       else setError(msg);
     } finally {
       setSaving(false);
@@ -98,7 +115,14 @@ export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
         lat={lat === "" || !Number.isFinite(Number(lat)) ? null : Number(lat)}
         lng={lng === "" || !Number.isFinite(Number(lng)) ? null : Number(lng)}
         onPick={(la, ln) => { setLat(la.toFixed(6)); setLng(ln.toFixed(6)); }}
+        onRegion={mode === "create" ? setRegion : undefined}
       />
+      {chainNames && (
+        <p style={{ color: "#087" }}>
+          将自动挂入：{chainNames.join(" → ")} → 本点位（省市不存在则自动创建；改选父级可覆盖）{" "}
+          <button type="button" onClick={() => setRegion(null)}>不挂链</button>
+        </p>
+      )}
       <p>
         <input placeholder="纬度 lat（GCJ-02）" value={lat}
           onChange={(e) => setLat(e.target.value)} style={{ width: 160 }} />{" "}
