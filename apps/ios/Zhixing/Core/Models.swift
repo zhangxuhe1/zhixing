@@ -90,7 +90,7 @@ struct User: Codable { let id: String; let nickname: String }
 struct AuthResponse: Codable { let token: String; let user: User }
 
 struct PlaceRef: Codable { let id: String; let name: String }
-struct FootprintPhotoMeta: Codable, Identifiable { let id: String; let takenAt: Date? }
+struct FootprintPhotoMeta: Codable, Identifiable, Equatable { let id: String; let takenAt: Date? }
 
 /// 足迹公开状态徽标：由 visibility/reviewStatus 纯映射得出，不直接来自服务端字段。
 enum PublishBadge: String { case pending = "审核中", rejected = "未通过", published = "已公开" }
