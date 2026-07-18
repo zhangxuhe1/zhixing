@@ -15,7 +15,7 @@
 - 补传照片的 EXIF 元数据入库(takenAt/坐标一律不带,同 Composer 手动撰写路径);
 - 补传照片反向修改足迹的日期/地点。
 
-顺带修复一个现存不一致:公开侧照片 `orderBy id desc`(cuid 递增 = 最新在前),私密侧无 orderBy(≈插入序)。若不修,补传的新照片会在公开页抢占第一张(事实封面),而本人私密侧看它排在最后。
+顺带修复一个现存不一致:公开照片墙查询 `orderBy id desc`(cuid 递增 = 最新在前),公开故事与私密侧则无 orderBy(依赖 DB 返回序,≈插入序但无保证)。若不修,补传的新照片会在照片墙抢占该足迹首图,与本人私密侧所见相反;故事面与私密面的顺序也一直靠未定义行为撑着。
 
 ## 1. 数据模型
 
@@ -33,7 +33,7 @@
 | `DELETE /photos/:id` | 新增 | 属主校验(错误码沿用 `GET /photos/:id` 惯例)→ 删 DB 行 → `storage.remove([mediaUrl])`。先 DB 后 S3,镜像删足迹路由:S3 失败最多留孤儿对象,不留悬空行;成功响应形状同样镜像删足迹路由。**不触发重审** |
 | `PUT /footprints/:id/photos/order` | 新增 | body `{ photoIds: string[] }` 全量排列;与该足迹现存照片集合不完全相等 → 400 `invalid_body`;事务内批量写 orderIndex 0..n-1;幂等;**不触发重审** |
 
-查询统一:footprints.ts(私密 `/me/footprints`)与 public.ts(公开面)的 photos 子查询全部改为 §1 的 orderBy。公开 DTO 字段不增不减(orderIndex 不下发,顺序由数组序表达),禁字段回归测试原样生效。
+查询统一:全部四处照片子查询改为 §1 的 orderBy——footprints.ts `FOOTPRINT_SELECT`(私密三路由共用)、public.ts `footprintSelect`(故事列表/故事详情)、public.ts 照片墙查询、adminReview.ts 审核队列(管理员所见顺序与公开面一致,审核所见即所得)。公开 DTO 字段不增不减(orderIndex 不下发,顺序由数组序表达),禁字段回归测试原样生效。
 
 ## 3. 重审策略(已拍板:宽松)
 
