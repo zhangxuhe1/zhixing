@@ -95,8 +95,8 @@ struct FootprintPhotoDraft: Equatable {
 
     var count: Int { entries.count }
 
-    /// 剩余可加张数(上限 9,下限 0)。
-    var remainingQuota: Int { max(0, 9 - count) }
+    /// 剩余可加张数(上限 ZXLimit.footprintPhotos,下限 0——超上限的历史遗留数据不产生负配额)。
+    var remainingQuota: Int { max(0, ZXLimit.footprintPhotos - count) }
 
     // MARK: - 进度固化(部分失败重试的正确性)
 

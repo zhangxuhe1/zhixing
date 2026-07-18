@@ -127,11 +127,11 @@ struct FootprintComposer: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(itemsEmpty ? "选择照片" : "已选择 \(itemsCount) 张照片")
-        .accessibilityHint("最多选择 9 张，已选照片会显示选择顺序")
+        .accessibilityHint("最多选择 \(ZXLimit.footprintPhotos) 张，已选照片会显示选择顺序")
         #else
         PhotosPicker(
             selection: $items,
-            maxSelectionCount: 9,
+            maxSelectionCount: ZXLimit.footprintPhotos,
             // 有序模式会在相册缩略图右上角显示醒目的数字徽标；
             // 比单一颜色或同形对勾更清楚，也顺带说明最终上传顺序。
             selectionBehavior: .ordered,
@@ -140,7 +140,7 @@ struct FootprintComposer: View {
             PhotoPickerRowLabel(itemsEmpty: itemsEmpty, itemsCount: itemsCount)
         }
         .accessibilityLabel(itemsEmpty ? "选择照片" : "已选择 \(itemsCount) 张照片")
-        .accessibilityHint("最多选择 9 张，已选照片会显示选择顺序")
+        .accessibilityHint("最多选择 \(ZXLimit.footprintPhotos) 张，已选照片会显示选择顺序")
         #endif
     }
 
@@ -212,7 +212,7 @@ private struct PhotoPickerRowLabel: View {
                 .foregroundStyle(itemsEmpty ? ZXTheme.pine : ZXTheme.jade)
             VStack(alignment: .leading, spacing: 3) {
                 Text(itemsEmpty ? "选择照片（可选）" : "已选 \(itemsCount) 张")
-                Text(itemsEmpty ? "最多 9 张" : "再次进入可调整选择与顺序")
+                Text(itemsEmpty ? "最多 \(ZXLimit.footprintPhotos) 张" : "再次进入可调整选择与顺序")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

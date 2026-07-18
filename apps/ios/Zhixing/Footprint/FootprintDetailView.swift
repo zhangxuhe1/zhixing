@@ -27,7 +27,7 @@ struct FootprintDetailView: View {
     @State private var editorPickerItems: [PhotosPickerItem] = []
     @State private var showEditorPhotoPicker = false
     /// 点"+"时刻的 draft.remainingQuota 快照：sheet 关闭期间 draft 不变，快照即权威上限。
-    @State private var editorPickerLimit = 9
+    @State private var editorPickerLimit = ZXLimit.footprintPhotos
     @State private var restoreEditorAfterPhotoPicker = false
     #endif
 
@@ -196,7 +196,7 @@ struct FootprintDetailView: View {
         editorSaving = false
         editorPickerItems = []
         showEditorPhotoPicker = false
-        editorPickerLimit = 9
+        editorPickerLimit = ZXLimit.footprintPhotos
         restoreEditorAfterPhotoPicker = false
     }
 
@@ -210,7 +210,7 @@ struct FootprintDetailView: View {
         editorSaving = false
         editorPickerItems = []
         showEditorPhotoPicker = false
-        editorPickerLimit = 9
+        editorPickerLimit = ZXLimit.footprintPhotos
         restoreEditorAfterPhotoPicker = false
     }
 

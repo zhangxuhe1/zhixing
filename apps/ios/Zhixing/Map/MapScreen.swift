@@ -101,7 +101,7 @@ struct MapScreen: View {
         .photosPicker(
             isPresented: $showComposerPhotoPicker,
             selection: $composerPhotoItems,
-            maxSelectionCount: 9,
+            maxSelectionCount: ZXLimit.footprintPhotos,
             selectionBehavior: .ordered,
             matching: .images
         )

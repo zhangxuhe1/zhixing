@@ -262,7 +262,7 @@ struct FootprintEditor: View {
             if d.hasChanges {
                 _ = try await store.update(id: footprint.id, text: d.text, date: d.date, visibility: d.visibility)
             }
-            // ② 删除必须先于 ③ 上传：满 9 张时「删旧补新」要靠先删才能过服务端的 9 张上限。
+            // ② 删除必须先于 ③ 上传：满额时「删旧补新」要靠先删才能过服务端的照片上限。
             for id in draft.pendingRemovals {
                 try await store.deletePhoto(id: id)
                 draft.markRemoved(id: id) // 进度固化：失败重试不再重复 DELETE
@@ -320,6 +320,7 @@ struct FootprintEditor: View {
 
     private static let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
 
+    @ViewBuilder
     private var photoSection: some View {
         LazyVGrid(columns: Self.gridColumns, spacing: 4) {
             // 身份绑 entry.id（拖拽重排后 offset 身份会错乱复用视图，严禁绑 offset）；
@@ -332,6 +333,12 @@ struct FootprintEditor: View {
             }
         }
         .padding(.vertical, 4)
+        // 满额时"+"格不再渲染，必须留一行解释，否则消失会被误读为 bug（走查反馈①）。
+        if draft.remainingQuota == 0 {
+            Text("照片最多 \(ZXLimit.footprintPhotos) 张，删除后可继续添加")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func photoCell(entry: PhotoDraftEntry, index: Int) -> some View {

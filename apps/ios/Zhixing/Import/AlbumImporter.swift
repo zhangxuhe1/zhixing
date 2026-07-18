@@ -141,7 +141,7 @@ final class AlbumImportModel {
             do {
                 let fp = try await store.create(
                     placeId: group.pin.id, text: nil, date: group.start)
-                for asset in group.assets.prefix(9) { // 每段足迹照片上限 9 张
+                for asset in group.assets.prefix(ZXLimit.footprintPhotos) { // 每段足迹照片跟随产品上限
                     globalIndex += 1
                     guard let data = await Self.imageData(localIdentifier: asset.id) else {
                         skippedIndices.append(globalIndex)

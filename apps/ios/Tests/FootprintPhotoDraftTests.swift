@@ -56,7 +56,7 @@ final class FootprintPhotoDraftTests: XCTestCase {
         draft.append(l1)
         draft.append(l2)
         XCTAssertEqual(draft.pendingAdditions, [l1, l2])
-        XCTAssertEqual(draft.remainingQuota, 6)
+        XCTAssertEqual(draft.remainingQuota, 9)
         XCTAssertFalse(draft.reorderNeeded)
         XCTAssertTrue(draft.hasChanges)
         XCTAssertNil(draft.finalPhotoIds)
@@ -156,12 +156,14 @@ final class FootprintPhotoDraftTests: XCTestCase {
         XCTAssertEqual(draft.pendingAdditions, [late])
     }
 
-    // 9 张满额:remainingQuota=0(下限 0,不为负)。
+    // 12 张满额:remainingQuota=0;期望值故意写字面量钉住产品值,不引用 ZXLimit。
     func testFullQuotaIsZero() {
-        let metas = (1...9).map { meta("p\($0)") }
-        var draft = FootprintPhotoDraft(original: metas)
+        let metas = (1...12).map { meta("p\($0)") }
+        let draft = FootprintPhotoDraft(original: metas)
         XCTAssertEqual(draft.remainingQuota, 0)
-        draft.append(localDraft())
-        XCTAssertEqual(draft.remainingQuota, 0)
+
+        // 超额(13 张 remote,上限历史下调等遗留场景):仍为 0 不为负。
+        let over = FootprintPhotoDraft(original: (1...13).map { meta("p\($0)") })
+        XCTAssertEqual(over.remainingQuota, 0)
     }
 }

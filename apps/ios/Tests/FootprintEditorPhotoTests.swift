@@ -54,6 +54,15 @@ final class FootprintEditorPhotoTests: XCTestCase {
         XCTAssertTrue(detail.contains("guard !editorSaving"))
     }
 
+    /// 满额提示(走查修复 A):配额耗尽时"+"格不再渲染,必须留下解释文案,
+    /// 否则消失会被误读为 bug;文案里的上限数字必须走 ZXLimit 常量插值,不得写死。
+    func testFullQuotaHintMarkers() throws {
+        let editor = try source("Footprint/FootprintEditor.swift")
+
+        XCTAssertTrue(editor.contains("照片最多"))
+        XCTAssertTrue(editor.contains("ZXLimit.footprintPhotos"))
+    }
+
     /// Catalyst 选图舞步(Task 8):系统图库必须从详情页根层呈现(.presentation 全窗样式,
     /// MapScreen↔Composer 先例),选张上限用提升到 detail 侧的 editorPickerLimit;
     /// 编辑器侧 Catalyst 分支通过 onChoosePhotos 回调发起舞步,✕ 删除角标悬停显隐(.onHover)。
