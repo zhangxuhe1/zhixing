@@ -306,6 +306,89 @@ test("已有 9 张再传第 10 张 → 400 photo_limit_reached，不写库不落
   expect(await countStorageObjects(`photos/${fpId}/`)).toBe(0);
 });
 
+test("属主删除单张照片：204、DB 只剩另一张、S3 对象被清；删到 0 足迹本体仍在", async () => {
+  const alice = await userAuth(app, "aliceDel");
+  const fpId = await makeFootprint(alice.headers);
+
+  const ids: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const mp = multipartPayload({}, PNG_1PX, "image/png");
+    const up = await app.inject({
+      method: "POST", url: `/footprints/${fpId}/photos`,
+      headers: { ...alice.headers, ...mp.headers }, payload: mp.payload,
+    });
+    expect(up.statusCode).toBe(201);
+    ids.push(up.json().id as string);
+  }
+  expect(await countStorageObjects(`photos/${fpId}/`)).toBe(2);
+
+  // 删第 1 张：DB 剩 1 行且是第 2 张；storage.remove 是 await 的，响应返回时对象已清。
+  const del1 = await app.inject({ method: "DELETE", url: `/photos/${ids[0]}`, headers: alice.headers });
+  expect(del1.statusCode).toBe(204);
+  const rest = await app.prisma.footprintPhoto.findMany({ where: { footprintId: fpId } });
+  expect(rest.map((p) => p.id)).toEqual([ids[1]]);
+  expect(await countStorageObjects(`photos/${fpId}/`)).toBe(1);
+
+  // 删到 0：足迹本体不受影响，photos 变空数组。
+  const del2 = await app.inject({ method: "DELETE", url: `/photos/${ids[1]}`, headers: alice.headers });
+  expect(del2.statusCode).toBe(204);
+  const mine = await app.inject({ method: "GET", url: "/me/footprints", headers: alice.headers });
+  const mineFp = mine.json().find((f: { id: string }) => f.id === fpId);
+  expect(mineFp).toBeTruthy();
+  expect(mineFp.photos).toEqual([]);
+});
+
+test("非属主删照片 → 404 且行还在;不存在的 photoId → 404", async () => {
+  const alice = await userAuth(app, "aliceDel2");
+  const bob = await userAuth(app, "bobDel2");
+  const fpId = await makeFootprint(alice.headers);
+
+  const mp = multipartPayload({}, PNG_1PX, "image/png");
+  const up = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...alice.headers, ...mp.headers }, payload: mp.payload,
+  });
+  const photoId = up.json().id as string;
+
+  // 删除仅属主可为——即便照片在公开面可读，非属主删一律 404。
+  const res = await app.inject({ method: "DELETE", url: `/photos/${photoId}`, headers: bob.headers });
+  expect(res.statusCode).toBe(404);
+  expect(res.json().error).toBe("not_found");
+  expect(await app.prisma.footprintPhoto.count({ where: { id: photoId } })).toBe(1);
+
+  const missing = await app.inject({
+    method: "DELETE", url: "/photos/nonexistent-photo-id", headers: alice.headers,
+  });
+  expect(missing.statusCode).toBe(404);
+  expect(missing.json().error).toBe("not_found");
+});
+
+test("宽松重审策略：PUBLIC+APPROVED 足迹删照片不回审（reviewStatus / publicRequestedAt 原样）", async () => {
+  const alice = await userAuth(app, "aliceDelPub");
+  const place = await app.prisma.place.create({
+    data: { name: "删图不回审测试地", level: "DISTRICT", lat: 3, lng: 3 },
+  });
+  const fp = await app.prisma.footprint.create({
+    data: {
+      userId: alice.user.id, placeId: place.id, date: new Date("2026-05-01T10:00:00.000Z"),
+      visibility: "PUBLIC", reviewStatus: "APPROVED",
+      publicRequestedAt: new Date("2020-01-01T00:00:00.000Z"),
+    },
+  });
+  const photo = await app.prisma.footprintPhoto.create({
+    data: { footprintId: fp.id, mediaUrl: `photos/${fp.id}/seed.png` },
+  });
+  const before = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fp.id } });
+
+  const res = await app.inject({ method: "DELETE", url: `/photos/${photo.id}`, headers: alice.headers });
+  expect(res.statusCode).toBe(204);
+
+  // spec §3 宽松重审：删图不引入未审内容，不触发回审。
+  const after = await app.prisma.footprint.findUniqueOrThrow({ where: { id: fp.id } });
+  expect(after.reviewStatus).toBe("APPROVED");
+  expect(after.publicRequestedAt).toEqual(before.publicRequestedAt);
+});
+
 test("超过 15MB → 413（fastify-multipart 文件大小限制固化）", async () => {
   const { headers } = await userAuth(app);
   const fpId = await makeFootprint(headers);

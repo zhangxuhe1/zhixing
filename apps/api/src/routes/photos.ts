@@ -122,4 +122,28 @@ export async function photosRoutes(app: FastifyInstance) {
     }
     return { url: await app.storage.presignGet(photo.mediaUrl, 300) };
   });
+
+  // 与 GET /photos/:id 的关键差异：读允许公开面（PUBLIC+APPROVED 的照片陌生人可读），
+  // 删仅属主可为——photo 不存在或非属主一律 404，不泄露照片是否存在。
+  // 全程不触碰 reviewStatus / publicRequestedAt：删图不回审（spec §3 宽松重审策略——
+  // 删除只减内容、不引入未审内容，无须重新过审）。
+  app.delete("/photos/:id", { preHandler: requireUser }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const photo = await app.prisma.footprintPhoto.findUnique({
+      where: { id },
+      include: { footprint: { select: { userId: true } } },
+    });
+    if (!photo || photo.footprint.userId !== req.userId) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+    // 先删 DB 后清 S3：S3 失败最多留孤儿对象（可容忍），反之悬空 DB 行不可容忍。
+    // await 而非 fire-and-forget：响应返回时清理已发生，测试可直接断言；吞错仅告警。
+    await app.prisma.footprintPhoto.delete({ where: { id: photo.id } });
+    try {
+      await app.storage.remove([photo.mediaUrl]);
+    } catch (err) {
+      app.log.warn({ err, mediaUrl: photo.mediaUrl }, "照片对象清理失败，留下孤儿对象");
+    }
+    return reply.code(204).send();
+  });
 }
