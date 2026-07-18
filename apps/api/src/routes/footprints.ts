@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@zhixing/db";
 import { z } from "zod";
 import { requireUser } from "../auth.js";
+import { PHOTO_ORDER_BY } from "./photos.js";
 
 /**
  * 依据旅程剩余成员重算去规范化的 start/end；无成员则删除该 Trip。
@@ -56,7 +57,7 @@ export const FOOTPRINT_SELECT = {
   tripId: true,
   createdAt: true,
   place: { select: { id: true, name: true } },
-  photos: { select: { id: true, takenAt: true } },
+  photos: { select: { id: true, takenAt: true }, orderBy: PHOTO_ORDER_BY },
 } as const;
 
 /**

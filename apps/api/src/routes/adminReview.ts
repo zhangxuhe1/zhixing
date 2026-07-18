@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAdmin } from "../auth.js";
+import { PHOTO_ORDER_BY } from "./photos.js";
 
 const reviewActionSchema = z.object({ action: z.enum(["approve", "reject"]) });
 
@@ -17,7 +18,8 @@ const reviewQueueSelect = {
   publicRequestedAt: true,
   user: { select: { nickname: true } },
   place: { select: { name: true } },
-  photos: { select: { id: true, mediaUrl: true } },
+  // 审核队列照片序与用户端一致。
+  photos: { select: { id: true, mediaUrl: true }, orderBy: PHOTO_ORDER_BY },
 } as const;
 
 export async function adminReviewRoutes(app: FastifyInstance) {

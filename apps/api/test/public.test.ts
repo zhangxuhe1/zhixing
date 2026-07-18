@@ -134,13 +134,14 @@ test("分页：25 条 APPROVED，limit=20 → nextCursor 非空，第二页 5 �
   expect(new Set([...ids1, ...ids2]).size).toBe(25);
 });
 
-test("photo-wall 分组：2024-04 与 2023-11 两条带照片足迹 → groups=[2024·春, 2023·秋] 顺序；组内照片按 id 倒序", async () => {
+test("photo-wall 分组：2024-04 与 2023-11 两条带照片足迹 → groups=[2024·春, 2023·秋] 顺序；组内照片按创建序", async () => {
   const place = await seedPlace();
   const { user } = await userAuth(app, "author5");
   const viewer = await userAuth(app, "viewer5");
   const spring = await seedFootprint({ placeId: place.id, userId: user.id, visibility: "PUBLIC", reviewStatus: "APPROVED", date: "2024-04-15T10:00:00.000Z" });
   const autumn = await seedFootprint({ placeId: place.id, userId: user.id, visibility: "PUBLIC", reviewStatus: "APPROVED", date: "2023-11-15T10:00:00.000Z" });
-  // 同一足迹下两张照片：断言组内按 photo id 倒序（对 id 排序取倒序作为期望，不依赖创建先后）
+  // 同一足迹下两张照片：断言组内按创建序（springPhoto1 在前）。原实现是 id 倒序，
+  // 与私密面/故事面顺序相反——spec §0 的有意修复，orderIndex 相同（存量 0）时 id 升序兜底。
   const springPhoto1 = await app.prisma.footprintPhoto.create({ data: { footprintId: spring.id, mediaUrl: "photos/s1.jpg" } });
   const springPhoto2 = await app.prisma.footprintPhoto.create({ data: { footprintId: spring.id, mediaUrl: "photos/s2.jpg" } });
   const photoAutumn = await app.prisma.footprintPhoto.create({ data: { footprintId: autumn.id, mediaUrl: "photos/a.jpg" } });
@@ -150,8 +151,9 @@ test("photo-wall 分组：2024-04 与 2023-11 两条带照片足迹 → groups=[
   const body = res.json();
   expect(body.groups.map((g: { label: string }) => g.label)).toEqual(["2024·春", "2023·秋"]);
 
-  const springIdsDesc = [springPhoto1.id, springPhoto2.id].sort().reverse();
-  expect(body.groups[0].photos).toEqual(springIdsDesc.map((id) => ({ photoId: id, footprintId: spring.id })));
+  expect(body.groups[0].photos).toEqual(
+    [springPhoto1.id, springPhoto2.id].map((id) => ({ photoId: id, footprintId: spring.id })),
+  );
   expect(body.groups[1].photos).toEqual([{ photoId: photoAutumn.id, footprintId: autumn.id }]);
   // 护栏：不带计数字段
   expect(JSON.stringify(body)).not.toContain("count");

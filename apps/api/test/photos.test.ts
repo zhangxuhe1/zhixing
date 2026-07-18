@@ -235,6 +235,77 @@ test("meta 非法（takenAt 非 ISO8601 / lat·lng 越界）→ 400 invalid_phot
   expect(await countStorageObjects(`photos/${fpId}/`)).toBe(0);
 });
 
+test("照片顺序=上传顺序，私密/故事/照片墙三面一致；orderIndex 不下发", async () => {
+  const alice = await userAuth(app, "aliceOrder");
+  const viewer = await userAuth(app, "viewerOrder");
+  const fpId = await makeFootprint(alice.headers);
+
+  // 逐张上传 3 张，记录返回 id 的顺序（即上传顺序）。
+  const uploadedIds: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const mp = multipartPayload({}, PNG_1PX, "image/png");
+    const up = await app.inject({
+      method: "POST", url: `/footprints/${fpId}/photos`,
+      headers: { ...alice.headers, ...mp.headers }, payload: mp.payload,
+    });
+    expect(up.statusCode).toBe(201);
+    uploadedIds.push(up.json().id as string);
+  }
+
+  // 私密面：/me/footprints 的 photos id 序 = 上传序。
+  const mine = await app.inject({ method: "GET", url: "/me/footprints", headers: alice.headers });
+  const mineFp = mine.json().find((f: { id: string }) => f.id === fpId);
+  expect(mineFp.photos.map((p: { id: string }) => p.id)).toEqual(uploadedIds);
+
+  // 直改库进公开态，公开两面（stories / photo-wall）顺序须与私密面完全一致。
+  await app.prisma.footprint.update({
+    where: { id: fpId }, data: { visibility: "PUBLIC", reviewStatus: "APPROVED" },
+  });
+  const { placeId } = await app.prisma.footprint.findUniqueOrThrow({
+    where: { id: fpId }, select: { placeId: true },
+  });
+
+  const stories = await app.inject({
+    method: "GET", url: `/places/${placeId}/stories`, headers: viewer.headers,
+  });
+  const story = stories.json().items.find((i: { footprintId: string }) => i.footprintId === fpId);
+  expect(story.photos.map((p: { photoId: string }) => p.photoId)).toEqual(uploadedIds);
+
+  // 照片墙此前是 id desc（spec §0 的 bug），此处断言不再翻转：组内序 = 上传序。
+  const wall = await app.inject({
+    method: "GET", url: `/places/${placeId}/photo-wall`, headers: viewer.headers,
+  });
+  const wallPhotos = wall.json().groups
+    .flatMap((g: { photos: { photoId: string; footprintId: string }[] }) => g.photos)
+    .filter((p: { footprintId: string }) => p.footprintId === fpId);
+  expect(wallPhotos.map((p: { photoId: string }) => p.photoId)).toEqual(uploadedIds);
+
+  // spec §2：orderIndex 序号列不下发，顺序仅由数组序表达。
+  expect(JSON.stringify(stories.json())).not.toContain("orderIndex");
+  expect(JSON.stringify(wall.json())).not.toContain("orderIndex");
+});
+
+test("已有 9 张再传第 10 张 → 400 photo_limit_reached，不写库不落盘", async () => {
+  const { headers } = await userAuth(app, "aliceLimit");
+  const fpId = await makeFootprint(headers);
+  await app.prisma.footprintPhoto.createMany({
+    data: Array.from({ length: 9 }, (_, i) => ({
+      footprintId: fpId, mediaUrl: `photos/seed-${i}.jpg`,
+    })),
+  });
+
+  const mp = multipartPayload({}, PNG_1PX, "image/png");
+  const res = await app.inject({
+    method: "POST", url: `/footprints/${fpId}/photos`,
+    headers: { ...headers, ...mp.headers }, payload: mp.payload,
+  });
+  expect(res.statusCode).toBe(400);
+  expect(res.json().error).toBe("photo_limit_reached");
+  // DB 行数仍 9；上限校验先于 storage.put——MinIO 里不留孤儿对象。
+  expect(await app.prisma.footprintPhoto.count({ where: { footprintId: fpId } })).toBe(9);
+  expect(await countStorageObjects(`photos/${fpId}/`)).toBe(0);
+});
+
 test("超过 15MB → 413（fastify-multipart 文件大小限制固化）", async () => {
   const { headers } = await userAuth(app);
   const fpId = await makeFootprint(headers);

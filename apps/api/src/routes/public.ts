@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "../auth.js";
 import { PUBLICLY_VISIBLE } from "../visibility.js";
 import { cstParts } from "../time.js";
+import { PHOTO_ORDER_BY } from "./photos.js";
 
 const storiesQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -16,7 +17,8 @@ const footprintSelect = {
   likeCount: true,
   viewCount: true,
   user: { select: { nickname: true } },
-  photos: { select: { id: true } },
+  // orderIndex 本身不下发（spec §2：顺序仅由数组序表达）。
+  photos: { select: { id: true }, orderBy: PHOTO_ORDER_BY },
 } as const;
 
 type FootprintForDto = {
@@ -120,7 +122,8 @@ export async function publicRoutes(app: FastifyInstance) {
       select: {
         id: true,
         date: true,
-        photos: { select: { id: true }, orderBy: { id: "desc" } },
+        // spec §0 修复：原 id desc 使组内照片与私密面/故事面顺序相反，统一为落库序号升序。
+        photos: { select: { id: true }, orderBy: PHOTO_ORDER_BY },
       },
     });
 
