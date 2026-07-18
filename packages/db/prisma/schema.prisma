@@ -194,6 +194,7 @@ model FootprintPhoto {
   footprintId String
   footprint   Footprint @relation(fields: [footprintId], references: [id], onDelete: Cascade)
   mediaUrl    String
+  orderIndex  Int       @default(0) // 展示顺序，0 起；不加唯一约束（重排事务会经历中间态）。@default(0) 仅为存量迁移落列，新行由服务端显式赋值
   takenAt     DateTime?
   lat         Float? // 原始坐标；公开展示时由服务端脱敏到地点级
   lng         Float?
