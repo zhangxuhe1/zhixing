@@ -15,6 +15,9 @@ export const PHOTO_ORDER_BY: Prisma.FootprintPhotoOrderByWithRelationInput[] = [
   { id: "asc" },
 ];
 
+/** 单条足迹照片上限(产品值,与 iOS ZXLimit.footprintPhotos 对齐;走查放宽 9→12)。 */
+const FOOTPRINT_PHOTO_LIMIT = 12;
+
 const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -46,13 +49,13 @@ export async function photosRoutes(app: FastifyInstance) {
     if (!footprint || footprint.userId !== req.userId) {
       return reply.code(404).send({ error: "not_found" });
     }
-    // 9 张上限：与撰写器/导入的 9 张口径统一。校验先于 req.file()/storage.put，
+    // 照片上限：与撰写器/导入口径统一。校验先于 req.file()/storage.put，
     // 超限请求不消费文件流、不留孤儿对象。并发竞态下可能短暂超限，但单客户端
     // 顺序上传无感，读侧 orderIndex+id 兜底排序无害，不为此加库级约束。
     const photoCount = await app.prisma.footprintPhoto.count({
       where: { footprintId: footprint.id },
     });
-    if (photoCount >= 9) {
+    if (photoCount >= FOOTPRINT_PHOTO_LIMIT) {
       return reply.code(400).send({ error: "photo_limit_reached" });
     }
     const data = await req.file();

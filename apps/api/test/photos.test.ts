@@ -285,14 +285,19 @@ test("照片顺序=上传顺序，私密/故事/照片墙三面一致；orderInd
   expect(JSON.stringify(wall.json())).not.toContain("orderIndex");
 });
 
-test("已有 9 张再传第 10 张 → 400 photo_limit_reached，不写库不落盘", async () => {
+test("已有 12 张再传第 13 张 → 400 photo_limit_reached，不写库不落盘", async () => {
   const { headers } = await userAuth(app, "aliceLimit");
   const fpId = await makeFootprint(headers);
-  await app.prisma.footprintPhoto.createMany({
-    data: Array.from({ length: 9 }, (_, i) => ({
-      footprintId: fpId, mediaUrl: `photos/seed-${i}.jpg`,
-    })),
-  });
+  // 前 12 张走真实上传路由而非直插库：同时钉住上限的下界——有人把上限误调小时，
+  // 第 N+1 张的 201 断言先红。字面量 12/13 即产品值，故意不引用实现侧常量。
+  for (let i = 0; i < 12; i++) {
+    const mp = multipartPayload({}, PNG_1PX, "image/png");
+    const up = await app.inject({
+      method: "POST", url: `/footprints/${fpId}/photos`,
+      headers: { ...headers, ...mp.headers }, payload: mp.payload,
+    });
+    expect(up.statusCode).toBe(201);
+  }
 
   const mp = multipartPayload({}, PNG_1PX, "image/png");
   const res = await app.inject({
@@ -301,9 +306,9 @@ test("已有 9 张再传第 10 张 → 400 photo_limit_reached，不写库不落
   });
   expect(res.statusCode).toBe(400);
   expect(res.json().error).toBe("photo_limit_reached");
-  // DB 行数仍 9；上限校验先于 storage.put——MinIO 里不留孤儿对象。
-  expect(await app.prisma.footprintPhoto.count({ where: { footprintId: fpId } })).toBe(9);
-  expect(await countStorageObjects(`photos/${fpId}/`)).toBe(0);
+  // DB 行数仍 12；上限校验先于 storage.put——MinIO 里不留第 13 个孤儿对象。
+  expect(await app.prisma.footprintPhoto.count({ where: { footprintId: fpId } })).toBe(12);
+  expect(await countStorageObjects(`photos/${fpId}/`)).toBe(12);
 });
 
 test("属主删除单张照片：204、DB 只剩另一张、S3 对象被清；删到 0 足迹本体仍在", async () => {
