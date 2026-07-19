@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAdmin } from "../auth.js";
 import { placeAncestors } from "../placeAncestors.js";
+import { placeSubtreeIds } from "../placeSubtree.js";
 
 const blockSchema = z.object({
   type: z.enum(["TEXT", "IMAGE", "AUDIO", "VIDEO"]),
@@ -9,9 +10,11 @@ const blockSchema = z.object({
   mediaUrl: z.string().optional(),
 });
 
+const categoryEnum = z.enum(["CUSTOMS", "FOOD", "DIALECT", "ANECDOTE", "PLACE_NAME"]);
+
 const createCardSchema = z.object({
   placeId: z.string(),
-  category: z.enum(["CUSTOMS", "FOOD", "DIALECT", "ANECDOTE", "PLACE_NAME"]),
+  category: categoryEnum,
   title: z.string().min(1),
   sources: z.array(z.string()).default([]),
   blocks: z.array(blockSchema).min(1),
@@ -24,6 +27,15 @@ const patchCardSchema = z.object({
 });
 
 const statusSchema = z.object({ action: z.enum(["review", "retire"]) });
+
+const adminListQuerySchema = z.object({
+  under: z.string().min(1).optional(),
+  category: categoryEnum.optional(),
+  status: z.enum(["AI_GENERATED", "REVIEWED", "RETIRED"]).optional(),
+  q: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
 
 const includeBlocks = { blocks: { orderBy: { order: "asc" as const } } };
 
@@ -56,6 +68,46 @@ export async function cardsRoutes(app: FastifyInstance) {
         lng: place.lng,
         ancestors: await placeAncestors(app.prisma, place.parentId),
       },
+    };
+  });
+
+  // 管理列表：子树/分类/状态/标题关键字筛选 + 分页；逐字段轻 DTO，不带 blocks
+  app.get("/admin/cards", { preHandler: requireAdmin }, async (req, reply) => {
+    const parsed = adminListQuerySchema.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_query" });
+    const { under, category, status, q, page, pageSize } = parsed.data;
+
+    const keyword = q?.trim() ?? "";
+    const where = {
+      ...(under ? { placeId: { in: await placeSubtreeIds(app.prisma, under) } } : {}),
+      ...(category ? { category } : {}),
+      ...(status ? { status } : {}),
+      ...(keyword !== ""
+        ? { title: { contains: keyword, mode: "insensitive" as const } }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      app.prisma.card.count({ where }),
+      app.prisma.card.findMany({
+        where,
+        include: { place: { select: { name: true } } },
+        // 批量导入会撞 createdAt 时间戳，补 id 兜底保证翻页稳定
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return {
+      total,
+      items: rows.map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.category,
+        status: c.status,
+        createdAt: c.createdAt,
+        placeId: c.placeId,
+        placeName: c.place.name,
+      })),
     };
   });
 
