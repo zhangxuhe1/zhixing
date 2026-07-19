@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { AMapPicker, type AdminRegion, type ZXCenter } from "./amap-picker";
+import { LEVEL_LABELS } from "../region-cascade";
 
 export type PlaceRow = {
   id: string; name: string; level: string; parentId: string | null;
@@ -9,9 +10,6 @@ export type PlaceRow = {
 };
 
 const LEVELS = ["PROVINCE", "CITY", "DISTRICT", "POI"] as const;
-export const LEVEL_LABELS: Record<string, string> = {
-  PROVINCE: "省", CITY: "市", DISTRICT: "区县", POI: "点位",
-};
 
 export function PlaceForm({ mode, initial, places, onDone, onCancel }: {
   mode: "create" | "edit";
