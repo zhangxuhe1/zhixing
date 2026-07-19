@@ -34,7 +34,7 @@
 - Consumes: `@zhixing/db` 的 `PrismaClient`（与 `apps/api/src/placeAncestors.ts` 同款导入）。
 - Produces: `placeSubtreeIds(prisma: PrismaClient, rootId: string): Promise<string[]>` —— 返回 rootId 整棵子树（**含自身**）的地点 id 列表；rootId 不存在时返回 `[rootId]`（上游 `IN` 查询自然得空集）；脏数据成环时靠 visited 去重终止。Task 2 依赖此签名。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `apps/api/test/placeSubtree.test.ts`：
 
@@ -84,12 +84,12 @@ test("脏数据成环不死循环", async () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `pnpm -C apps/api exec vitest run test/placeSubtree.test.ts`
 Expected: FAIL——`Cannot find module '../src/placeSubtree.js'`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 创建 `apps/api/src/placeSubtree.ts`：
 
@@ -126,12 +126,12 @@ export async function placeSubtreeIds(
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `pnpm -C apps/api exec vitest run test/placeSubtree.test.ts`
 Expected: PASS（2 个用例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/api/src/placeSubtree.ts apps/api/test/placeSubtree.test.ts
@@ -150,7 +150,7 @@ git commit -m "feat(api): placeSubtree 子树展开 helper——邻接表 BFS+vi
 - Consumes: Task 1 的 `placeSubtreeIds(prisma, rootId): Promise<string[]>`；现有 `requireAdmin`（`../auth.js`）。
 - Produces: `GET /admin/cards`（requireAdmin）。query 全可选：`under`（placeId，子树语义）、`category`（五分类枚举）、`status`（AI_GENERATED/REVIEWED/RETIRED，不传=全部）、`q`（标题关键字，大小写不敏感 contains）、`page`（默认 1）、`pageSize`（默认 50，上限 200）。响应 `{ total: number, items: Array<{ id, title, category, status, createdAt, placeId, placeName }> }`，按 createdAt desc、id desc。Task 4 前端依赖此 query/DTO 形状。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `apps/api/test/adminCards.test.ts`：
 
@@ -291,12 +291,12 @@ test("未鉴权 401；非法参数 400；under 不存在返回空集", async () 
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `pnpm -C apps/api exec vitest run test/adminCards.test.ts`
 Expected: FAIL——`/admin/cards` 路由不存在，`statusCode` 404 ≠ 预期
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 修改 `apps/api/src/routes/cards.ts`。
 
@@ -381,17 +381,17 @@ const adminListQuerySchema = z.object({
   });
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `pnpm -C apps/api exec vitest run test/adminCards.test.ts`
 Expected: PASS（4 个用例）
 
-- [ ] **Step 5: 跑 api 全量测试防回归**
+- [x] **Step 5: 跑 api 全量测试防回归**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: 全部 PASS（需 Docker 起着 `pnpm db:up`；若首次或改过 schema，先 `pnpm -C packages/db push:test`）
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add apps/api/src/routes/cards.ts apps/api/test/adminCards.test.ts
@@ -415,7 +415,7 @@ git commit -m "feat(api): GET /admin/cards 管理列表——子树/分类/状�
   - `LEVEL_LABELS: Record<string, string>`（从 place-form 迁来，值不变：省/市/区县/点位）。
   - `inSubtree(parentById: Map<string, string | null>, rootId: string, id: string): boolean`（32 跳保险丝）。
 
-- [ ] **Step 1: 创建共享组件**
+- [x] **Step 1: 创建共享组件**
 
 创建 `apps/admin/app/region-cascade.tsx`（放 app 根，与 token-bar.tsx 同规；级联注释随逻辑从 places/page.tsx 迁入）：
 
@@ -500,7 +500,7 @@ export function RegionCascade({ places, provinceId, cityId, onChange, disabled }
 }
 ```
 
-- [ ] **Step 2: 地点库页改用共享组件**
+- [x] **Step 2: 地点库页改用共享组件**
 
 重写 `apps/admin/app/places/page.tsx` 为：
 
@@ -598,7 +598,7 @@ export default function PlacesPage() {
 }
 ```
 
-- [ ] **Step 3: place-form 的 LEVEL_LABELS 改为导入**
+- [x] **Step 3: place-form 的 LEVEL_LABELS 改为导入**
 
 修改 `apps/admin/app/places/place-form.tsx`：删除本地定义
 
@@ -616,12 +616,12 @@ import { LEVEL_LABELS } from "../region-cascade";
 
 （`LEVELS` 常量保留在原处；除这两处外该文件不动。全仓只有 places/page.tsx 曾从 place-form 导入 LEVEL_LABELS，Step 2 已改为从共享文件导入。）
 
-- [ ] **Step 4: 类型检查**
+- [x] **Step 4: 类型检查**
 
 Run: `pnpm --filter @zhixing/admin build`
 Expected: 编译通过，无 TS 报错
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add apps/admin/app/region-cascade.tsx apps/admin/app/places/page.tsx apps/admin/app/places/place-form.tsx
@@ -639,7 +639,7 @@ git commit -m "refactor(admin): 抽共享省市级联组件 RegionCascade——�
 - Consumes: Task 2 的 `GET /admin/cards`（query：under/category/status/q/page/pageSize；响应 `{ total, items: [{ id, title, category, status, createdAt, placeId, placeName }] }`）；Task 3 的 `RegionCascade` / `RegionPlace` / `LEVEL_LABELS` / `inSubtree`；现有 `api()`（自动带 admin token）。
 - Produces: 无下游依赖。
 
-- [ ] **Step 1: 重写页面**
+- [x] **Step 1: 重写页面**
 
 重写 `apps/admin/app/cards/page.tsx` 为：
 
@@ -784,12 +784,12 @@ export default function CardsPage() {
 }
 ```
 
-- [ ] **Step 2: 类型检查**
+- [x] **Step 2: 类型检查**
 
 Run: `pnpm --filter @zhixing/admin build`
 Expected: 编译通过，无 TS 报错
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add apps/admin/app/cards/page.tsx
@@ -802,17 +802,17 @@ git commit -m "feat(admin): 风物卡页重写为管理列表——省市地点�
 
 **Files:** 无新改动（只跑验证；如走查发现问题，另行修复提交）
 
-- [ ] **Step 1: api 全量测试**
+- [x] **Step 1: api 全量测试**
 
 Run: `pnpm -C apps/api exec vitest run`
 Expected: 全部 PASS
 
-- [ ] **Step 2: admin 构建**
+- [x] **Step 2: admin 构建**
 
 Run: `pnpm --filter @zhixing/admin build`
 Expected: 编译通过
 
-- [ ] **Step 3: 起本地环境交人工走查**
+- [x] **Step 3: 起本地环境交人工走查**
 
 依次：`pnpm db:up` → `pnpm --filter @zhixing/api dev`（:8787）→ `pnpm --filter @zhixing/admin dev`（:3000），浏览器开 http://localhost:3000/cards。走查清单（admin 是网页，浏览器走查即可，不涉及 Mac Catalyst）：
 
@@ -825,7 +825,7 @@ Expected: 编译通过
 7. 点标题进详情页，「标记已复核 / 下架」照常工作；
 8. 地点库页（/places）回归：级联/层级/关键字/新建/编辑行为与改造前一致。
 
-- [ ] **Step 4: 勾选计划复选框并提交计划文件**
+- [x] **Step 4: 勾选计划复选框并提交计划文件**
 
 ```bash
 git add docs/superpowers/plans/2026-07-18-admin-cards-list.md
