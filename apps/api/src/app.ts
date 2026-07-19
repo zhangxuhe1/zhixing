@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
-import Fastify from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import { createPrisma } from "@zhixing/db";
 import { remoteAppleJwks, type AppleJwks } from "./apple.js";
 import { config } from "./config.js";
@@ -52,7 +52,7 @@ export function buildApp(opts: BuildAppOpts = {}) {
   // 429 由插件自答、不经 errorHandler，体形保持现状——客户端按 HTTP status 判别（见规格
   // 与 iOS EmailAuthRules 注释）。5xx 绝不回显 err.message（防内部信息/堆栈泄漏），细节只进日志。
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not_found" }));
-  app.setErrorHandler((err, req, reply) => {
+  app.setErrorHandler((err: FastifyError, req, reply) => {
     const status = err.statusCode ?? 500;
     if (status >= 500) {
       req.log.error(err);
