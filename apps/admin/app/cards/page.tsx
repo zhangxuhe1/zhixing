@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { inSubtree, LEVEL_LABELS, RegionCascade, type RegionPlace } from "../region-cascade";
 
@@ -33,15 +33,21 @@ export default function CardsPage() {
   const [filters, setFilters] = useState<Filters>(INITIAL);
   const [data, setData] = useState<{ total: number; items: CardRow[] }>({ total: 0, items: [] });
   const [error, setError] = useState("");
+  // 地点源单独报错:卡片请求成功路径会清 error,共用一个状态会把 places 的失败无声抹掉
+  const [placesError, setPlacesError] = useState("");
 
   useEffect(() => {
-    api<RegionPlace[]>("/places").then(setPlaces).catch((e) => setError(String(e)));
+    api<RegionPlace[]>("/places")
+      .then((ps) => { setPlaces(ps); setPlacesError(""); })
+      .catch((e) => setPlacesError(String(e)));
   }, []);
 
-  // 关键字 300ms 防抖:落定后并入 filters 并重置回第 1 页(与其它筛选同规)
+  // 关键字 300ms 防抖:以 trim 后的词判定变化(纯空格编辑不重查、不误回第 1 页),
+  // 落定后并入 filters 并重置回第 1 页(与其它筛选同规)
   useEffect(() => {
     const t = setTimeout(() => {
-      setFilters((f) => (f.q === keyword ? f : { ...f, q: keyword, page: 1 }));
+      const q = keyword.trim();
+      setFilters((f) => (f.q === q ? f : { ...f, q, page: 1 }));
     }, 300);
     return () => clearTimeout(t);
   }, [keyword]);
@@ -52,13 +58,20 @@ export default function CardsPage() {
     if (under) params.set("under", under);
     if (filters.category) params.set("category", filters.category);
     if (filters.status) params.set("status", filters.status);
-    if (filters.q.trim() !== "") params.set("q", filters.q.trim());
+    if (filters.q !== "") params.set("q", filters.q);
     params.set("page", String(filters.page));
     params.set("pageSize", String(PAGE_SIZE));
+    let stale = false; // 筛选又变时丢弃迟到的旧响应,防乱序覆盖新结果
     api<{ total: number; items: CardRow[] }>(`/admin/cards?${params}`)
-      .then((d) => { setData(d); setError(""); })
-      .catch((e) => setError(String(e)));
+      .then((d) => { if (!stale) { setData(d); setError(""); } })
+      .catch((e) => { if (!stale) setError(String(e)); });
+    return () => { stale = true; };
   }, [filters]);
+
+  // 稳定引用:RegionCascade 的失效复位 effect 依赖 onChange,内联箭头会让它每次渲染空跑
+  const onRegion = useCallback((provinceId: string, cityId: string) => {
+    setFilters((f) => ({ ...f, provinceId, cityId, placeId: "", page: 1 }));
+  }, []);
 
   const parentById = useMemo(() => new Map(places.map((p) => [p.id, p.parentId])), [places]);
   const rootId = filters.cityId || filters.provinceId;
@@ -83,11 +96,11 @@ export default function CardsPage() {
   return (
     <>
       <h2>风物卡（{data.total}）</h2>
+      {placesError && <p style={{ color: "red" }}>{placesError}</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
       <p>
         <RegionCascade places={places} provinceId={filters.provinceId} cityId={filters.cityId}
-          onChange={(provinceId, cityId) =>
-            setFilters((f) => ({ ...f, provinceId, cityId, placeId: "", page: 1 }))} />{" "}
+          onChange={onRegion} />{" "}
         <select value={filters.placeId} disabled={rootId === ""}
           onChange={(e) => setFilters((f) => ({ ...f, placeId: e.target.value, page: 1 }))}>
           <option value="">全部地点</option>
