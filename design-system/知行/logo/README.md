@@ -19,7 +19,8 @@
 
 - `apps/ios/Zhixing/Assets.xcassets/AppIcon.appiconset/AppIcon.png` — 应用图标（1024，无透明通道）
 - `apps/ios/Zhixing/Assets.xcassets/BrandMark.imageset/` — 透明底图形标母版（256px），用于
-  登录页徽标 / Catalyst 侧栏头 / 会话恢复启动画面（均垫 rice 底砖）
+  登录页徽标 / Catalyst 侧栏头 / 会话恢复启动画面（均垫 rice 底砖）、旅程分享卡落款
+  （卡底即米色，直接落标）
 - `apps/api/assets/email-logo.png` — 验证码邮件品牌头小样（160px 米色圆角方块，CID 内联附件）
 - `apps/admin/app/icon.png` — 管理后台 favicon（256px，Next App Router 约定）
 

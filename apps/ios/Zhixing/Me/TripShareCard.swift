@@ -121,7 +121,12 @@ struct TripShareCard: View {
     private var brandFooter: some View {
         VStack(spacing: 10) {
             Rectangle().fill(ZXTheme.oldGold.opacity(0.45)).frame(height: 1)
-            HStack(alignment: .center) {
+            HStack(alignment: .center, spacing: 10) {
+                // 卡底即宣纸米色,透明底图形标直接落上去,无需再垫底砖
+                Image("BrandMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("知行")
                         .font(.system(.headline, design: .serif, weight: .bold))
