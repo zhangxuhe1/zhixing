@@ -1,5 +1,26 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
 import { config } from "./config.js";
+
+/** 邮件内联附件（nodemailer Attachment 的结构子集，避免对其类型声明的直接依赖）。 */
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  cid: string;
+  contentDisposition: "inline";
+}
+
+/**
+ * 品牌 logo（山径一笔）：以 CID 内联附件嵌入，而非外链/data URI——QQ 邮箱、163 等
+ * 国内客户端默认拦外链图、不渲染 data URI，CID 是唯一普遍可靠的嵌图方式。
+ * 原图见 design-system/知行/logo/；此处为 160px 米色圆角方块小样（16KB）。
+ */
+const LOGO_CID = "zhixing-logo";
+const LOGO_PNG = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "../assets/email-logo.png"),
+);
 
 /** HTML 转义：所有插入邮件模板的值都要过一遍——验证码目前是纯数字，但按契约纵深防御，不因内容"看起来安全"就省略。 */
 function escapeHtml(raw: string): string {
@@ -48,7 +69,12 @@ const MONO = "'Courier New',Courier,monospace";
  *
  * 返回的 subject 未加前缀——统一由 sendMail 加上「【知行】」前缀，调用方不应重复添加。
  */
-export function renderCodeEmail(code: string): { subject: string; text: string; html: string } {
+export function renderCodeEmail(code: string): {
+  subject: string;
+  text: string;
+  html: string;
+  attachments: MailAttachment[];
+} {
   const safeCode = escapeHtml(code);
   const subject = "登录验证码";
   const text = [
@@ -71,9 +97,18 @@ export function renderCodeEmail(code: string): { subject: string; text: string; 
     <td align="center">
       <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:${C.card};border:1px solid ${C.hair};border-radius:12px;overflow:hidden;">
         <tr>
-          <td style="padding:24px 32px 18px;border-bottom:1px solid ${C.hair};">
-            <span style="font-family:${SERIF};font-size:22px;font-weight:700;letter-spacing:2px;color:${C.brand};">${BRAND.name}</span>
-            <span style="font-size:12px;color:${C.muted};padding-left:10px;">${BRAND.tagline}</span>
+          <td style="padding:20px 32px 16px;border-bottom:1px solid ${C.hair};">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding-right:12px;">
+                  <img src="cid:${LOGO_CID}" width="42" height="42" alt="${BRAND.name}" style="display:block;border:0;">
+                </td>
+                <td>
+                  <span style="font-family:${SERIF};font-size:22px;font-weight:700;letter-spacing:2px;color:${C.brand};">${BRAND.name}</span><br>
+                  <span style="font-size:12px;color:${C.muted};">${BRAND.tagline}</span>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
         <tr>
@@ -100,7 +135,10 @@ export function renderCodeEmail(code: string): { subject: string; text: string; 
 </table>
 </body>
 </html>`;
-  return { subject, text, html };
+  const attachments: MailAttachment[] = [
+    { filename: "zhixing-logo.png", content: LOGO_PNG, cid: LOGO_CID, contentDisposition: "inline" },
+  ];
+  return { subject, text, html, attachments };
 }
 
 /**
@@ -110,7 +148,13 @@ export function renderCodeEmail(code: string): { subject: string; text: string; 
  * 主题统一在此处加「【知行】」前缀——调用方（如 renderCodeEmail）返回的 subject 不带前缀，
  * 避免出现「【知行】【知行】...」的双重前缀。
  */
-export async function sendMail(to: string, subject: string, text: string, html?: string): Promise<void> {
+export async function sendMail(
+  to: string,
+  subject: string,
+  text: string,
+  html?: string,
+  attachments?: MailAttachment[],
+): Promise<void> {
   const prefixedSubject = `【知行】${subject}`;
 
   if (!config.smtp.url) {
@@ -125,5 +169,6 @@ export async function sendMail(to: string, subject: string, text: string, html?:
     subject: prefixedSubject,
     text,
     html,
+    attachments,
   });
 }

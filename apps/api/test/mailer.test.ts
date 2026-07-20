@@ -35,3 +35,14 @@ test("用例4 转义契约：含元字符的输入被转义（&lt;b&gt; 而非�
   expect(html).toContain("&lt;b&gt;");
   expect(html).not.toContain("<b>");
 });
+
+test("用例5 品牌 logo 内联附件：attachments 携带 PNG 且 html 以 cid 引用（QQ/163 不吃外链与 data URI）", () => {
+  const { html, attachments } = renderCodeEmail(CODE);
+  expect(attachments).toHaveLength(1);
+  const logo = attachments[0];
+  expect(logo.cid).toBe("zhixing-logo");
+  expect(logo.contentDisposition).toBe("inline");
+  // PNG 魔数,证明附件确实是图片内容而非占位
+  expect([...logo.content.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  expect(html).toContain("cid:zhixing-logo");
+});

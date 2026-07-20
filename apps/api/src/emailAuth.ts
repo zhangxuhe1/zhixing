@@ -69,7 +69,7 @@ export async function issueEmailCode(prisma: PrismaClient, email: string): Promi
     data: { email, code, expiresAt: new Date(now + EMAIL_CODE.ttlMs) },
   });
   const mail = renderCodeEmail(code);
-  await sendMail(email, mail.subject, mail.text, mail.html);
+  await sendMail(email, mail.subject, mail.text, mail.html, mail.attachments);
 }
 
 /**

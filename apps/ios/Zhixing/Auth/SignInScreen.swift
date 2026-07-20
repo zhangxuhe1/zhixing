@@ -81,10 +81,11 @@ struct SignInScreen: View {
     private func hero(alignment: HorizontalAlignment, compact: Bool) -> some View {
         VStack(alignment: alignment, spacing: compact ? 12 : 18) {
             HStack(spacing: 12) {
-                Image(systemName: "map.fill")
-                    .font(.system(size: 22, weight: .semibold))
+                Image("BrandMark")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(7)
                     .frame(width: 48, height: 48)
-                    .foregroundStyle(ZXTheme.pineDeep)
                     .background(ZXTheme.rice.opacity(0.88), in: RoundedRectangle(cornerRadius: 14))
                 Text("知行")
                     .font(.system(size: 29, weight: .bold, design: .serif))

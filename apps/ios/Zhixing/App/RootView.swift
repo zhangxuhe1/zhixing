@@ -11,9 +11,10 @@ struct RootView: View {
                 ZStack {
                     ZXTheme.canvas.ignoresSafeArea()
                     VStack(spacing: 14) {
-                        Image(systemName: "map.fill")
-                            .font(.system(size: 28, weight: .light))
-                            .foregroundStyle(ZXTheme.pine)
+                        Image("BrandMark")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 52, height: 52)
                         ProgressView("正在展开地图…")
                             .tint(ZXTheme.pine)
                             .foregroundStyle(.secondary)
@@ -109,11 +110,13 @@ private struct DesktopMainView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 228, max: 280)
             .safeAreaInset(edge: .top) {
                 HStack(spacing: 11) {
-                    Image(systemName: "map.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
+                    Image("BrandMark")
+                        .resizable()
+                        .scaledToFit()
+                        .padding(5)
                         .frame(width: 38, height: 38)
-                        .background(ZXTheme.pine, in: RoundedRectangle(cornerRadius: 11))
+                        .background(ZXTheme.rice, in: RoundedRectangle(cornerRadius: 11))
+                        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(.black.opacity(0.08)))
                     VStack(alignment: .leading, spacing: 1) {
                         Text("知行")
                             .font(.system(.title3, design: .serif, weight: .bold))
