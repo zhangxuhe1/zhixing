@@ -11,10 +11,14 @@ struct RootView: View {
                 ZStack {
                     ZXTheme.canvas.ignoresSafeArea()
                     VStack(spacing: 14) {
+                        // 与登录页/侧栏一致垫 rice 底砖：BrandMark 是墨绿透明底,裸放在深色 canvas 上会看不见
                         Image("BrandMark")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 52, height: 52)
+                            .padding(9)
+                            .frame(width: 64, height: 64)
+                            .background(ZXTheme.rice, in: RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.black.opacity(0.08)))
                         ProgressView("正在展开地图…")
                             .tint(ZXTheme.pine)
                             .foregroundStyle(.secondary)

@@ -15,6 +15,14 @@
 应用内复用该标时，从原稿抠出透明底图形（宣纸底为纯色，可色键抠图），或直接用图标圆角
 方块形式呈现（登录徽标、关于行等"应用身份"场景）。
 
+## 已落地位置清单（换标时逐处同步）
+
+- `apps/ios/Zhixing/Assets.xcassets/AppIcon.appiconset/AppIcon.png` — 应用图标（1024，无透明通道）
+- `apps/ios/Zhixing/Assets.xcassets/BrandMark.imageset/` — 透明底图形标母版（256px），用于
+  登录页徽标 / Catalyst 侧栏头 / 会话恢复启动画面（均垫 rice 底砖）
+- `apps/api/assets/email-logo.png` — 验证码邮件品牌头小样（160px 米色圆角方块，CID 内联附件）
+- `apps/admin/app/icon.png` — 管理后台 favicon（256px，Next App Router 约定）
+
 ## 重新生成
 
 提示词要点（英文喂给生图模型）：品牌色 + "WORDLESS abstract brand mark, ONE continuous

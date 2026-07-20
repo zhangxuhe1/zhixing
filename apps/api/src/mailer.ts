@@ -1,6 +1,4 @@
 import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
 import { config } from "./config.js";
 
@@ -18,9 +16,9 @@ export interface MailAttachment {
  * 原图见 design-system/知行/logo/；此处为 160px 米色圆角方块小样（16KB）。
  */
 const LOGO_CID = "zhixing-logo";
-const LOGO_PNG = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "../assets/email-logo.png"),
-);
+// 相对路径成立依赖运行时始终以 tsx 直跑 src/（dev、Docker、vitest 皆如此）；
+// 若将来改为 tsc 产物运行，需同步搬运 assets 或调整此路径。加载失败启动即崩是有意的 fail-fast。
+const LOGO_PNG = readFileSync(new URL("../assets/email-logo.png", import.meta.url));
 
 /** HTML 转义：所有插入邮件模板的值都要过一遍——验证码目前是纯数字，但按契约纵深防御，不因内容"看起来安全"就省略。 */
 function escapeHtml(raw: string): string {
