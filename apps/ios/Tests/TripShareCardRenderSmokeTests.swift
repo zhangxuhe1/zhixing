@@ -3,11 +3,13 @@ import XCTest
 
 @testable import Zhixing
 
-/// 临时冒烟：把分享卡真渲成 PNG 落盘,供人工目检品牌落款(BrandMark)效果。
-/// 模拟器无沙箱强制,直接写 /tmp 便于宿主机读取。
+/// 常驻渲染回归：守护整卡可渲染+固定宽,并断言品牌标资源存在(命名图片缺失时 SwiftUI 是
+/// 静默空渲,不 crash,渲染断言本身抓不住)。PNG 落盘 /tmp 仅为人工目检便利,失败不拖垮断言;
+/// 项目测试被 project.yml 与 ios-test.sh 钉死在模拟器上,模拟器共享宿主文件系统,/tmp 可写。
 @MainActor
 final class TripShareCardRenderSmokeTests: XCTestCase {
     func test_renderShareCardToPNG() throws {
+        XCTAssertNotNil(UIImage(named: "BrandMark"), "品牌图形标资源缺失(或测试脱离了 TEST_HOST 宿主)")
         let photo = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 300)).image { ctx in
             UIColor(red: 0.32, green: 0.45, blue: 0.4, alpha: 1).setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: 300, height: 300))
@@ -25,7 +27,7 @@ final class TripShareCardRenderSmokeTests: XCTestCase {
         XCTAssertEqual(image.size.width, TripShareCard.width, accuracy: 1)
         let data = try XCTUnwrap(image.pngData())
         let url = URL(fileURLWithPath: "/tmp/zhixing-sharecard-smoke.png")
-        try data.write(to: url)
+        try? data.write(to: url)
         print("share card written: \(url.path), bytes=\(data.count)")
     }
 }
