@@ -25,6 +25,9 @@ enum EmailAuthRules {
     /// 冷却/日限统一 429、错码/过期/锁死统一 401，均无细分信息。这里只按 HTTP status 映射、
     /// **禁止解析 body**——authRateLimit 插件的 429 体形与 {error} 不同，按 status 判别对两种体形都稳。
     static func message(for error: Error) -> String {
+        if error is SessionPersistenceError {
+            return "登录成功，但无法安全保存登录状态，请检查磁盘权限后重试"
+        }
         if case let APIError.status(code, _) = error {
             switch code {
             case 429: return "操作太频繁，请稍后再试"

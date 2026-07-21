@@ -20,7 +20,7 @@
 **流程**：`SignInScreen` 增加"邮箱验证码登录"区块，两步交互——
 
 1. 输入邮箱 → 点"发送验证码" → `POST /auth/email/send`，按钮进入冷却倒计时——send 成功仅返回 `{ok:true}`、**不下发冷却秒数**，客户端自带倒计时常量（取值与服务端 `EMAIL_CODE.cooldownMs` 一致，当前 60s，注释互指，改参数时两边同步）；
-2. 输入 6 位验证码 → `POST /auth/email/verify` → 拿到 session JWT，走与 SIWA 完全相同的 `SessionStore` 存储路径（Keychain），后续请求无差别。
+2. 输入 6 位验证码 → `POST /auth/email/verify` → 拿到 session JWT，走与 SIWA 完全相同的 `SessionStore` / `SessionTokenStore` 存储路径（iOS 为 Keychain；无 Team 的 ad-hoc Catalyst 在缺 entitlement 时为 Application Support 降级文件），后续请求无差别。
 
 **平台差异**：
 
@@ -34,7 +34,7 @@
 - 401 →"验证码错误或已失效，请重新获取"（错码/过期/锁死，服务端不区分）；
 - 其余（含 400）→ 笼统失败提示；邮箱格式/6 位数字由客户端本地校验提前兜住。
 
-**代码位置**：`Auth/` 下新增 `EmailSignInSection.swift`（SignInScreen 只负责组装）+ `APIClient` 增加两个端点方法 + 单元测试（验证码输入校验、倒计时状态机）。
+**代码位置**：`Auth/` 下新增 `EmailSignInSection.swift`（SignInScreen 只负责组装）+ `SessionStore` 增加两个认证端点方法 + 单元测试（验证码输入校验、倒计时状态机）。`APIClient` 继续保持通用 HTTP 层。
 
 ## 二、Catalyst 工程改造 + 最小桌面适配
 
@@ -47,8 +47,8 @@
 **最小桌面适配**（只做三件事）：
 
 1. 窗口最小尺寸：`UIWindowScene.sizeRestrictions` 设最小 1000×700，避免窗口拖成手机条状导致地图不可用；
-2. 核心流程走查修复：邮箱登录 → 退出重开 App 验证登录态仍在（钥匙串在 Catalyst 上的首个真实读写路径）→ 地图浏览/风物卡 → 发足迹（搜索/当前位置选点）→ 批量导入（Mac 照片库，本版核心卖点）→ 我的页。只修阻断性问题（崩溃、点不到、功能不可用），观感问题记录后留给后续"桌面级体验"计划；
-3. 已知风险点预检：CoreLocation 在 Mac 首次定位授权弹窗行为不同；PHPhotoLibrary 读的是 Mac「照片」App 图库（未开 iCloud 照片的用户图库可能为空——安装说明提示）；钥匙串跨版本：ad-hoc 签名的 designated requirement 绑二进制 hash、逐版本变化——首装首登正常，**升级新版后**旧 token 条目会触发系统钥匙串授权弹窗或读不到（表现为升级即登出），v0.1 单版本无感，写进安装说明做预期管理；现有 Keychain.swift 不用 data-protection keychain 的写法在 ad-hoc 下是唯一可行解（改用会 -34018 缺 application-identifier），勿动。
+2. 核心流程走查修复：邮箱登录 → 退出重开 App 验证登录态仍在（Catalyst 会话存储的首个真实恢复路径）→ 地图浏览/风物卡 → 发足迹（搜索/当前位置选点）→ 批量导入（Mac 照片库，本版核心卖点）→ 我的页。只修阻断性问题（崩溃、点不到、功能不可用），观感问题记录后留给后续"桌面级体验"计划；
+3. 已知风险点预检：CoreLocation 在 Mac 首次定位授权弹窗行为不同；PHPhotoLibrary 读的是 Mac「照片」App 图库（未开 iCloud 照片的用户图库可能为空——安装说明提示）。会话持久化结论于 2026-07-21 经真实 Release Catalyst 日志纠正：无 Team 的 ad-hoc Catalyst 即使查询未显式设置 `kSecUseDataProtectionKeychain`，`SecItemAdd` 仍稳定返回 `-34018 errSecMissingEntitlement`，首装同一版本也根本写不进 Keychain；旧判断“仅跨版本有风险”错误。当前兼容层为 Keychain 优先，遇 `-34018` 后降级到 Application Support 的 0600 会话文件；以后取得合法稳定签名后自动迁回 Keychain 并删除文件。该文件方案仅用于无开发者账号内测期，安全性低于 Keychain。
 
 **测试不动**：ZhixingTests 继续跑 iOS 模拟器（scripts/ios-test.sh 原样）；Catalyst 侧保障 = dmg 脚本 Release 构建成功 + 人工走查，首版不为 Mac 单独建测试 target。
 

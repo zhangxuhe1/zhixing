@@ -74,6 +74,7 @@ private struct DesktopMainView: View {
     @Environment(SessionStore.self) private var session
     @State private var selection: DesktopDestination? = .map
     @State private var showImport = false
+    @State private var signOutError: String?
 
     var body: some View {
         NavigationSplitView {
@@ -156,7 +157,7 @@ private struct DesktopMainView: View {
     private var sidebarAccountAction: some View {
         VStack(spacing: 0) {
             Divider()
-            Button(role: .destructive) { session.signOut() } label: {
+            Button(role: .destructive, action: signOut) {
                 Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
@@ -167,10 +168,28 @@ private struct DesktopMainView: View {
             .foregroundStyle(.secondary)
             .help("退出当前账户")
             .accessibilityLabel("退出当前账户")
+            .alert(
+                "退出登录失败", isPresented: Binding(
+                    get: { signOutError != nil },
+                    set: { if !$0 { signOutError = nil } }
+                ), presenting: signOutError
+            ) { _ in
+                Button("好", role: .cancel) {}
+            } message: { message in
+                Text(message)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.ultraThinMaterial)
+    }
+
+    private func signOut() {
+        do {
+            try session.signOut()
+        } catch {
+            signOutError = SessionStore.signOutFailureMessage
+        }
     }
 }
 #endif

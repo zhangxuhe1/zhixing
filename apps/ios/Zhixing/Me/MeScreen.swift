@@ -5,6 +5,7 @@ struct MeScreen: View {
     @Environment(FootprintStore.self) private var store
     @State private var showImport = false
     @State private var deleteError: String?
+    @State private var signOutError: String?
 
     var body: some View {
         NavigationStack {
@@ -74,9 +75,19 @@ struct MeScreen: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
                 Section {
-                    Button(role: .destructive) { session.signOut() } label: {
+                    Button(role: .destructive, action: signOut) {
                         Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
                             .frame(maxWidth: .infinity)
+                    }
+                    .alert(
+                        "退出登录失败", isPresented: Binding(
+                            get: { signOutError != nil },
+                            set: { if !$0 { signOutError = nil } }
+                        ), presenting: signOutError
+                    ) { _ in
+                        Button("好", role: .cancel) {}
+                    } message: { message in
+                        Text(message)
                     }
                 }
                 #endif
@@ -98,6 +109,14 @@ struct MeScreen: View {
             } message: { message in
                 Text(message)
             }
+        }
+    }
+
+    private func signOut() {
+        do {
+            try session.signOut()
+        } catch {
+            signOutError = SessionStore.signOutFailureMessage
         }
     }
 

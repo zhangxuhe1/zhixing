@@ -2,6 +2,28 @@ import Foundation
 import os
 import Security
 
+enum SessionPersistenceError: Error, LocalizedError {
+    case keychain(operation: String, status: OSStatus)
+    case file(operation: String, underlying: Error)
+    case emptyToken
+
+    var isMissingEntitlement: Bool {
+        if case let .keychain(_, status) = self { return status == errSecMissingEntitlement }
+        return false
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case let .keychain(operation, status):
+            return "会话钥匙串\(operation)失败（\(status)）"
+        case let .file(operation, underlying):
+            return "会话文件\(operation)失败：\(underlying.localizedDescription)"
+        case .emptyToken:
+            return "保存的会话为空"
+        }
+    }
+}
+
 enum Keychain {
     private static let logger = Logger(subsystem: "app.zhixing.ios", category: "Keychain")
 
@@ -11,40 +33,50 @@ enum Keychain {
          kSecAttrAccount as String: key]
     }
 
-    /// 先删后加保证幂等覆盖；SecItemAdd 非 success（例如遗留脏项恰好没被上面的 delete 清掉）时
-    /// 再删一次重试一遍——多数情况下这就能自愈。两次都不成功就 os_log fault 留痕（调用方 SessionStore
-    /// 目前不感知 save 失败，至少不能悄无声息：不这样做的话，登录态本该落盘却没落盘，会在下次冷启动
-    /// 时表现成"莫名其妙被登出"，且完全没有线索）。
-    static func save(_ value: String, key: String) {
-        SecItemDelete(query(key) as CFDictionary)
+    /// 优先原位更新，避免“先删旧 token、再写新 token”在第二步失败时丢失原会话。
+    /// 保存失败必须上抛，调用方不能继续制造“本次已登录、冷启动又掉线”的假成功。
+    static func save(_ value: String, key: String) throws {
+        let data = Data(value.utf8)
+        let updateStatus = SecItemUpdate(
+            query(key) as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            logger.error("Keychain update 失败 status=\(updateStatus, privacy: .public)")
+            throw SessionPersistenceError.keychain(operation: "更新", status: updateStatus)
+        }
+
         var attrs = query(key)
-        attrs[kSecValueData as String] = Data(value.utf8)
-        var status = SecItemAdd(attrs as CFDictionary, nil)
-        if status != errSecSuccess {
-            logger.fault("Keychain save 首次失败 status=\(status, privacy: .public)，删除后重试一次")
-            SecItemDelete(query(key) as CFDictionary)
-            status = SecItemAdd(attrs as CFDictionary, nil)
-            if status != errSecSuccess {
-                logger.fault("Keychain save 重试后仍失败 status=\(status, privacy: .public)")
-            }
+        attrs[kSecValueData as String] = data
+        let status = SecItemAdd(attrs as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            logger.error("Keychain save 失败 status=\(status, privacy: .public)")
+            throw SessionPersistenceError.keychain(operation: "保存", status: status)
         }
     }
 
-    static func load(key: String) -> String? {
+    static func load(key: String) throws -> String? {
         var q = query(key)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess,
-              let data = out as? Data else { return nil }
-        return String(decoding: data, as: UTF8.self)
+        let status = SecItemCopyMatching(q as CFDictionary, &out)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = out as? Data else {
+            logger.error("Keychain load 失败 status=\(status, privacy: .public)")
+            throw SessionPersistenceError.keychain(operation: "读取", status: status)
+        }
+        let token = String(decoding: data, as: UTF8.self)
+        guard !token.isEmpty else { throw SessionPersistenceError.emptyToken }
+        return token
     }
 
-    /// errSecItemNotFound 是正常态（本来就没有 / 已经删过），不算失败；其余非 success 才记 fault。
-    static func delete(key: String) {
+    /// errSecItemNotFound 是正常态；其余错误上抛给会话存储层统一处理。
+    static func delete(key: String) throws {
         let status = SecItemDelete(query(key) as CFDictionary)
-        if status != errSecSuccess, status != errSecItemNotFound {
-            logger.fault("Keychain delete 失败 status=\(status, privacy: .public)")
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            logger.error("Keychain delete 失败 status=\(status, privacy: .public)")
+            throw SessionPersistenceError.keychain(operation: "删除", status: status)
         }
     }
 }

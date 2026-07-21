@@ -4,7 +4,7 @@
 
 **Goal:** 把知行 iOS App 构建为 Mac Catalyst 桌面版并打包 dmg 分发给朋友小圈子，同时补齐邮箱验证码登录 UI（Mac 唯一正规登录路径）与部署前硬化清单代码项。
 
-**Architecture:** 客户端三块顺序推进——邮箱登录 UI（iOS/Mac 共用，走与 SIWA 相同的 SessionStore/Keychain 通道）→ Catalyst 工程改造（entitlements 按 SDK 分叉，SIWA 编译期裁剪）→ dmg 打包脚本（ad-hoc 签名，留 Developer ID 升级钩子）。服务端硬化三项（启动断言/compose 健康检查/统一错误形状）独立于客户端，先做，使 VPS 部署（用户主导，走 docs/deploy.md）可并行。
+**Architecture:** 客户端三块顺序推进——邮箱登录 UI（iOS/Mac 共用，走与 SIWA 相同的 `SessionStore` / `SessionTokenStore` 通道）→ Catalyst 工程改造（entitlements 按 SDK 分叉，SIWA 编译期裁剪）→ dmg 打包脚本（ad-hoc 签名，留 Developer ID 升级钩子）。服务端硬化三项（启动断言/compose 健康检查/统一错误形状）独立于客户端，先做，使 VPS 部署（用户主导，走 docs/deploy.md）可并行。
 
 **Tech Stack:** SwiftUI（Swift 6, iOS 17+ / macOS 14+ Catalyst）+ XcodeGen + xcodebuild/hdiutil；服务端 Fastify 5 + vitest。**零新增依赖。**
 
@@ -17,7 +17,7 @@
 - **版本号探针结论（已实证）**：XcodeGen 生成的 Info.plist 把 `CFBundleShortVersionString` 硬编码为 1.0——只加 `MARKETING_VERSION` 构建设置流不进产物，必须同步在 `info.properties` 写 `CFBundleShortVersionString: $(MARKETING_VERSION)`。dmg 产物命名依赖真实版本号。
 - **服务端错误面故意合并（防爆破，勿为 UI 拆开）**：冷却/日限统一 429 `rate_limited`，错码/过期/锁死统一 401 `invalid_code`，均无细分信息。客户端**只按 HTTP status 映射**中文文案、绝不解析 body（authRateLimit 插件的 429 体形与 `{error}` 不同，按 status 判别对两种体形都稳）。
 - **send 成功仅返回 `{ok:true}`、不下发冷却秒数**：客户端自带倒计时常量，取值与服务端 `EMAIL_CODE.cooldownMs`（60s）一致，两边注释互指，改参数时同步。
-- **Keychain 跨版本风险（写进安装说明，代码勿动）**：ad-hoc 签名的 designated requirement 绑二进制 hash、逐版本变化——升级新版后旧 token 条目会触发系统钥匙串授权弹窗或读不到（表现为升级即登出）；v0.1 单版本无感。现有 Keychain.swift 不用 data-protection keychain 的写法在 ad-hoc 下是唯一可行解（改用会 -34018 缺 application-identifier），**勿动**。
+- **2026-07-21 纠正——Keychain 并非仅跨版本风险**：真实 Release Catalyst 日志证明，同一 ad-hoc 安装包首次登录时 `SecItemAdd` 已返回 `-34018 errSecMissingEntitlement`，token 从未落盘；此前“现有写法可避开 data-protection keychain、代码勿动”的判断错误。现实现改为 Keychain 优先，缺 entitlement 时写入 0600 Application Support 会话文件，取得合法签名后自动迁回 Keychain。
 - **Gatekeeper 放行主路径 = `xattr -dr com.apple.quarantine`**：ad-hoc + quarantine 在 Apple Silicon 上大概率弹「已损坏」对话框（无"仍要打开"通道）；"系统设置 → 仍要打开"是 Intel 机器可能出现的备路径。最终文案以验收第 1 步干净环境实测为准。U 盘/scp 拷贝不带 quarantine，可完全绕开。
 - **部署前硬化清单**（docs/deploy.md 标注"首次部署时执行"）代码项纳入本计划：compose.prod.yml 的 db healthcheck 与 api 对 db 的 `service_healthy` 依赖**已存在**，只缺 minio healthcheck + api 对 minio 的依赖收紧；photos.test.ts:247 的 413 用例只断言状态码不断言体形，统一错误形状不会破坏它。
 - **启动断言必须门在生产**：本地 dev 就是靠 config.ts 的 dev 默认值零配置起跑的，断言无条件生效会废掉 `pnpm --filter @zhixing/api dev`。方案：compose.prod.yml 给 api 注入 `NODE_ENV: production`，server.ts 仅在该值下断言；buildApp 不动，测试零波及。
@@ -35,7 +35,7 @@
 - Catalyst 构建验证命令（Debug，ad-hoc 覆写；在 apps/ios 下）：`xcodebuild -project Zhixing.xcodeproj -scheme Zhixing -configuration Debug -destination 'generic/platform=macOS,variant=Mac Catalyst' -derivedDataPath DerivedData/mac-debug CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- build`
 - 客户端倒计时常量与服务端 `EMAIL_CODE.cooldownMs`（apps/api/src/emailAuth.ts，60s）取值一致，**注释互指**，改参数两边同步。
 - 客户端错误呈现只按 HTTP status 映射，禁止解析响应 body 字符串。
-- Keychain.swift 现有写法勿动（见背景）。
+- 会话持久化统一经 `SessionTokenStore`：iOS 使用 Keychain；无 Team 的 ad-hoc Catalyst 仅在 `errSecMissingEntitlement` 时降级到 0600 Application Support 文件。主动退出必须同时删除所有可能存储位置，任一删除失败都不得把 UI 伪装成已退出。
 
 **任务依赖**：H1→H2→H3（服务端硬化，先做，使用户可并行开始部署）；C1→C2→C3（邮箱登录 UI）→C4（Catalyst）→C5（dmg）→C6（安装说明）→C7（走查）；A1 最后（依赖用户侧 VPS/DNS/SMTP 就绪 + C5 产物）。
 
@@ -188,12 +188,12 @@ func sendEmailCode(email: String) async throws
 func signInWithEmail(email: String, code: String) async throws
 ```
 
-> 规格原文写"APIClient 增加两个端点方法"，此处按代码库既有模式落在 SessionStore——认证端点方法（signInWithApple/devLogin）历来住这里，且 verify 成功必须走 SessionStore 私有的 `apply()`（Keychain 存储路径）。APIClient 保持纯通用 HTTP 层，不加业务端点。
+> 规格原文写"APIClient 增加两个端点方法"，此处按代码库既有模式落在 SessionStore——认证端点方法（signInWithApple/devLogin）历来住这里，且 verify 成功必须走 SessionStore 私有的 `apply()`（统一 `SessionTokenStore` 存储路径）。APIClient 保持纯通用 HTTP 层，不加业务端点。
 
 **行为契约：**
 
 - `sendEmailCode`：POST `/auth/email/send`，body `{email}`；成功仅要求 `{ok:true}` 可解码（私有 Decodable 结构体），无返回值。注释注明：服务端契约见 apps/api/src/routes/auth.ts，**成功不下发冷却秒数**，倒计时由客户端常量驱动（C2）。
-- `signInWithEmail`：POST `/auth/email/verify`，body `{email, code}`；成功解码 `AuthResponse` 后走**与 SIWA 完全相同**的 `apply()`（token 入 Keychain + APIClient.shared.token），后续请求无差别。
+- `signInWithEmail`：POST `/auth/email/verify`，body `{email, code}`；成功解码 `AuthResponse` 后走**与 SIWA 完全相同**的 `apply()`（token 先入 `SessionTokenStore`，再设置 `APIClient.shared.token`），后续请求无差别。
 - 失败一律上抛 `APIError.status`——中文文案映射不在本层（C2 的 EmailAuthRules 负责）。
 - 入参邮箱由调用方（C3 视图层）trim 后传入，本层不重复校验（服务端还有 normalizeEmail 兜底）。
 - body 结构体仿照现有 `AppleBody`/`DevBody` 私有嵌套写法。
@@ -203,7 +203,7 @@ func signInWithEmail(email: String, code: String) async throws
 | # | stub | 动作 | 断言 |
 |---|------|------|------|
 | 1 | 200 `{"ok":true}` | `sendEmailCode(email:"friend@example.com")` | lastRequest path==`/auth/email/send`、method POST、content-type application/json、body JSON 的 email 字段回读相等 |
-| 2 | 200 `{"token":"jwt-123","user":{"id":"u1","nickname":"测试"}}` | 新建 SessionStore，`signInWithEmail(email:…, code:"123456")`；**defer session.signOut()**（清 Keychain 与 APIClient.shared.token，防污染其他用例） | lastRequest path==`/auth/email/verify`；`session.token=="jwt-123"`；`isSignedIn==true` |
+| 2 | 200 `{"token":"jwt-123","user":{"id":"u1","nickname":"测试"}}` | 新建 SessionStore，`signInWithEmail(email:…, code:"123456")`；**defer { try? session.signOut() }**（清持久会话与 APIClient.shared.token，防污染其他用例） | lastRequest path==`/auth/email/verify`；`session.token=="jwt-123"`；`isSignedIn==true` |
 | 3 | 401 `{"error":"invalid_code"}` | `signInWithEmail(…, code:"000000")` | 抛 `APIError.status(401,_)`；`session.token` 仍为 nil |
 
 **Steps:**
@@ -213,7 +213,7 @@ func signInWithEmail(email: String, code: String) async throws
 - [x] 在 SessionStore 按契约实现两方法
 - [x] 内环重跑，预期 PASS
 - [x] 整套 `scripts/ios-test.sh` 全绿
-- [x] Commit: `feat(ios): SessionStore 邮箱验证码登录端点（与 SIWA 同一 Keychain 通道）`
+- [x] Commit: `feat(ios): SessionStore 邮箱验证码登录端点（与 SIWA 同一 Keychain 通道）`（历史提交名；当前两种登录已统一演进为 `SessionTokenStore` 通道）
 
 ---
 
@@ -404,7 +404,7 @@ private static func applyWindowSizeRestrictions()
    - 两段均标注「最终以实测弹窗为准」占位符，A1 定稿；
 4. **零门槛备选**：quarantine 只在浏览器/网盘/AirDrop 等下载途径被打上——**U 盘或 scp 拷贝的 dmg 没有这道关卡**，可完全跳过放行步骤（小圈子分发优先推荐）；
 5. **使用提示**：邮箱验证码注册登录（无需 Apple 账号）；批量导入读取的是 Mac「照片」App 图库——未开 iCloud 照片的用户图库可能为空，建议开启 iCloud 照片同步（刚开启后同步很慢，可能要等较久才有图）；
-6. **升级须知（预期管理）**：升级新版本后若弹系统钥匙串授权框或被登出，属预期行为（内测版签名逐版本变化所致），重新登录即可。
+6. **升级须知（2026-07-21 后）**：无 Team 的内测包使用同一 bundle ID 的 Application Support 降级会话，普通重开和覆盖升级均应保持登录；取得合法签名后首次启动自动迁回 Keychain。若仍掉登录，视为回归缺陷，不再归类为“ad-hoc 预期行为”。
 
 **Steps:**
 
@@ -430,7 +430,7 @@ private static func applyWindowSizeRestrictions()
 
 - [ ] 窗口：尝试把窗口拖小，最小停在 1000×700
 - [ ] 邮箱验证码登录成功（码从本地 api 控制台读）
-- [ ] **退出重开 App，登录态仍在**——Keychain 在 Catalyst 上的首个真实读写路径
+- [ ] **退出重开 App，登录态仍在**——Catalyst `SessionTokenStore` 的真实恢复路径（ad-hoc 应走 Application Support 降级文件；正式签名后走 Keychain）
 - [ ] 地图浏览、风物卡打开可读
 - [ ] 发足迹：搜索选点与「当前位置」各试一次（CoreLocation 首次授权弹窗行为与 iOS 不同，预检点）
 - [ ] 批量导入：读 Mac「照片」App 图库（本版核心卖点；PHPhotoLibrary 授权 + 空图库提示核对）

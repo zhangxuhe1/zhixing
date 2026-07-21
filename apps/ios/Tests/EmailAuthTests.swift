@@ -38,8 +38,8 @@ final class EmailAuthTests: XCTestCase {
         StubURLProtocol.stub = .init(status: 200, body: Data(
             #"{"token":"jwt-123","user":{"id":"u1","nickname":"测试"}}"#.utf8))
         let session = SessionStore()
-        // 清理 Keychain 与 APIClient.shared.token，防污染其他用例
-        defer { session.signOut() }
+        // 清理持久会话与 APIClient.shared.token，防污染其他用例
+        defer { try? session.signOut() }
         try await session.signInWithEmail(email: "friend@example.com", code: "123456")
         XCTAssertEqual(StubURLProtocol.lastRequest?.url?.path, "/auth/email/verify")
         let json = try JSONSerialization.jsonObject(
@@ -48,6 +48,35 @@ final class EmailAuthTests: XCTestCase {
         XCTAssertEqual(json?["code"] as? String, "123456")
         XCTAssertEqual(session.token, "jwt-123")
         XCTAssertTrue(session.isSignedIn)
+    }
+
+    @MainActor
+    func testEmailSessionRestoresFromPersistentStoreAfterNewSessionInstance() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zhixing-email-restore-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let tokenStore = FileSessionTokenStore(directory: directory)
+
+        StubURLProtocol.stub = .init(status: 200, body: Data(
+            #"{"token":"jwt-persisted","user":{"id":"u1","nickname":"测试"}}"#.utf8))
+        let signedIn = SessionStore(tokenStore: tokenStore)
+        try await signedIn.signInWithEmail(email: "friend@example.com", code: "123456")
+        XCTAssertEqual(try tokenStore.load(), "jwt-persisted")
+
+        // 模拟进程重启：不用原 SessionStore，新实例只能从持久层恢复。
+        StubURLProtocol.stub = .init(status: 200, body: Data(
+            #"{"id":"u1","nickname":"测试"}"#.utf8))
+        let restored = SessionStore(tokenStore: tokenStore)
+        await restored.restore()
+
+        XCTAssertFalse(restored.restoring)
+        XCTAssertTrue(restored.isSignedIn)
+        XCTAssertEqual(restored.token, "jwt-persisted")
+        XCTAssertEqual(restored.user?.id, "u1")
+        XCTAssertEqual(
+            StubURLProtocol.lastRequest?.value(forHTTPHeaderField: "authorization"),
+            "Bearer jwt-persisted")
+        try restored.signOut()
     }
 
     @MainActor
@@ -64,5 +93,43 @@ final class EmailAuthTests: XCTestCase {
         }
         XCTAssertNil(session.token)
         XCTAssertFalse(session.isSignedIn)
+    }
+
+    @MainActor
+    func testUserSignOutFailureKeepsSessionAndCompensatesPersistentToken() async throws {
+        StubURLProtocol.stub = .init(status: 200, body: Data(
+            #"{"token":"jwt-stays-signed-in","user":{"id":"u1","nickname":"测试"}}"#.utf8))
+        let tokenStore = InMemorySessionTokenStore()
+        let session = SessionStore(tokenStore: tokenStore)
+        try await session.signInWithEmail(email: "friend@example.com", code: "123456")
+        tokenStore.deleteError = CocoaError(.fileWriteNoPermission)
+
+        XCTAssertThrowsError(try session.signOut())
+        XCTAssertTrue(session.isSignedIn)
+        XCTAssertEqual(session.token, "jwt-stays-signed-in")
+        XCTAssertEqual(APIClient.shared.token, "jwt-stays-signed-in")
+        XCTAssertEqual(tokenStore.token, "jwt-stays-signed-in")
+        XCTAssertEqual(tokenStore.savedTokens, ["jwt-stays-signed-in", "jwt-stays-signed-in"])
+
+        tokenStore.deleteError = nil
+        try session.signOut()
+        XCTAssertFalse(session.isSignedIn)
+        XCTAssertNil(APIClient.shared.token)
+        XCTAssertNil(tokenStore.token)
+    }
+
+    @MainActor
+    func testExpiredSessionClearsMemoryEvenWhenPersistentDeleteFails() async {
+        let tokenStore = InMemorySessionTokenStore(token: "jwt-expired")
+        tokenStore.deleteError = CocoaError(.fileWriteNoPermission)
+        StubURLProtocol.stub = .init(status: 401, body: Data(#"{"error":"unauthorized"}"#.utf8))
+        let session = SessionStore(tokenStore: tokenStore)
+
+        await session.restore()
+
+        XCTAssertFalse(session.isSignedIn)
+        XCTAssertNil(session.token)
+        XCTAssertNil(APIClient.shared.token)
+        XCTAssertEqual(tokenStore.token, "jwt-expired")
     }
 }

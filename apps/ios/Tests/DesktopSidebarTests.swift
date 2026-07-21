@@ -24,7 +24,9 @@ final class DesktopSidebarTests: XCTestCase {
         XCTAssertTrue(sidebarContent.contains("Text(\"快捷操作\")"))
         XCTAssertTrue(sidebarContent.contains("Text(\"从相册点亮旅行\")"))
         XCTAssertTrue(sidebarContent.contains("Label(\"导入的足迹默认仅自己可见\", systemImage: \"lock.fill\")"))
-        XCTAssertTrue(source.contains("Button(role: .destructive) { session.signOut() }"))
+        XCTAssertTrue(source.contains("Button(role: .destructive, action: signOut)"))
+        XCTAssertTrue(source.contains("try session.signOut()"))
+        XCTAssertTrue(source.contains("SessionStore.signOutFailureMessage"))
         XCTAssertTrue(source.contains("AlbumImportScreen().appStores()"))
     }
 
@@ -33,6 +35,8 @@ final class DesktopSidebarTests: XCTestCase {
 
         XCTAssertTrue(source.contains("#if !targetEnvironment(macCatalyst)"))
         XCTAssertTrue(source.contains("Label(\"从相册点亮过去的旅行\", systemImage: \"photo.stack.fill\")"))
-        XCTAssertTrue(source.contains("Button(role: .destructive) { session.signOut() }"))
+        XCTAssertTrue(source.contains("Button(role: .destructive, action: signOut)"))
+        XCTAssertTrue(source.contains("try session.signOut()"))
+        XCTAssertTrue(source.contains("SessionStore.signOutFailureMessage"))
     }
 }

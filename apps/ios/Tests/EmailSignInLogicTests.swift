@@ -53,5 +53,8 @@ final class EmailSignInLogicTests: XCTestCase {
         XCTAssertEqual(
             EmailAuthRules.message(for: URLError(.notConnectedToInternet)),
             "操作失败，请检查网络后重试")
+        XCTAssertEqual(
+            EmailAuthRules.message(for: SessionPersistenceError.emptyToken),
+            "登录成功，但无法安全保存登录状态，请检查磁盘权限后重试")
     }
 }
