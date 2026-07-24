@@ -185,7 +185,7 @@ private struct StoryRow: View {
             HStack {
                 Label(story.authorNickname, systemImage: "person.crop.circle.fill")
                     .font(.headline)
-                    .foregroundStyle(ZXTheme.pine)
+                    .foregroundStyle(ZXTheme.accent)
                 Spacer()
                 Text(story.date, format: .dateTime.year().month().day()
                     .locale(Locale(identifier: "zh_Hans_CN")))

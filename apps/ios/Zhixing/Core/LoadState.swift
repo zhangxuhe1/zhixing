@@ -38,7 +38,7 @@ struct LoadStateView<Value: Sendable, Content: View>: View {
             EmptyView()
         case .loading:
             VStack(spacing: 12) {
-                ProgressView().tint(ZXTheme.pine)
+                ProgressView().tint(ZXTheme.accent)
                 Text("正在沿地图寻找…")
                     .font(.caption)
                     .foregroundStyle(.secondary)

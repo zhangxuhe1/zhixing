@@ -79,7 +79,7 @@ struct ReportSheet: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(ZXTheme.jade)
+                .foregroundStyle(ZXTheme.accent)
             Text("已收到，谢谢指正")
                 .font(.headline)
         }

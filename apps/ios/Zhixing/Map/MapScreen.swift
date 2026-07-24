@@ -206,7 +206,7 @@ struct MapScreen: View {
         } label: {
             Image(systemName: "square.3.layers.3d")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(ZXTheme.pine)
+                .foregroundStyle(ZXTheme.accent)
                 .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
         }
@@ -224,7 +224,7 @@ struct MapScreen: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(emphasized ? .white : ZXTheme.pine)
+                .foregroundStyle(emphasized ? .white : ZXTheme.accent)
                 .frame(width: 42, height: 42)
                 .background(emphasized ? ZXTheme.cinnabar : Color.clear, in: RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())

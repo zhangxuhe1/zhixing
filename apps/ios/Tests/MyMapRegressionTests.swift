@@ -1,5 +1,6 @@
 import MapKit
 import SwiftUI
+import UIKit
 import XCTest
 @testable import Zhixing
 
@@ -26,6 +27,59 @@ final class MyMapRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("fitPlaceIds: $fitPlaceIds"), "个人地图必须支持自动聚焦足迹")
         XCTAssertTrue(source.contains("onSelect: { selectedPin = $0 }"), "足迹点必须能打开详情")
         XCTAssertTrue(source.contains("await store.load()"), "进入个人地图必须刷新足迹和统计快照")
+    }
+
+    /// 宽屏与故事地图对齐使用透明顶栏；iPhone compact 必须把四列统计回落到地图内，
+    /// 不能与返回按钮争抢 principal 的有限宽度。
+    func testMyMapSummaryAdaptsBetweenToolbarAndCompactOverlay() throws {
+        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let sourceURL = testsDirectory.deletingLastPathComponent()
+            .appendingPathComponent("Zhixing/Me/MyMapScreen.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains(".toolbarBackground(navigationBarVisibility, for: .navigationBar)"),
+            "导航栏材质必须跟随 compact/regular 布局切换")
+        XCTAssertTrue(
+            source.contains("ToolbarItem(placement: .principal)"),
+            "regular/Catalyst 仍应把统计挂在 principal")
+        XCTAssertTrue(source.contains("summaryPlacement == .toolbar"))
+        XCTAssertTrue(source.contains("summaryPlacement == .overlay"))
+        XCTAssertTrue(source.contains("layout: .toolbar"))
+        XCTAssertTrue(source.contains("layout: .overlay"))
+    }
+
+    func testMyMapSummaryPlacementKeepsCompactWidthOutOfToolbar() {
+        XCTAssertEqual(
+            MyMapSummaryPlacement.resolve(horizontalSizeClass: .compact),
+            .overlay,
+            "iPhone compact 宽度必须使用地图内纵向统计卡")
+        XCTAssertEqual(
+            MyMapSummaryPlacement.resolve(horizontalSizeClass: .regular),
+            .toolbar,
+            "regular 宽度应保留桌面式 toolbar 统计")
+        XCTAssertEqual(
+            MyMapSummaryPlacement.resolve(horizontalSizeClass: nil),
+            .toolbar,
+            "Catalyst 未提供 size class 时应保持现有宽屏 toolbar 布局")
+    }
+
+    @MainActor
+    func testCompactSummaryFits375PointViewportAtAccessibilityTextSize() {
+        let availableWidth: CGFloat = 375 - 32
+        let card = MyMapSummaryCard(
+            stats: Stats(footprints: 0, places: 0, cities: 0, provinces: 0),
+            footprints: [],
+            layout: .overlay)
+            .environment(\.dynamicTypeSize, .accessibility3)
+        let host = UIHostingController(rootView: card)
+
+        let fitted = host.sizeThatFits(in: CGSize(width: availableWidth, height: 1_000))
+
+        XCTAssertLessThanOrEqual(
+            fitted.width, availableWidth + 0.5,
+            "compact 统计卡在 375pt 视口和无障碍大字号下不得横向溢出")
+        XCTAssertGreaterThan(fitted.height, 0)
     }
 
     @MainActor

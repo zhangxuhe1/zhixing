@@ -30,6 +30,9 @@ pnpm -C apps/api exec vitest run test/trips.test.ts # single test file
 scripts/ios-test.sh                                 # iOS tests (xcodegen generate + xcodebuild test on a simulator)
 scripts/mac-dev.sh                                  # Mac Catalyst debug env: Postgres/MinIO + dev API + Zhixing.app (Debug-maccatalyst)
 scripts/mac-dmg.sh                                  # Mac Catalyst Release build + dmg (ad-hoc signing by default; MAC_SIGN_IDENTITY upgrades to Developer ID + notarization)
+# 构建 / 安装 Mac 测试版（dmg 或本地覆盖装）时：先退出知行进程，再删除旧的 /Applications/知行.app
+# 与 dist/Zhixing-*.dmg（以及需要全量重建时的 apps/ios/DerivedData/mac），装新版后再 xattr 清 quarantine；
+# 不要在旧 App 仍驻留时覆盖，避免跑到过期二进制。
 
 # Content pipeline (set GEMINI_API_KEY or DEEPSEEK_API_KEY in .env; import/batch are idempotent)
 pnpm --filter @zhixing/pipeline import-places

@@ -124,7 +124,7 @@ struct MeScreen: View {
         HStack(spacing: 14) {
             Image(systemName: "person.crop.circle.fill")
                 .font(.system(size: 44, weight: .light))
-                .foregroundStyle(ZXTheme.pine)
+                .foregroundStyle(ZXTheme.accent)
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.user?.nickname ?? "知行旅人")
                     .font(.system(.title2, design: .serif, weight: .bold))
@@ -160,7 +160,7 @@ struct MeScreen: View {
         VStack(spacing: 2) {
             Text("\(value ?? 0)")
                 .font(.system(.title2, design: .rounded, weight: .bold))
-                .foregroundStyle(ZXTheme.pine)
+                .foregroundStyle(ZXTheme.accent)
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -170,7 +170,7 @@ struct MeScreen: View {
         HStack(spacing: 13) {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(ZXTheme.pine)
+                .foregroundStyle(ZXTheme.accent)
                 .frame(width: 36, height: 36)
                 .background(ZXTheme.jade.opacity(0.11), in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 3) {

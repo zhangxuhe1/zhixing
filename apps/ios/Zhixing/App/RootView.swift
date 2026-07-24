@@ -20,7 +20,7 @@ struct RootView: View {
                             .background(ZXTheme.rice, in: RoundedRectangle(cornerRadius: 16))
                             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.black.opacity(0.08)))
                         ProgressView("正在展开地图…")
-                            .tint(ZXTheme.pine)
+                            .tint(ZXTheme.accent)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -30,7 +30,7 @@ struct RootView: View {
                 SignInScreen()
             }
         }
-        .tint(ZXTheme.pine)
+        .tint(ZXTheme.accent)
         .task { await session.restore() }
         .onChange(of: session.isSignedIn) { _, signedIn in
             // 登出/会话失效的统一清理点：所有"用户私有数据 store"都必须在这里 reset（§5.1 防跨账号泄露）。
@@ -58,7 +58,7 @@ struct MainTabView: View {
             MapScreen().tabItem { Label("地图", systemImage: "map.fill") }
             MeScreen().tabItem { Label("我的", systemImage: "person.fill") }
         }
-        .tint(ZXTheme.pine)
+        .tint(ZXTheme.accent)
         #endif
     }
 }
@@ -94,7 +94,7 @@ private struct DesktopMainView: View {
                                 .foregroundStyle(.primary)
                         } icon: {
                             Image(systemName: "photo.stack.fill")
-                                .foregroundStyle(ZXTheme.pine)
+                                .foregroundStyle(ZXTheme.sidebarAction)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -111,6 +111,10 @@ private struct DesktopMainView: View {
                 }
             }
             .listStyle(.sidebar)
+            // 侧栏玻璃用固定叠色，不依赖 detail 是否是地图：
+            // 否则「故事地图」透绿、「我的知行/足迹」吃到 canvas 变死黑，观感不统一。
+            .scrollContentBackground(.hidden)
+            .background { DesktopSidebarGlassBackground() }
             .navigationTitle("知行")
             .navigationSplitViewColumnWidth(min: 200, ideal: 228, max: 280)
             .safeAreaInset(edge: .top) {
@@ -133,7 +137,7 @@ private struct DesktopMainView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
+                .background { DesktopSidebarGlassBackground() }
             }
             .safeAreaInset(edge: .bottom) {
                 sidebarAccountAction
@@ -147,7 +151,7 @@ private struct DesktopMainView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(ZXTheme.pine)
+        .tint(ZXTheme.accent)
         .sheet(isPresented: $showImport) {
             AlbumImportScreen().appStores()
         }
@@ -165,7 +169,7 @@ private struct DesktopMainView: View {
                     .padding(.vertical, 8)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(ZXTheme.sidebarAccountAction)
             .help("退出当前账户")
             .accessibilityLabel("退出当前账户")
             .alert(
@@ -181,7 +185,7 @@ private struct DesktopMainView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
+        .background { DesktopSidebarGlassBackground() }
     }
 
     private func signOut() {
@@ -190,6 +194,30 @@ private struct DesktopMainView: View {
         } catch {
             signOutError = SessionStore.signOutFailureMessage
         }
+    }
+}
+
+/// Catalyst 侧栏玻璃底。
+///
+/// 目标观感对齐「故事地图」：墨绿玻璃，而不是纯黑实色。
+/// 叠色固定在侧栏自身，避免 NavigationSplitView 因隔壁是列表/导航栏而把侧栏吸成死黑。
+private struct DesktopSidebarGlassBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            if colorScheme == .dark {
+                // 模仿故事地图旁侧栏的石青/松墨透色，各页保持同一套
+                ZXTheme.pineDeep.opacity(0.42)
+                ZXTheme.jade.opacity(0.16)
+                Color.black.opacity(0.14)
+            } else {
+                ZXTheme.rice.opacity(0.55)
+                Color.white.opacity(0.28)
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 #endif

@@ -70,7 +70,7 @@ struct CardDetailView: View {
                                 default:
                                     ZStack {
                                         ZXTheme.jade.opacity(0.08)
-                                        ProgressView().tint(ZXTheme.pine)
+                                        ProgressView().tint(ZXTheme.accent)
                                     }
                                 }
                             }
@@ -114,7 +114,7 @@ struct CardDetailView: View {
                     Task { await toggleFavorite() }
                 } label: {
                     Image(systemName: isFavorited ? "bookmark.fill" : "bookmark")
-                        .foregroundStyle(isFavorited ? ZXTheme.cinnabar : ZXTheme.pine)
+                        .foregroundStyle(isFavorited ? ZXTheme.cinnabar : ZXTheme.accent)
                 }
                 .disabled(isTogglingFavorite)
                 .accessibilityLabel(isFavorited ? "取消收藏" : "收藏")

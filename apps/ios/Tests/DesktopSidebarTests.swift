@@ -30,6 +30,21 @@ final class DesktopSidebarTests: XCTestCase {
         XCTAssertTrue(source.contains("AlbumImportScreen().appStores()"))
     }
 
+    /// 侧栏玻璃：固定松墨/石青叠色，跨「故事地图 / 我的知行」统一，不依赖 detail 透色。
+    func testDesktopSidebarUsesControlledGlassBackground() throws {
+        let source = try appSource(named: "App/RootView.swift")
+        let glassStart = try XCTUnwrap(source.range(of: "private struct DesktopSidebarGlassBackground"))
+        let glassSource = String(source[glassStart.lowerBound...])
+
+        XCTAssertTrue(source.contains(".scrollContentBackground(.hidden)"))
+        XCTAssertTrue(source.contains("DesktopSidebarGlassBackground()"))
+        XCTAssertTrue(glassSource.contains(".ultraThinMaterial"))
+        XCTAssertTrue(glassSource.contains("colorScheme == .dark"))
+        XCTAssertTrue(glassSource.contains("ZXTheme.pineDeep"))
+        XCTAssertTrue(glassSource.contains("ZXTheme.jade"))
+        XCTAssertTrue(glassSource.contains("ZXTheme.rice"))
+    }
+
     func testPhoneMeScreenRetainsActionsOutsideCatalyst() throws {
         let source = try appSource(named: "Me/MeScreen.swift")
 

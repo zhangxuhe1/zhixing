@@ -35,7 +35,7 @@ struct StoryDetailView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: "person.crop.circle.fill")
                                     .font(.title2)
-                                    .foregroundStyle(ZXTheme.pine)
+                                    .foregroundStyle(ZXTheme.accent)
                                 Text(story.authorNickname).font(.headline)
                             Spacer()
                             Text(story.date, format: .dateTime.year().month().day()

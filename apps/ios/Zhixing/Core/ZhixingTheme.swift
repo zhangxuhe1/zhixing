@@ -3,6 +3,7 @@ import UIKit
 
 /// 知行的统一视觉令牌：取色自宣纸、松墨、石青与朱砂，避免系统默认青色把产品做成通用工具。
 enum ZXTheme {
+    /// 品牌填充色。适合按钮、标记等有浅色前景的实色区域，不应直接充当深色界面的前景色。
     static let pine = Color(red: 0.08, green: 0.25, blue: 0.21)
     static let pineDeep = Color(red: 0.045, green: 0.15, blue: 0.13)
     static let jade = Color(red: 0.21, green: 0.43, blue: 0.38)
@@ -11,6 +12,26 @@ enum ZXTheme {
     static let oldGold = Color(red: 0.66, green: 0.52, blue: 0.28)
     static let rice = Color(red: 0.96, green: 0.94, blue: 0.88)
     static let ink = Color(red: 0.09, green: 0.12, blue: 0.11)
+
+    /// 界面强调色：用于文字、SF Symbols、系统 tint 等“位于表面之上”的内容。
+    /// 浅色模式沿用松墨绿；深色模式提升明度，确保在 canvas、surface 和地图 Material 上
+    /// 都有足够对比。不要用它替代 pine 的实色填充职责。
+    static let accent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.51, green: 0.80, blue: 0.71, alpha: 1)
+            : UIColor(red: 0.08, green: 0.25, blue: 0.21, alpha: 1)
+    })
+
+    /// 桌面侧栏的可操作项使用独立语义色：深色玻璃背景上与系统主标签统一为白色；
+    /// 浅色模式继续保留相册入口的品牌强调和低频账户操作的次要层级。
+    static let sidebarAction = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? .white
+            : UIColor(red: 0.08, green: 0.25, blue: 0.21, alpha: 1)
+    })
+    static let sidebarAccountAction = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .white : .secondaryLabel
+    })
 
     static let canvas = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
@@ -52,7 +73,7 @@ struct ZXSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.semibold))
-            .foregroundStyle(isEnabled ? ZXTheme.pine : .secondary)
+            .foregroundStyle(isEnabled ? ZXTheme.accent : .secondary)
             .padding(.horizontal, 16)
             .frame(minHeight: 44)
             .background(
@@ -61,7 +82,7 @@ struct ZXSecondaryButtonStyle: ButtonStyle {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(ZXTheme.pine.opacity(isEnabled ? 0.22 : 0.10), lineWidth: 1)
+                    .stroke(ZXTheme.accent.opacity(isEnabled ? 0.28 : 0.10), lineWidth: 1)
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: configuration.isPressed)
     }
@@ -111,7 +132,7 @@ struct ZXCategoryBadge: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(ZXTheme.pine)
+            .foregroundStyle(ZXTheme.accent)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(ZXTheme.jade.opacity(0.13), in: Capsule())
@@ -128,7 +149,7 @@ struct ZXEmptyState: View {
         VStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(ZXTheme.jade)
+                .foregroundStyle(ZXTheme.accent)
                 .frame(width: 58, height: 58)
                 .background(ZXTheme.jade.opacity(0.10), in: Circle())
             Text(title)
@@ -155,7 +176,7 @@ struct ZXSectionEmptyState: View {
         HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(ZXTheme.pine)
+                .foregroundStyle(ZXTheme.accent)
                 .frame(width: 48, height: 48)
                 .background(ZXTheme.jade.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
 
