@@ -24,6 +24,12 @@ export function pickJobs(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+export function assertBatchSucceeded(failedJobs: number): void {
+  if (failedJobs > 0) {
+    throw new Error(`批量生成存在 ${failedJobs} 个失败任务`);
+  }
+}
+
 async function main() {
   // pnpm run 会把 "--" 透传进来，剥掉它（同 generate.ts 的处理）
   const rawArgs = process.argv.slice(2);
@@ -78,6 +84,7 @@ async function main() {
       await sleep(Number(values.delay));
     }
     console.log(`完成：成功 ${ok}，失败 ${fail}`);
+    assertBatchSucceeded(fail);
   } finally {
     await prisma.$disconnect();
   }

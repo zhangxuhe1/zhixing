@@ -29,7 +29,8 @@
    适用前提：生产库还没有真实用户数据（首次部署/内测重置）。一旦有真实用户，禁止整库覆盖，
    改为只导内容三表：`pg_dump --data-only --disable-triggers -t '"Place"' -t '"Card"' -t '"CardBlock"'`
    （容器内 zhixing 用户是超级用户，--disable-triggers 可用；导入前先在后台确认无 placeId 冲突）
-6. crontab 加 `scripts/backup.sh` 每日备份
+6. crontab 加 `scripts/backup.sh` 每日完整备份，并配置异地同步；备份范围、校验与恢复见
+   [`backup-restore.md`](./backup-restore.md)
 7. 安全检查：ADMIN_TOKEN/SESSION_SECRET 已换强值；`ZHIXING_DEV_AUTH` 未设置；
    db/minio 无宿主端口暴露；只有 caddy 开 80/443
 
@@ -55,7 +56,11 @@ Next.js 的 NEXT_PUBLIC_ 变量在构建期内联：本地开发写 `apps/admin/
 
 ## 部署前硬化清单（M1 终审建议，首次部署时执行）
 
-- [ ] 备份含照片：backup.sh 目前只 pg_dump——首次部署时把 minio-data 卷纳入备份（如 `docker run --rm -v zhixing_minio-data:/data -v $PWD/backups:/backup alpine tar czf /backup/minio-$(date +%Y%m%d).tar.gz /data`）
+- [x] 本机完整备份：`scripts/backup.sh` 同时备份 PostgreSQL、MinIO volume 与恢复辅助配置，
+      生成并验证 SHA-256，默认保留 14 份
+- [ ] 生产化 MinIO 灾备：当前测试期采用在线底层卷归档；正式生产前改为维护窗口/原子快照，
+      或对象级 mirror / replication，并记录镜像版本、完成隔离恢复演练
+- [ ] 异地灾备：把完整备份每日同步到独立云厂商/服务器；同机 `backups/` 不能防 VPS 整机损坏
 - [x] 启动断言：SESSION_SECRET / ADMIN_TOKEN / S3_SECRET_KEY 为 change-me、空串或 dev 默认值时 api 拒绝启动（compose 缺变量会替换成空串，`??` 捕不到）——已实现于 apps/api/src/prodGuard.ts + server.ts，由 compose 注入的 NODE_ENV=production 触发
 - [x] compose 健康检查：db/minio 加 healthcheck，api `depends_on.condition: service_healthy`，避免首启 migrate 竞态——compose.prod.yml 已补齐（db pg_isready + minio `mc ready local`，api 两依赖均 service_healthy）
 - [x] 统一错误形状：Fastify setErrorHandler 把框架级 404/413/500 也收敛到 `{error:"..."}`（现仅应用级错误统一）——已实现于 apps/api/src/app.ts（setNotFoundHandler + setErrorHandler，5xx 不回显内部信息）

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { pickJobs } from "../src/batch.js";
+import { assertBatchSucceeded, pickJobs } from "../src/batch.js";
 
 const pins = [
   { id: "1", name: "什刹海", cardCount: 1 },
@@ -19,4 +19,9 @@ test("补足到 target，分类轮转，已达标地点跳过", () => {
   expect(jobs.filter((j) => j.placeName === "什刹海").map((j) => j.category)).toEqual([
     "FOOD", "CUSTOMS",
   ]);
+});
+
+test("任一任务失败时让 batch 以失败状态结束", () => {
+  expect(() => assertBatchSucceeded(0)).not.toThrow();
+  expect(() => assertBatchSucceeded(2)).toThrow("批量生成存在 2 个失败任务");
 });

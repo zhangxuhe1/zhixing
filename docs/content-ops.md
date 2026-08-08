@@ -1,5 +1,8 @@
 # 内容运营手册（地点库与风物卡）
 
+生产环境新增地点后的零卡统计、备份、Gemini 批量补卡与验收，见
+[`production-card-backfill-sop.md`](./production-card-backfill-sop.md)。
+
 前提：`pnpm db:up`；`.env` 配好 GEMINI_API_KEY（联网检索）；`docker compose` 的 db 在跑。
 后台地址以本地 http://localhost:3000 为例（生产环境替换为线上 admin 地址）。
 
