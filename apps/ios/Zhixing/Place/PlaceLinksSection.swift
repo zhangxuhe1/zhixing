@@ -1,7 +1,7 @@
 import SafariServices
 import SwiftUI
 
-/// 地点抽屉「网友攻略」分栏:管理员维护的外部平台链接列表。
+/// 地点抽屉「网友分享」分栏:管理员维护的外部平台链接列表。
 /// 自足式 tab(与 StoriesSection/PhotoWallSection 同构):自己请求 /places/{id} 取 links,
 /// LoadState 保证失败可见可重试——失败 ≠ 空态,无链接才进空态。
 /// iOS 用 SFSafariViewController 应用内打开;Catalyst 交给系统默认浏览器。
@@ -18,9 +18,9 @@ struct PlaceLinksSection: View {
                     if links.isEmpty {
                         ZXSectionEmptyState(
                             icon: "link",
-                            eyebrow: "网友攻略",
-                            title: "攻略还在收集中",
-                            message: "我们会陆续为这里挑选值得一看的网友攻略与带玩视频。")
+                            eyebrow: "网友分享",
+                            title: "分享还在收集中",
+                            message: "我们会陆续为这里挑选值得一看的旅行记录与实用攻略。")
                     }
                     ForEach(links) { link in
                         Button {
@@ -32,6 +32,14 @@ struct PlaceLinksSection: View {
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .foregroundStyle(.white)
                                     .background(ZXTheme.cinnabar, in: Capsule())
+                                // 内容标签 chip:刻意比 cinnabar 平台徽章安静——次级信息不做第二处红色强调
+                                if let tag = link.tag {
+                                    Text(tag)
+                                        .font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 8).padding(.vertical, 3)
+                                        .foregroundStyle(.secondary)
+                                        .background(Color(.tertiarySystemFill), in: Capsule())
+                                }
                                 Text(link.title)
                                     .font(.subheadline)
                                     .foregroundStyle(.primary)
@@ -70,12 +78,14 @@ struct PlaceLinksSection: View {
             let detail: PlaceDetail = try await APIClient.shared.get("/places/\(placeId)")
             state = .loaded(detail.links ?? [])
         } catch {
-            state = .failed("网友攻略加载失败，请重试")
+            state = .failed("网友分享加载失败，请重试")
         }
     }
 
     private func open(_ link: PlaceLink) {
-        guard let url = URL(string: link.url), url.scheme == "https" else { return }
+        // 打开前 trim:容错旧缓存里带首尾空白的存量 URL(服务端已入口 trim + migration 清洗)
+        let trimmed = link.url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), url.scheme == "https" else { return }
         #if targetEnvironment(macCatalyst)
         UIApplication.shared.open(url) // Catalyst → 系统默认浏览器
         #else

@@ -59,4 +59,25 @@ final class PlacePathTests: XCTestCase {
         let detail = try APIClient.decoder.decode(PlaceDetail.self, from: Data(json.utf8))
         XCTAssertNil(detail.links)
     }
+
+    func testPlaceLinkDecodesTag() throws {
+        let json = """
+        {"id":"p1","name":"香港","level":"CITY","intro":null,"ancestors":[],
+         "links":[{"id":"l1","platform":"BILIBILI","title":"200 元穷游香港",
+                   "url":"https://example.com/hk","sortOrder":0,"tag":"实用攻略"}]}
+        """
+        let detail = try APIClient.decoder.decode(PlaceDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(detail.links?.first?.tag, "实用攻略")
+    }
+
+    /// 老服务端/旧缓存无 tag 字段:解码不崩,chip 数据为 nil(未打标同形)。
+    func testPlaceLinkToleratesMissingTag() throws {
+        let json = """
+        {"id":"p1","name":"香港","level":"CITY","intro":null,"ancestors":[],
+         "links":[{"id":"l1","platform":"DOUYIN","title":"香港旅行记录",
+                   "url":"https://example.com/a","sortOrder":0}]}
+        """
+        let detail = try APIClient.decoder.decode(PlaceDetail.self, from: Data(json.utf8))
+        XCTAssertNil(detail.links?.first?.tag)
+    }
 }

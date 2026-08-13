@@ -16,14 +16,14 @@ struct PlaceAncestor: Codable, Hashable {
     let level: String
 }
 
-/// `GET /places/:id` 的地点详情:抽屉头部路径与网友攻略分栏共用。
+/// `GET /places/:id` 的地点详情:抽屉头部路径与网友分享分栏共用。
 struct PlaceDetail: Codable {
     let id: String
     let name: String
     let level: String
     let intro: String?
     let ancestors: [PlaceAncestor]
-    /// 旧服务端/缓存无此字段,可选容错;网友攻略分栏自行请求本接口,空数组与 nil 都进空态。
+    /// 旧服务端/缓存无此字段,可选容错;网友分享分栏自行请求本接口,空数组与 nil 都进空态。
     let links: [PlaceLink]?
 
     /// 从远到近的位置路径:"山东省 · 济南市";链顶(无祖先)为 nil,不渲染。
@@ -37,6 +37,8 @@ struct PlaceLink: Codable, Identifiable {
     let platform: String
     let title: String
     let url: String
+    /// 管理端维护的内容标签名(如"实用攻略""旅行记录");老服务端/未打标为 nil,不渲染 chip。
+    let tag: String?
 
     static let platformLabels = [
         "XIAOHONGSHU": "小红书", "BILIBILI": "B 站", "DOUYIN": "抖音",

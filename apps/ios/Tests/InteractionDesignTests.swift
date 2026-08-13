@@ -67,9 +67,9 @@ final class InteractionDesignTests: XCTestCase {
         let drawer = try source("Place/PlaceDrawer.swift")
         let links = try source("Place/PlaceLinksSection.swift")
 
-        // 四段分栏,网友攻略紧随风物卡之后
+        // 四段分栏,网友分享紧随风物卡之后
         let cards = try XCTUnwrap(drawer.range(of: "case cards = \"风物卡\""))
-        let guides = try XCTUnwrap(drawer.range(of: "case links = \"网友攻略\""))
+        let guides = try XCTUnwrap(drawer.range(of: "case links = \"网友分享\""))
         let stories = try XCTUnwrap(drawer.range(of: "case stories = \"旅人故事\""))
         XCTAssertTrue(cards.lowerBound < guides.lowerBound)
         XCTAssertTrue(guides.lowerBound < stories.lowerBound)
@@ -82,6 +82,9 @@ final class InteractionDesignTests: XCTestCase {
         XCTAssertTrue(links.contains("LoadState<[PlaceLink]>"))
         XCTAssertTrue(links.contains("LoadStateView(state: state, retry:"))
         XCTAssertTrue(links.contains("ZXSectionEmptyState"))
-        XCTAssertTrue(links.contains("攻略还在收集中"))
+        XCTAssertTrue(links.contains("分享还在收集中"))
+        // 标签 chip 只在 tag 非 nil 时渲染;打开前 trim 容错存量空白 URL
+        XCTAssertTrue(links.contains("if let tag = link.tag"))
+        XCTAssertTrue(links.contains("trimmingCharacters(in: .whitespacesAndNewlines)"))
     }
 }
