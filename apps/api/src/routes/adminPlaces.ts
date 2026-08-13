@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@zhixing/db";
 import { requireAdmin } from "../auth.js";
+import { placeAncestors } from "../placeAncestors.js";
+import { LINK_SELECT, PLACE_LINK_ORDER_BY } from "../placeLinks.js";
 
 const levelEnum = z.enum(["PROVINCE", "CITY", "DISTRICT", "POI"]);
 
@@ -39,8 +41,9 @@ const patchPlaceSchema = z
 const linkCreateSchema = z.object({
   platform: z.enum(["XIAOHONGSHU", "BILIBILI", "DOUYIN", "WEIBO", "OTHER"]),
   title: z.string().trim().min(1).max(100),
-  url: z.string().url().startsWith("https://").max(500),
+  url: z.string().trim().url().startsWith("https://").max(500),
   sortOrder: z.number().int().min(0).optional(),
+  tagId: z.string().nullish(),
 });
 
 const linkPatchSchema = linkCreateSchema.partial().refine(
@@ -48,9 +51,11 @@ const linkPatchSchema = linkCreateSchema.partial().refine(
   { message: "at least one field required" },
 );
 
-const LINK_SELECT = {
-  id: true, platform: true, title: true, url: true, sortOrder: true,
-} as const;
+// tagId 预检 + 写库 P2003 兜底都收敛为 400 unknown_tag:
+// 预检给出友好错误,FK 兜底覆盖"预检后标签恰被删除"的窄竞态。
+async function tagExists(prisma: FastifyInstance["prisma"], tagId: string) {
+  return !!(await prisma.placeLinkTag.findUnique({ where: { id: tagId }, select: { id: true } }));
+}
 
 // 沿父链上溯,命中自身即成环。树深≤4,32 跳保险丝防御脏数据下的死循环。
 async function reachesSelf(
@@ -263,11 +268,21 @@ export async function adminPlacesRoutes(app: FastifyInstance) {
     }
     const place = await app.prisma.place.findUnique({ where: { id } });
     if (!place) return reply.code(404).send({ error: "not_found" });
-    const link = await app.prisma.placeLink.create({
-      data: { ...body.data, placeId: id },
-      select: LINK_SELECT,
-    });
-    return reply.code(201).send(link);
+    if (body.data.tagId && !(await tagExists(app.prisma, body.data.tagId))) {
+      return reply.code(400).send({ error: "unknown_tag" });
+    }
+    try {
+      const link = await app.prisma.placeLink.create({
+        data: { ...body.data, placeId: id },
+        select: LINK_SELECT,
+      });
+      return reply.code(201).send(link);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        return reply.code(400).send({ error: "unknown_tag" });
+      }
+      throw err;
+    }
   });
 
   app.patch("/admin/links/:id", { preHandler: requireAdmin }, async (req, reply) => {
@@ -278,7 +293,60 @@ export async function adminPlacesRoutes(app: FastifyInstance) {
     }
     const existing = await app.prisma.placeLink.findUnique({ where: { id } });
     if (!existing) return reply.code(404).send({ error: "not_found" });
-    return app.prisma.placeLink.update({ where: { id }, data: body.data, select: LINK_SELECT });
+    if (body.data.tagId && !(await tagExists(app.prisma, body.data.tagId))) {
+      return reply.code(400).send({ error: "unknown_tag" });
+    }
+    try {
+      return await app.prisma.placeLink.update({ where: { id }, data: body.data, select: LINK_SELECT });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        return reply.code(400).send({ error: "unknown_tag" });
+      }
+      throw err;
+    }
+  });
+
+  // 管理端地点外链详情:编辑需要 tagId,公开 DTO 只有标签名——管理端不再借公开接口
+  app.get("/admin/places/:id/links", { preHandler: requireAdmin }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const place = await app.prisma.place.findUnique({
+      where: { id },
+      include: { links: { select: LINK_SELECT, orderBy: PLACE_LINK_ORDER_BY } },
+    });
+    if (!place) return reply.code(404).send({ error: "not_found" });
+    return {
+      id: place.id, name: place.name, level: place.level,
+      ancestors: await placeAncestors(app.prisma, place.parentId),
+      links: place.links,
+    };
+  });
+
+  // 外链总览:存量打标与日常巡查入口。一次读全量 Place 内存拼路径,
+  // 不做逐链接 N+1;当前 79 条/123 地点量级不分页(阈值见 spec"何时重新考虑")。
+  app.get("/admin/links", { preHandler: requireAdmin }, async () => {
+    const [links, places] = await Promise.all([
+      app.prisma.placeLink.findMany({
+        select: { ...LINK_SELECT, placeId: true },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
+      app.prisma.place.findMany({ select: { id: true, name: true, parentId: true } }),
+    ]);
+    const byId = new Map(places.map((p) => [p.id, p]));
+    // 沿父链拼"省 · 市 · 地点";10 跳保险丝防脏数据成环(树深 ≤ 4)
+    const pathOf = (placeId: string): string => {
+      const names: string[] = [];
+      let cur = byId.get(placeId);
+      for (let hops = 0; cur && hops < 10; hops++) {
+        names.unshift(cur.name);
+        cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+      }
+      return names.join(" · ");
+    };
+    return {
+      items: links.map(({ placeId, ...l }) => ({
+        ...l, place: { id: placeId, path: pathOf(placeId) },
+      })),
+    };
   });
 
   app.delete("/admin/links/:id", { preHandler: requireAdmin }, async (req, reply) => {

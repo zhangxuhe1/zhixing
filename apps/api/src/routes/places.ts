@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { countCardsByPlace } from "../placeCounts.js";
 import { placeAncestors } from "../placeAncestors.js";
+import { PLACE_LINK_ORDER_BY } from "../placeLinks.js";
 
 // pins/random 未鉴权且是重查询（全量地点 + 卡数聚合），同样受全局 keyGenerator
 // "有 Authorization 头就按头计费"的伪造绕过影响——覆盖为按 req.ip 计数；不传 max/
@@ -49,7 +50,7 @@ export async function placesRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const place = await app.prisma.place.findUnique({
       where: { id },
-      include: { links: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+      include: { links: { orderBy: PLACE_LINK_ORDER_BY, include: { tag: { select: { name: true } } } } },
     });
     if (!place) return reply.code(404).send({ error: "not_found" });
     return {
@@ -61,7 +62,8 @@ export async function placesRoutes(app: FastifyInstance) {
       intro: place.intro,
       ancestors: await placeAncestors(app.prisma, place.parentId),
       links: place.links.map((l) => ({
-        id: l.id, platform: l.platform, title: l.title, url: l.url, sortOrder: l.sortOrder,
+        id: l.id, platform: l.platform, title: l.title, url: l.url,
+        sortOrder: l.sortOrder, tag: l.tag?.name ?? null,
       })),
     };
   });
