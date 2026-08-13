@@ -31,7 +31,7 @@ Implementation Kickoff → Task 1（DB）→ Task 2（标签字典 API）→ Tas
 
 ## Implementation Kickoff
 
-- [ ] **两份方案文档先单独成 commit**（此时 `git status --short` 应只显示这两个路径与已删除的旧方案文档；若有其它暂存内容先处理干净）：
+- [x] **两份方案文档先单独成 commit**（此时 `git status --short` 应只显示这两个路径与已删除的旧方案文档；若有其它暂存内容先处理干净）：
 
 ```sh
 git add docs/superpowers/specs/2026-08-12-place-link-tags-design.md docs/superpowers/plans/2026-08-12-place-link-tags.md
@@ -51,7 +51,7 @@ git commit -m "docs(spec): 网友分享更名与外链内容标签方案
 - Modify（TRUNCATE 清单 8 处）: `apps/api/test/helpers.ts`、`packages/db/test/identity.test.ts`、`packages/db/test/schema.test.ts`、`packages/db/test/seed.test.ts`、`packages/db/test/seed-extras.test.ts`、`packages/db/test/m2-models.test.ts`、`apps/pipeline/test/import.test.ts`、`apps/pipeline/test/regions.test.ts`
 - Test: `packages/db/test/schema.test.ts`
 
-- [ ] **Step 1: schema 变更**
+- [x] **Step 1: schema 变更**
 
 `packages/db/prisma/schema.prisma` 中 `PlaceLink` 模型之前插入：
 
@@ -75,7 +75,7 @@ model PlaceLinkTag {
   tag       PlaceLinkTag? @relation(fields: [tagId], references: [id], onDelete: Restrict)
 ```
 
-- [ ] **Step 2: 生成迁移（--create-only）并追加存量 URL 清洗**
+- [x] **Step 2: 生成迁移（--create-only）并追加存量 URL 清洗**
 
 prisma CLI 不读仓库根 `.env`（那是 api/pipeline 运行时的加载约定），必须显式绑定数据库 URL。**本计划每个代码块自包含：不依赖上一个块导出的变量或遗留的 cwd**，全部命令从仓库根、以内联 env 执行。
 
@@ -91,7 +91,7 @@ DATABASE_URL="postgresql://zhixing:zhixing@127.0.0.1:5433/zhixing" \
 UPDATE "PlaceLink" SET "url" = btrim("url", E' \t\r\n') WHERE "url" <> btrim("url", E' \t\r\n');
 ```
 
-- [ ] **Step 3: 一次性演练库验证「旧结构 + 存量脏 URL → 目标迁移」（可反复重跑；push:test 绕过 migration SQL，不能替代本步）**
+- [x] **Step 3: 一次性演练库验证「旧结构 + 存量脏 URL → 目标迁移」（可反复重跑；push:test 绕过 migration SQL，不能替代本步）**
 
 整块自包含、`set -e` fail-closed、开头即重建演练库——中途失败直接重跑整块即可，不碰开发库/测试库，也不会留下「已半途迁移无法复验」的状态。两次 `migrate deploy` 用的正是生产升级的同一命令与同一份 SQL 文件：
 
@@ -135,7 +135,7 @@ echo "migration rehearsal OK"
 
 Expected: 输出 `migration rehearsal OK`；`migration.sql` 含 `CREATE TABLE "PlaceLinkTag"`、`ALTER TABLE "PlaceLink" ADD COLUMN "tagId"`、`ON DELETE RESTRICT` 外键与 UPDATE。（psql 服务名以本地 compose 为准，`docker compose ps` 可查。）
 
-- [ ] **Step 4: 应用迁移到开发库**
+- [x] **Step 4: 应用迁移到开发库**
 
 ```sh
 DATABASE_URL="postgresql://zhixing:zhixing@127.0.0.1:5433/zhixing" \
@@ -144,7 +144,7 @@ DATABASE_URL="postgresql://zhixing:zhixing@127.0.0.1:5433/zhixing" \
 
 Expected: 迁移应用成功（也会重新 `prisma generate`）。
 
-- [ ] **Step 5: 八处 TRUNCATE 清单补 `"PlaceLinkTag"`**
+- [x] **Step 5: 八处 TRUNCATE 清单补 `"PlaceLinkTag"`**
 
 上列 8 个文件的 TRUNCATE 语句中，在 `"PlaceLink"` 后插入 `,"PlaceLinkTag"`。例（apps/api/test/helpers.ts）：
 
@@ -154,7 +154,7 @@ Expected: 迁移应用成功（也会重新 `prisma generate`）。
 
 改完用 `rg '"PlaceLink"' -l --glob '*.ts'` 复核：所有命中文件都应同时含 `"PlaceLinkTag"`（`apps/pipeline/test/generate.test.ts` 的清单本就不含 PlaceLink，不动）。
 
-- [ ] **Step 6: 同步测试库**
+- [x] **Step 6: 同步测试库**
 
 ```sh
 pnpm -C packages/db push:test
@@ -162,7 +162,7 @@ pnpm -C packages/db push:test
 
 `push:test` 用 `db push` 按 schema 直接建表（绕过 migration SQL）——btrim 清洗已在 Step 3 经真实迁移验证，此处只负责测试库结构同步。
 
-- [ ] **Step 7: 往返测试**
+- [x] **Step 7: 往返测试**
 
 `packages/db/test/schema.test.ts` 末尾追加：
 
@@ -192,7 +192,7 @@ test("PlaceLinkTag 往返:挂标、重名拒绝、删除被引用标签拒绝", 
 });
 ```
 
-- [ ] **Step 8: 跑 db 与全仓测试**
+- [x] **Step 8: 跑 db 与全仓测试**
 
 ```sh
 pnpm -C packages/db exec vitest run && pnpm test
@@ -200,7 +200,7 @@ pnpm -C packages/db exec vitest run && pnpm test
 
 Expected: PASS（全仓绿——确认 TRUNCATE 无遗漏、老代码对新列零感知）。
 
-- [ ] **Step 9: 提交**
+- [x] **Step 9: 提交**
 
 ```sh
 git add packages/db/prisma packages/db/test apps/api/test/helpers.ts apps/pipeline/test/import.test.ts apps/pipeline/test/regions.test.ts
@@ -223,7 +223,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 **Interfaces:**
 - Produces: `GET /admin/link-tags` → `[{ id, name, sortOrder, linkCount }]`；`POST /admin/link-tags`；`PATCH /admin/link-tags/:id`；`DELETE /admin/link-tags/:id`。全部 `requireAdmin`。
 
-- [ ] **Step 1: 先写失败的测试**
+- [x] **Step 1: 先写失败的测试**
 
 新建 `apps/api/test/adminLinkTags.test.ts`：
 
@@ -327,7 +327,7 @@ test("删除:未引用 204;被引用 409 tag_in_use 且带计数", async () => {
 
 Run: `pnpm -C apps/api exec vitest run test/adminLinkTags.test.ts` → Expected: **FAIL**（404，路由不存在）。
 
-- [ ] **Step 2: 实现路由**
+- [x] **Step 2: 实现路由**
 
 新建 `apps/api/src/routes/adminLinkTags.ts`：
 
@@ -420,7 +420,7 @@ export async function adminLinkTagsRoutes(app: FastifyInstance) {
 
 `apps/api/src/app.ts`：import `adminLinkTagsRoutes`（保持字母序位置），在 `app.register(adminPlacesRoutes);` 之后加 `app.register(adminLinkTagsRoutes);`。
 
-- [ ] **Step 3: 跑测试与全量回归**
+- [x] **Step 3: 跑测试与全量回归**
 
 ```sh
 pnpm -C apps/api exec vitest run test/adminLinkTags.test.ts && pnpm -C apps/api exec vitest run
@@ -428,7 +428,7 @@ pnpm -C apps/api exec vitest run test/adminLinkTags.test.ts && pnpm -C apps/api 
 
 Expected: 全绿。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```sh
 git add apps/api/src/routes/adminLinkTags.ts apps/api/src/app.ts apps/api/test/adminLinkTags.test.ts
@@ -453,7 +453,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 - Produces: `GET /admin/places/:id/links` → `{ id, name, level, ancestors, links: [{ …LINK_SELECT, tag: { id, name } | null }] }`；`GET /admin/links` → `{ items: [{ …, place: { id, path } }] }`；公开 `/places/:id` links 项新增 `tag: string | null`。
 - Consumes: `placeAncestors`（src/placeAncestors.ts）、Task 2 的标签表。
 
-- [ ] **Step 1: 先改/加测试（失败）**
+- [x] **Step 1: 先改/加测试（失败）**
 
 `apps/api/test/placeLinks.test.ts`：
 
@@ -588,7 +588,7 @@ test("GET /admin/links:401/全量含地点路径与标签", async () => {
 
 Run: `pnpm -C apps/api exec vitest run test/placeLinks.test.ts` → Expected: **FAIL**。
 
-- [ ] **Step 2: 共享常量模块**
+- [x] **Step 2: 共享常量模块**
 
 新建 `apps/api/src/placeLinks.ts`：
 
@@ -609,7 +609,7 @@ export const LINK_SELECT = {
 } satisfies Prisma.PlaceLinkSelect;
 ```
 
-- [ ] **Step 3: adminPlaces.ts 改造**
+- [x] **Step 3: adminPlaces.ts 改造**
 
 ① 顶部 import 补 `placeAncestors`（`../placeAncestors.js`）与共享模块 `PLACE_LINK_ORDER_BY, LINK_SELECT`（`../placeLinks.js`）；删除本文件内旧的 `LINK_SELECT` 常量。
 
@@ -682,7 +682,7 @@ POST handler 在 `place` 存在性检查后加：
   });
 ```
 
-- [ ] **Step 4: places.ts 公开 DTO**
+- [x] **Step 4: places.ts 公开 DTO**
 
 `apps/api/src/routes/places.ts`：import `PLACE_LINK_ORDER_BY`（`../placeLinks.js`）；`/places/:id` 查询改为：
 
@@ -699,7 +699,7 @@ DTO 的 `links` map 改为（公开面只下发标签名，不泄漏 tagId）：
       })),
 ```
 
-- [ ] **Step 5: 跑 api 全量**
+- [x] **Step 5: 跑 api 全量**
 
 ```sh
 pnpm -C apps/api exec vitest run
@@ -707,7 +707,7 @@ pnpm -C apps/api exec vitest run
 
 Expected: 全绿（含 Step 1 的新用例与更新后的键断言）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```sh
 git add apps/api/src/placeLinks.ts apps/api/src/routes/adminPlaces.ts apps/api/src/routes/places.ts apps/api/test/placeLinks.test.ts
@@ -740,7 +740,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 - **可编辑输入（排序/改名）改受控组件**（per-row draft state），失败丢弃草稿即复位——禁止 `defaultValue` + key 技巧（PATCH 失败时服务端值不变、key 不变，输入框不会复位）；
 - 已知接受的残余：写锁生效前一瞬已在途的另一行写入可能被回拉快照错过——DB 始终正确，仅显示短暂滞后，刷新即齐。不做 mutation queue / loadGeneration / 全局 reconciliation。
 
-- [ ] **Step 1: 导航**
+- [x] **Step 1: 导航**
 
 `apps/admin/app/layout.tsx` 在 `<Link href="/places">地点库</Link>` 之后加：
 
@@ -748,7 +748,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
           <Link href="/links">外链</Link>
 ```
 
-- [ ] **Step 2: 标签管理页**
+- [x] **Step 2: 标签管理页**
 
 新建 `apps/admin/app/link-tags/page.tsx`：
 
@@ -910,7 +910,7 @@ export default function LinkTagsPage() {
 }
 ```
 
-- [ ] **Step 3: 外链总览页**
+- [x] **Step 3: 外链总览页**
 
 新建 `apps/admin/app/links/page.tsx`：
 
@@ -1029,7 +1029,7 @@ export default function LinksPage() {
 }
 ```
 
-- [ ] **Step 4: 地点外链页改造**
+- [x] **Step 4: 地点外链页改造**
 
 `apps/admin/app/places/[id]/page.tsx` 整文件替换（读取切到管理端接口；表格加标签列；新增表单加标签下拉；标题更名并带未打标计数）：
 
@@ -1229,7 +1229,7 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
 }
 ```
 
-- [ ] **Step 5: build 验证**
+- [x] **Step 5: build 验证**
 
 ```sh
 pnpm -C apps/admin build
@@ -1237,7 +1237,7 @@ pnpm -C apps/admin build
 
 Expected: 编译通过、无类型错误。
 
-- [ ] **Step 6: 人工走查**
+- [x] **Step 6: 人工走查**
 
 dev server 常驻前台不退出，三条命令不能放在同一个 shell 里顺序执行——各开一个终端：
 
@@ -1267,7 +1267,7 @@ pnpm --filter @zhixing/admin dev
 5. 竞态防线抽查（DevTools Network 调慢速档）：改某行标签后立即再操作同一行——控件禁用（请求在途）；打标成功后 UI 值来自 PATCH 响应而非整页刷新；慢网下快速双击「添加」（标签页与外链页各试一次）只产生一条记录；临时停掉 API 后改名/打标——输入框复位为服务端值、回拉期间页面全禁写；此时回拉同样失败，错误提示保持可见（不被后续清空）、页面解锁但停在旧快照，重启 API 后刷新即齐；
 6. `GET /places/:id`（curl）：已打标链接 `tag` 为标签名，未打标为 `null`，响应无 `tagId`。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```sh
 git add apps/admin/app/link-tags apps/admin/app/links "apps/admin/app/places/[id]/page.tsx" apps/admin/app/layout.tsx
@@ -1290,7 +1290,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 - Modify: `apps/ios/Zhixing/Place/PlaceLinksSection.swift`（chip、文案、URL trim）
 - Modify: `apps/ios/Zhixing/Place/PlaceDrawer.swift`（枚举 rawValue 与注释）
 
-- [ ] **Step 1: 先改守卫测试（失败）**
+- [x] **Step 1: 先改守卫测试（失败）**
 
 ① `InteractionDesignTests.testPlaceLinksIsAStandaloneDrawerSection` 内更新/追加：
 
@@ -1335,7 +1335,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
     }
 ```
 
-- [ ] **Step 2: 跑单测确认失败**
+- [x] **Step 2: 跑单测确认失败**
 
 从仓库根执行（子 shell 包裹，不改变当前 cwd，可反复整块重跑）：
 
@@ -1351,7 +1351,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 
 Expected: **FAIL**（`PlaceLink` 无 `tag` 属性时 `PlacePathTests` 编译失败；先加不带 UI 的模型字段可让编译过、断言红——两种失败形态均可接受）。
 
-- [ ] **Step 3: Models.swift**
+- [x] **Step 3: Models.swift**
 
 `PlaceLink` 加字段（`url` 之后）：
 
@@ -1362,7 +1362,7 @@ Expected: **FAIL**（`PlaceLink` 无 `tag` 属性时 `PlacePathTests` 编译失�
 
 第 19 行注释「网友攻略分栏」改「网友分享分栏」，第 26 行注释同步。
 
-- [ ] **Step 4: PlaceLinksSection.swift**
+- [x] **Step 4: PlaceLinksSection.swift**
 
 ① 头注释「网友攻略」→「网友分享」。
 ② 空态：
@@ -1395,11 +1395,11 @@ Expected: **FAIL**（`PlaceLink` 无 `tag` 属性时 `PlacePathTests` 编译失�
         guard let url = URL(string: trimmed), url.scheme == "https" else { return }
 ```
 
-- [ ] **Step 5: PlaceDrawer.swift**
+- [x] **Step 5: PlaceDrawer.swift**
 
 `case links = "网友攻略"` → `case links = "网友分享"`；枚举注释里的「网友攻略」同步改「网友分享」。
 
-- [ ] **Step 6: 跑单测确认通过，全量回归**
+- [x] **Step 6: 跑单测确认通过，全量回归**
 
 重跑 Step 2 的完整命令块（子 shell 自包含）→ PASS；然后从**仓库根**执行全量回归：
 
@@ -1409,7 +1409,7 @@ scripts/ios-test.sh
 
 Expected: `** TEST SUCCEEDED **`。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```sh
 git add apps/ios/Zhixing/Core/Models.swift apps/ios/Zhixing/Place/PlaceLinksSection.swift apps/ios/Zhixing/Place/PlaceDrawer.swift apps/ios/Tests/InteractionDesignTests.swift apps/ios/Tests/PlacePathTests.swift
@@ -1429,7 +1429,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 - Modify: `docs/content-ops.md`（新增「外链标签运营」小节）
 - Modify: `docs/deploy.md`（存量升级命令改两段式，保证 admin 晚于新 API）
 
-- [ ] **Step 1: content-ops.md 补运营流程**
+- [x] **Step 1: content-ops.md 补运营流程**
 
 在外链/内容维护相关小节附近（无则文末）新增：
 
@@ -1454,7 +1454,7 @@ spec: docs/superpowers/specs/2026-08-12-place-link-tags-design.md"
 删除标签前先把引用改完（引用数 > 0 时删除按钮禁用）；改名即时全局生效，无需重新打标。
 ```
 
-- [ ] **Step 2: docs/deploy.md 升级命令改两段式（现行「步骤」3、4 一并改写）**
+- [x] **Step 2: docs/deploy.md 升级命令改两段式（现行「步骤」3、4 一并改写）**
 
 现有 runbook 的一次性 `up -d --build` 不保证 admin 晚于新 API（compose 里 admin 不依赖 api，migration 又在 api 容器启动命令里执行）。修订范围是现行「步骤」一节的**第 3、4 两步**，不只是启动命令：
 
@@ -1481,7 +1481,7 @@ docker compose -f compose.prod.yml --env-file .env.production up -d --build admi
 
 ② 第 4 步的 `curl https://api.<域名>/health` 手工验证是不可执行的占位命令，且其职责已被上面脚本的硬断言覆盖——该步改写为只保留「浏览器打开 `https://admin.<域名>` 验证管理端可访问」。
 
-- [ ] **Step 3: 全链路回归**
+- [x] **Step 3: 全链路回归**
 
 ```sh
 pnpm test                              # root,含 packages/db(共享测试库,串行)
@@ -1492,7 +1492,7 @@ scripts/ios-test.sh                    # iOS 全量
 
 Expected: 全部通过。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```sh
 git add docs/content-ops.md docs/deploy.md
