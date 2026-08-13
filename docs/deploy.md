@@ -8,8 +8,32 @@
 ## 步骤
 1. VPS 装 Docker（官方脚本），git clone 本仓库
 2. `cp .env.production.example .env.production`，全部密钥换 `openssl rand -hex 24` 生成值
-3. `docker compose -f compose.prod.yml --env-file .env.production up -d --build`
-4. 验证：`curl https://api.<域名>/health` → `{"ok":true}`；浏览器打开 `https://admin.<域名>`
+3. 两段式启动（**禁止一次性全量 `up -d --build`**：compose 里 admin 不依赖 api、migration 又在
+   api 容器启动命令里执行，一把梭不保证 admin 晚于新 API 就绪——新管理页会对旧 API 全面 404）。
+   门槛 fail-closed：断言失败脚本即中止，绝不带病继续起 admin；每个 curl 都带
+   `--connect-timeout`/`--max-time`，单次探测有界，等待循环有总上限（60 次 × (探测 ≤5s + 间隔 2s)，
+   约 7 分钟封顶，正常几秒内通过）：
+
+   ```sh
+   set -euo pipefail
+   ZX_API_BASE="https://api.example.com"   # 以实际生产 API 域名为准
+
+   docker compose -f compose.prod.yml --env-file .env.production up -d --build db minio api
+
+   # 等新 API 就绪:/health 通,且未带鉴权的新 /admin 路由返回 401
+   # (旧 API 是 404;401 = 新路由已注册,只是没带 token)
+   for i in $(seq 1 60); do
+     curl -fsS --connect-timeout 2 --max-time 5 "$ZX_API_BASE/health" >/dev/null 2>&1 && break
+     sleep 2
+   done
+   curl -fsS --connect-timeout 2 --max-time 5 "$ZX_API_BASE/health" >/dev/null
+   test "$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' "$ZX_API_BASE/admin/link-tags")" = "401" \
+     || { echo "新 API 未就绪(期望 401),中止,不部署 admin" >&2; exit 1; }
+
+   docker compose -f compose.prod.yml --env-file .env.production up -d --build admin
+   ```
+
+4. 验证：浏览器打开 `https://admin.<域名>` 确认管理端可访问（API 侧健康与新接口就绪已由上一步硬断言把关）
 5. 灌数据：在 VPS 上 `DATABASE_URL=postgresql://zhixing:<密码>@localhost:5432/zhixing` 无法直连
    （db 未暴露端口）——用 `docker compose -f compose.prod.yml exec api sh` 进容器跑
    `pnpm --filter @zhixing/pipeline import-places && pnpm --filter @zhixing/pipeline import-regions`，
