@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useLockedReload } from "@/lib/useLockedReload";
 
 type LinkTag = { id: string; name: string };
 type AdminLink = {
@@ -19,11 +20,9 @@ const PLATFORM_LABELS: Record<string, string> = {
 export default function LinksPage() {
   const [items, setItems] = useState<AdminLink[] | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const [syncCount, setSyncCount] = useState(0); // 页面级写锁引用计数:>0 期间禁用全页写控件
   const [tags, setTags] = useState<TagOption[]>([]);
   const [onlyUntagged, setOnlyUntagged] = useState(false);
   const [error, setError] = useState("");
-  const syncing = syncCount > 0;
 
   // 双 GET 原子提交:先拿齐两份结果再一起 setState,不提交半份快照(不允许"链接更新了、
   // 标签列表还是旧的/空的");失败向上抛,由初始 effect / reloadLocked 决定如何呈现
@@ -37,19 +36,8 @@ export default function LinksPage() {
   }, []);
   useEffect(() => { void load().catch((e) => setError(String(e))); }, [load]);
 
-  // 不变量:初始加载后,整页 GET 只在写锁内发生——锁内发不出新写,陈旧快照无从覆盖别行新值。
-  // 引用计数持锁:并发触发多次回拉时,最后一个结束(finally)才解锁——先完成者不得提前放行
-  // 新写,否则仍在途的旧 GET 可能覆盖锁外新写;回拉失败设置 error 后解锁,页面停留在旧快照。
-  async function reloadLocked() {
-    setSyncCount((n) => n + 1);
-    try {
-      await load();
-    } catch (e) {
-      setError(String(e)); // 回拉失败必须可见:DB 可能已变,旧快照不再可信
-    } finally {
-      setSyncCount((n) => n - 1);
-    }
-  }
+  // 写锁与「快照失效」告警见 useLockedReload:staleError 与 error 独立,只随整页回拉成功/失败翻转
+  const { syncing, staleError, reloadLocked } = useLockedReload(load);
 
   async function saveTag(linkId: string, tagId: string) {
     setBusyIds((prev) => new Set(prev).add(linkId)); // 在途时禁用该行,同链接操作物理串行
@@ -84,6 +72,7 @@ export default function LinksPage() {
         {" ｜ "}
         <Link href="/link-tags">管理标签 →</Link>
       </p>
+      {staleError && <p style={{ color: "red" }}>同步服务端最新状态失败，页面可能停留在旧数据，请刷新页面（{staleError}）</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
       <table>
         <thead><tr><th>地点</th><th>平台</th><th>标题</th><th>链接</th><th>标签</th></tr></thead>

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useLockedReload } from "@/lib/useLockedReload";
 
 type TagRow = { id: string; name: string; sortOrder: number; linkCount: number };
 // POST/PATCH /admin/link-tags 的响应形状(POST 额外带 linkCount: 0)
@@ -13,17 +14,18 @@ export default function LinkTagsPage() {
   const [tags, setTags] = useState<TagRow[] | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
-  const [syncCount, setSyncCount] = useState(0); // 页面级写锁引用计数:>0 期间禁用全页写控件
   const [drafts, setDrafts] = useState<Record<string, string>>({}); // 受控草稿,key = `${id}:${field}`
   const [error, setError] = useState("");
   const [name, setName] = useState("");
-  const syncing = syncCount > 0;
 
   // load 不自吞错误:失败向上抛,由初始 effect / reloadLocked 决定如何呈现
   const load = useCallback(async () => {
     setTags(await api<TagRow[]>("/admin/link-tags"));
   }, []);
   useEffect(() => { void load().catch((e) => setError(String(e))); }, [load]);
+
+  // 写锁与「快照失效」告警见 useLockedReload:staleError 与 error 独立,只随整页回拉成功/失败翻转
+  const { syncing, staleError, reloadLocked } = useLockedReload(load);
 
   const locked = (id: string) => syncing || busyIds.has(id);
   function setBusy(id: string, on: boolean) {
@@ -38,20 +40,6 @@ export default function LinkTagsPage() {
     setDrafts((prev) => ({ ...prev, [`${id}:${field}`]: v }));
   const clearDraft = (id: string) =>
     setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${id}:`))));
-
-  // 不变量:初始加载后,整页 GET 只在写锁内发生——锁内发不出新写,陈旧快照无从覆盖别行新值。
-  // 引用计数持锁:并发触发多次回拉时,最后一个结束(finally)才解锁——先完成者不得提前放行
-  // 新写,否则仍在途的旧 GET 可能覆盖锁外新写;回拉失败设置 error 后解锁,页面停留在旧快照。
-  async function reloadLocked() {
-    setSyncCount((n) => n + 1);
-    try {
-      await load();
-    } catch (e) {
-      setError(String(e)); // 回拉失败必须可见:DB 可能已变,旧快照不再可信
-    } finally {
-      setSyncCount((n) => n - 1);
-    }
-  }
 
   async function create() {
     setCreating(true); // creating 锁:慢网双击不会重复创建
@@ -72,7 +60,7 @@ export default function LinkTagsPage() {
         method: "PATCH", body: JSON.stringify(data),
       });
       clearDraft(id);
-      setError(""); // 先清错再回拉:回拉失败设置的 error 不能被这里覆盖掉
+      setError(""); // 只清普通写入错误;「快照失效」告警由 useLockedReload 独立持有,这里碰不到
       if (data.sortOrder !== undefined) {
         await reloadLocked(); // 排序:平序组内真序在服务端(createdAt),锁页回拉
       } else {
@@ -101,6 +89,7 @@ export default function LinkTagsPage() {
     <>
       <h2>外链标签（{tags.length}）</h2>
       <p>标签用于给外链分类（如「实用攻略」「旅行记录」）；改名即时全局生效，被引用的标签不可删除。</p>
+      {staleError && <p style={{ color: "red" }}>同步服务端最新状态失败，页面可能停留在旧数据，请刷新页面（{staleError}）</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
       <table>
         <thead><tr><th>排序</th><th>名称</th><th>引用数</th><th>操作</th></tr></thead>

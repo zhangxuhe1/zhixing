@@ -2,6 +2,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useLockedReload } from "@/lib/useLockedReload";
 
 type LinkTag = { id: string; name: string };
 type PlaceLink = {
@@ -27,7 +28,6 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
   const [place, setPlace] = useState<PlaceLinks | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
-  const [syncCount, setSyncCount] = useState(0); // 页面级写锁引用计数:>0 期间禁用全页写控件
   const [orderDrafts, setOrderDrafts] = useState<Record<string, string>>({}); // 排序输入受控草稿
   const [tags, setTags] = useState<TagOption[]>([]);
   const [error, setError] = useState("");
@@ -36,7 +36,6 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
   const [url, setUrl] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [tagId, setTagId] = useState("");
-  const syncing = syncCount > 0;
 
   // 管理端读鉴权接口:编辑需要 tagId,公开 DTO 只有标签名。双 GET 原子提交:先拿齐两份
   // 结果再一起 setState,不提交半份快照;失败向上抛,由初始 effect / reloadLocked 决定呈现
@@ -50,6 +49,9 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
   }, [id]);
   useEffect(() => { void load().catch((e) => setError(String(e))); }, [load]);
 
+  // 写锁与「快照失效」告警见 useLockedReload:staleError 与 error 独立,只随整页回拉成功/失败翻转
+  const { syncing, staleError, reloadLocked } = useLockedReload(load);
+
   const locked = (linkId: string) => syncing || busyIds.has(linkId);
   function setBusy(linkId: string, on: boolean) {
     setBusyIds((prev) => {
@@ -60,20 +62,6 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
   }
   const clearOrderDraft = (linkId: string) =>
     setOrderDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== linkId)));
-
-  // 不变量:初始加载后,整页 GET 只在写锁内发生——锁内发不出新写,陈旧快照无从覆盖别行新值。
-  // 引用计数持锁:并发触发多次回拉时,最后一个结束(finally)才解锁——先完成者不得提前放行
-  // 新写,否则仍在途的旧 GET 可能覆盖锁外新写;回拉失败设置 error 后解锁,页面停留在旧快照。
-  async function reloadLocked() {
-    setSyncCount((n) => n + 1);
-    try {
-      await load();
-    } catch (e) {
-      setError(String(e)); // 回拉失败必须可见:DB 可能已变,旧快照不再可信
-    } finally {
-      setSyncCount((n) => n - 1);
-    }
-  }
 
   async function addLink() {
     setCreating(true); // creating 锁:url 无唯一约束,慢网双击的重复创建只能在入口挡
@@ -137,6 +125,7 @@ export default function PlaceLinksPage({ params }: { params: Promise<{ id: strin
         ｜网友分享外链（{place.links.length}，未打标 {untagged}）
       </h2>
       <p><Link href="/link-tags">管理标签 →</Link></p>
+      {staleError && <p style={{ color: "red" }}>同步服务端最新状态失败，页面可能停留在旧数据，请刷新页面（{staleError}）</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
       <table>
         <thead><tr><th>排序</th><th>平台</th><th>标题</th><th>链接</th><th>标签</th><th>操作</th></tr></thead>
