@@ -86,6 +86,17 @@ model Place {
   @@index([level])
 }
 
+// 外链内容标签字典:管理端自由增删改(如"实用攻略""旅行记录"),重命名即时全局生效。
+// 删除被引用标签由 API 预检 + FK Restrict 双层拒绝,防误删丢标注。
+// 详见 docs/superpowers/specs/2026-08-12-place-link-tags-design.md
+model PlaceLinkTag {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  sortOrder Int         @default(0) // 下拉选项与列表展示顺序
+  links     PlaceLink[]
+  createdAt DateTime    @default(now())
+}
+
 // 地点外链(小红书/B 站等攻略帖):第一期仅管理员维护;独立表而非 JSON,
 // 排序/增删与未来"用户提交+审核"演进都不再动 schema。
 model PlaceLink {
@@ -96,6 +107,8 @@ model PlaceLink {
   title     String
   url       String
   sortOrder Int          @default(0)
+  tagId     String?
+  tag       PlaceLinkTag? @relation(fields: [tagId], references: [id], onDelete: Restrict)
   createdAt DateTime     @default(now())
 
   @@index([placeId])

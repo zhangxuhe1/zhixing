@@ -10,7 +10,7 @@ const dataPath = fileURLToPath(new URL("../data/beijing-places.json", import.met
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "FootprintPhoto","Footprint","CardBlock","Card","PlaceLink","Place","User","SearchMiss" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "FootprintPhoto","Footprint","CardBlock","Card","PlaceLink","PlaceLinkTag","Place","User","SearchMiss" RESTART IDENTITY CASCADE',
   );
 });
 afterAll(async () => prisma.$disconnect());

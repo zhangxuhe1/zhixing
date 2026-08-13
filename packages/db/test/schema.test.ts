@@ -7,7 +7,7 @@ const prisma = createPrisma(
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","PlaceLink","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Like","CardFavorite","CardReport","FootprintPhoto","Footprint","Trip","CardBlock","Card","PlaceLink","PlaceLinkTag","Place","User","Identity","EmailCode","SearchMiss" RESTART IDENTITY CASCADE',
   );
 });
 afterAll(async () => prisma.$disconnect());
@@ -54,4 +54,28 @@ test("PlaceLink 往返:挂地点、级联删除", async () => {
 
   await prisma.place.delete({ where: { id: place.id } }); // onDelete: Cascade
   expect(await prisma.placeLink.count()).toBe(0);
+});
+
+test("PlaceLinkTag 往返:挂标、重名拒绝、删除被引用标签拒绝", async () => {
+  const place = await prisma.place.create({
+    data: { name: "香港", level: "CITY", lat: 22.32, lng: 114.17 },
+  });
+  const tag = await prisma.placeLinkTag.create({ data: { name: "实用攻略" } });
+  await prisma.placeLink.create({
+    data: {
+      placeId: place.id, platform: "BILIBILI",
+      title: "200 元穷游香港", url: "https://example.com/hk", tagId: tag.id,
+    },
+  });
+  const read = await prisma.placeLink.findFirstOrThrow({ include: { tag: true } });
+  expect(read.tag?.name).toBe("实用攻略");
+
+  // name 唯一约束
+  await expect(prisma.placeLinkTag.create({ data: { name: "实用攻略" } })).rejects.toThrow();
+  // onDelete: Restrict——被引用标签不可删
+  await expect(prisma.placeLinkTag.delete({ where: { id: tag.id } })).rejects.toThrow();
+  // 地点级联删链接后,标签才可删
+  await prisma.place.delete({ where: { id: place.id } });
+  await prisma.placeLinkTag.delete({ where: { id: tag.id } });
+  expect(await prisma.placeLinkTag.count()).toBe(0);
 });
