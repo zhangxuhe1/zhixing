@@ -38,7 +38,7 @@
 | 未打标状态 | **`tagId = null` 即未打标，不设「未分类」标签** | null 天然表达「还没打标」，管理端按 `tag == null` 统计待办即可；不需要旧方案的 `UNCLASSIFIED` 运营态枚举，也不存在「运营态泄漏到公开 API」的问题——null 在公开 DTO 就是 `tag: null`，App 不渲染 chip，与今日形态一致。**null 的语义必须保持纯粹的「待处理」**：看过但不属于任何分类的内容归入运营自建的「其他」标签（见存量打标），不允许「审核过却留在 null」——否则未打标计数永远混着已审条目，无法作为可归零的完成判据 |
 | 删除被引用的标签 | **拒绝（409 `tag_in_use`）+ DB `onDelete: Restrict` 兜底** | 误删标签会静默丢掉全部已打标注且不可恢复。管理端删除前可见引用计数，先把链接改标或清空再删；预检与删除之间的并发竞态由 FK Restrict 兜底转 409 |
 | App 端展示方式 | **行内 chip，不分组** | 单地点最多 4 条链接，分组标题的信息密度收益为零，还要处理动态标签的组序、空组、未打标行归属等边界。chip 直接兑现「点开前预判类型」，且未打标行零变化 |
-| chip 视觉 | **安静样式**：`caption2` + `.secondary` 前景 + `tertiarySystemFill` 胶囊 | 行内已有 cinnabar 实底平台徽章，标签是次级信息，不能成为第二处红色强调 |
+| chip 视觉 | **jade 淡彩样式**：`caption2` + `ZXTheme.accent` 前景 + `jade.opacity(0.13)` 胶囊 + 细描边（与 `ZXCategoryBadge` 同调） | 行内已有 cinnabar 实底平台徽章，标签是次级信息，不能成为第二处红色强调；初版纯灰（`.secondary` + `tertiarySystemFill`）实测观感过于寡淡，改用设计系统既有的石青玉色调——有色但仍比平台徽章安静一级 |
 | 公开 DTO 的标签形状 | **`tag: string \| null`（标签名）** | App 只消费名字；不下发 `tagId`（用户端无消费场景，公开契约保持最小）。标签名本身是公开内容的一部分，无隐私问题 |
 | 管理端读取来源 | **新增 `GET /admin/places/:id/links`（requireAdmin），不再借公开 `/places/:id`** | 管理端编辑需要 `tagId`，公开 DTO 只有标签名。与其把管理字段塞进公开契约，不如按仓库「公私物理分离」原则给管理端专用读取；两侧共用同一排序常量，切换接口不改变列表顺序 |
 | 存量打标的入口 | **新增管理端「外链总览」页（`GET /admin/links` 全量 + 前端「只看未打标」筛选）** | 79 条存量分布在 47 个地点，逐地点打开太低效。全量接口 + 本地筛选在当前量级下最简（无分页、无服务端筛选参数）；这个页面同时是日常巡查入口，不是一次性工具 |
@@ -117,7 +117,7 @@ model PlaceLinkTag {
 
 - 分段控件第二段：「网友攻略」→「网友分享」（`PlaceDrawer.DrawerSection.links` 的 rawValue，四字宽度不变）。
 - `PlaceLink`（`Core/Models.swift`）加 `let tag: String?`——可选容错，旧服务端/旧缓存缺字段解码为 nil（与 `PlaceDetail.links` 同款兼容写法）。
-- 链接行（`Place/PlaceLinksSection.swift`）：平台徽章后、标题前，`tag` 非 nil 时渲染一枚 chip——`caption2.weight(.semibold)`、`.secondary` 前景、`Color(.tertiarySystemFill)` 胶囊背景，刻意比 cinnabar 平台徽章安静。`tag == nil` 不渲染任何占位，行与今日完全一致。
+- 链接行（`Place/PlaceLinksSection.swift`）：平台徽章后、标题前，`tag` 非 nil 时渲染一枚 chip——`caption2.weight(.semibold)`、`ZXTheme.accent` 前景、`ZXTheme.jade.opacity(0.13)` 胶囊背景加 `jade.opacity(0.18)` 细描边（与 `ZXCategoryBadge` 同调），有色但刻意比 cinnabar 平台徽章安静。`tag == nil` 不渲染任何占位，行与今日完全一致。
 - `open(_:)` 对 `link.url` 先 `trimmingCharacters(in: .whitespacesAndNewlines)` 再构造 URL 与 https 校验；不改变其余打开行为。
 - 空态文案：eyebrow「网友分享」、标题「分享还在收集中」、正文「我们会陆续为这里挑选值得一看的旅行记录与实用攻略。」；失败文案「网友分享加载失败，请重试」。列表平铺、行样式、浏览器选择均不变。
 

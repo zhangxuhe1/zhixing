@@ -32,13 +32,15 @@ struct PlaceLinksSection: View {
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .foregroundStyle(.white)
                                     .background(ZXTheme.cinnabar, in: Capsule())
-                                // 内容标签 chip:刻意比 cinnabar 平台徽章安静——次级信息不做第二处红色强调
+                                // 内容标签 chip:jade 淡底 + accent 前景(与 ZXCategoryBadge 同调)——
+                                // 有色但仍比 cinnabar 平台徽章安静一级,不做第二处红色强调
                                 if let tag = link.tag {
                                     Text(tag)
                                         .font(.caption2.weight(.semibold))
                                         .padding(.horizontal, 8).padding(.vertical, 3)
-                                        .foregroundStyle(.secondary)
-                                        .background(Color(.tertiarySystemFill), in: Capsule())
+                                        .foregroundStyle(ZXTheme.accent)
+                                        .background(ZXTheme.jade.opacity(0.13), in: Capsule())
+                                        .overlay { Capsule().stroke(ZXTheme.jade.opacity(0.18), lineWidth: 1) }
                                 }
                                 Text(link.title)
                                     .font(.subheadline)
