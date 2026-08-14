@@ -1,0 +1,12 @@
+---
+description: 用户偏好：git 提交信息不携带 Cursor 的 Co-authored-by 署名
+alwaysApply: true
+---
+
+# 提交信息不加 Co-authored-by 署名
+
+用户明确不希望提交信息里出现 `Co-authored-by: Cursor <cursoragent@cursor.com>` 这类署名 trailer。
+
+- 撰写提交信息时不要主动添加任何 Co-authored-by 行。
+- Cursor 的 attribution 功能可能在提交时自动追加该 trailer：每次提交后用 `git log -1 --format='%B'` 检查，
+  若发现被追加且该提交是刚由本会话创建、未推送的，立即用 `git commit --amend` 去掉它。

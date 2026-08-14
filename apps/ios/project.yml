@@ -24,7 +24,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.zhixing.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: 0.2.0
+        MARKETING_VERSION: 0.3.0
         # Catalyst 走 macosx SDK，条件精确命中：Mac 构建用无 SIWA 的 entitlements
         # （ad-hoc 签名带 applesignin 直接失败），iOS 构建不受影响
         CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Zhixing/ZhixingMac.entitlements
