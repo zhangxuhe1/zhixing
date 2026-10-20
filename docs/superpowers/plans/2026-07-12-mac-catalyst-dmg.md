@@ -362,7 +362,7 @@ private static func applyWindowSizeRestrictions()
 **命令契约**（顺序即脚本骨架；产物路径 `dist/`、中间产物 `apps/ios/DerivedData/` 均已被根 .gitignore 覆盖）：
 
 1. `ROOT` 取仓库根（脚本所在目录的上级），`cd "$ROOT/apps/ios"`，`xcodegen generate`；
-2. Release 构建（`APP_API_BASE` 由 release 档自动取 `https://api.example.com`，无需覆写）：
+2. Release 构建（`APP_API_BASE` 从未跟踪的 `Config/Release.local.xcconfig` 读取，配置方式见 `docs/private-config.md`）：
 
    ```sh
    xcodebuild -project Zhixing.xcodeproj -scheme Zhixing -configuration Release \

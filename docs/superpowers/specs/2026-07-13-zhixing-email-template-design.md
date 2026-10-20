@@ -19,7 +19,7 @@
 | **改造范围** | 混合式：采纳 参考项目 的**呈现质量**（完整文档 / 自适应 / 品牌集中化 / 衬线体），**不**采纳其 `text\|code\|cta` block 联合类型 | 知行当前**只有一种邮件**（登录码），无第二处 `sendMail` 调用点。block 组合系统是为不存在的邮件预造抽象，违反 YAGNI。呈现质量在第一封邮件就回本；可扩展性要到第二种邮件才回本，届时再做也是小重构。 |
 | **视觉方向** | 水墨留白 · 朱砂 | 宣纸暖白 + 墨色正文 + 朱砂红验证码 + 衬线体「知行」，最贴人文遗产调性，也呼应「地图中国」的文化感。 |
 | **页头标语** | `知一方风土，行万里山河` | 与登录页品牌文案保持一致，知(风土)+行(山河)两层一句说尽。 |
-| **发件人域名** | `知行 <noreply@example.com>` | 复用 参考项目 项目在 Resend 已验证的域名，省一份域名费。SPF/DKIM 验证域名而非显示名，跨项目共用合规。纠正现状 stale 的 `noreply@example.com`。 |
+| **发件人域名** | `知行 <noreply@example.com>` | 此处仅为示例；真实发件人通过私有环境变量 `MAIL_FROM` 配置，并使用邮件服务商已验证的域名。 |
 
 ## 3. 架构
 
@@ -105,13 +105,13 @@ body(bg 外底)
 from: process.env.MAIL_FROM ?? "知行 <noreply@example.com>",
 ```
 
-- 纠正现状 stale 的 `noreply@example.com`（该 `.cc` 域名非项目所有，生产误发会 SPF/DKIM 不对齐 → 进垃圾箱或伪冒他域）。
-- 补注释：生产环境应经 `MAIL_FROM` 环境变量覆盖；默认值须为 Resend 已验证域名。
+- `noreply@example.com` 仅供本地控制台模式；真实发信前设置 `MAIL_FROM`，避免误用未验证的域名。
+- 补注释：生产环境应经 `MAIL_FROM` 环境变量覆盖；真实发件域名须经邮件服务商验证。
 
 ## 7. 安全
 
 - **HTML 转义**：`renderCodeEmail` 内所有动态插值（`code`）过 `escapeHtml`。品牌文案为可信常量。
-- **发件域对齐**：`From` 域名（`example.com`）须是 Resend 已验证域名，保证 SPF/DKIM 对齐、正常投递。显示名「知行」为自由文本，不参与鉴权。
+- **发件域对齐**：`From` 中的实际域名须经邮件服务商验证并配置 SPF/DKIM。示例域名不可直接用于发信，显示名「知行」不参与域名鉴权。
 - **无网络副作用（dev/test）**：`config.smtp.url` 为空（dev/test 默认）时 `sendMail` 仅 `console.log`，绝无外发——本次改造不触碰此分支。
 
 ## 8. 测试
@@ -129,7 +129,7 @@ from: process.env.MAIL_FROM ?? "知行 <noreply@example.com>",
 
 - [ ] 写 `apps/api/test/mailer.test.ts`（§8 四条契约），确认 RED。
 - [ ] 改 `apps/api/src/mailer.ts`：加 `BRAND` / `C` 常量；`renderCodeEmail` 重做 `text` + `html`（完整文档 + 自适应 + 水墨留白·朱砂 + 衬线品牌字 + 标语）；保留 `escapeHtml` 与 `sendMail` 不变。
-- [ ] 改 `apps/api/src/config.ts`：默认发件人 `noreply@example.com` → `noreply@example.com` + 补注释。
+- [x] `apps/api/src/config.ts` 使用示例默认发件人；实际发件人移入未跟踪的 `MAIL_FROM` 配置。
 - [ ] `pnpm -C apps/api exec vitest run` 全绿。
 - [ ] 视觉验收：本地渲染 `html` 到浏览器截图确认（宽屏 + 移动端）。
 - [ ] 提交（conventional commits，中文）。

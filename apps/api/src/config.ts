@@ -22,8 +22,7 @@ export const config = {
   smtp: {
     // 空字符串 = dev/test 默认：sendMail 走控制台打印分支，绝无网络副作用
     url: (process.env.SMTP_URL ?? "").trim(),
-    // 默认发件人须为 Resend 已验证域名（复用 参考项目 项目的 example.com，省一份域名费）；
-    // 生产应经 MAIL_FROM 覆盖。SPF/DKIM 鉴权的是域名而非显示名，故显示「知行」、域名用 example.com 合规。
+    // 默认仅供本地控制台模式；真实发信须在私有环境配置中设置已验证域名的 MAIL_FROM。
     from: process.env.MAIL_FROM ?? "知行 <noreply@example.com>",
   },
 };

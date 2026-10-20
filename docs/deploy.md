@@ -65,7 +65,7 @@
 ## SMTP 配置（邮箱验证码登录）
 
 - `SMTP_URL`：`smtps://user:pass@host:465` 格式连接串，直接交给 nodemailer 建立发信连接；留空时验证码只打印到 api 容器日志，不会真的发出邮件——这是 dev/test 默认，生产环境要让邮箱登录真正可用，必须配置这个变量
-- `MAIL_FROM`：发件人，格式「显示名 <地址>」，默认 `知行 <noreply@example.com>`；改用自有发信地址时一并改这里
+- `MAIL_FROM`：必须在 `.env.production` 中填写实际发件人，格式「显示名 <地址>」。`知行 <noreply@example.com>` 仅为示例，不可用于生产发信
 - 发信域名（`MAIL_FROM` 里 @ 后的域名）需要在 DNS 配好 SPF/DKIM，否则验证码邮件大概率被目标邮箱服务商（尤其 QQ/163/Gmail）打入垃圾箱或直接拒收
 
 ## 管理端高德选点（可选）

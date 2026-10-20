@@ -4,6 +4,8 @@ options:
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+configFiles:
+  Release: Config/Release.xcconfig
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -12,14 +14,29 @@ settings:
   configs:
     debug:
       APP_API_BASE: http://localhost:8787
-    release:
-      APP_API_BASE: https://api.example.com
 targets:
   Zhixing:
     type: application
     # iOS + Mac Catalyst 双目标（与 platform 键互斥）；测试 target 仍只跑 iOS 模拟器
     supportedDestinations: [iOS, macCatalyst]
     sources: [Zhixing]
+    preBuildScripts:
+      - name: 检查发布配置
+        script: |
+          if [ "$CONFIGURATION" = "Release" ]; then
+            case "${APP_API_BASE:-}" in
+              https://api.example.com|https://api.example.com/*)
+                echo "error: 请在 Config/Release.local.xcconfig 配置实际发布 API 地址。"
+                exit 1
+                ;;
+              https://?*) ;;
+              *)
+                echo "error: Release 构建需要通过 Config/Release.local.xcconfig 或构建参数设置 HTTPS APP_API_BASE。"
+                exit 1
+                ;;
+            esac
+          fi
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.zhixing.ios

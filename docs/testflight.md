@@ -8,8 +8,10 @@
    - 服务器 `.env.production` 的 APPLE_BUNDLE_ID，重启 api
 
 ## 发布步骤
-1. `apps/ios/project.yml`：release 的 APP_API_BASE 改为 `https://api.<域名>`；
-   settings.base 的 DEVELOPMENT_TEAM 填 Team ID；`xcodegen generate`
+1. 把 `apps/ios/Config/Release.local.xcconfig.example` 复制为同目录下的
+   `Release.local.xcconfig`，填写实际 API 地址及 DEVELOPMENT_TEAM（Team ID），
+   然后在 `apps/ios` 运行 `xcodegen generate`。本地配置已被 Git 忽略；
+   URL 按示例用 `https:/$()/` 写法，避免 `//` 被 xcconfig 当成注释。
 2. Xcode 打开工程 → Signing & Capabilities 确认自动签名 + Sign in with Apple 能力无红字
 3. App Store Connect（appstoreconnect.apple.com）→ 我的 App → 新建 App：
    平台 iOS、名称「知行」（若重名换备用名，见规格书 Q5）、bundle id 选上一步注册的、SKU 随意

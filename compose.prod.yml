@@ -60,8 +60,8 @@ services:
       # 邮箱验证码登录发信：留空 SMTP_URL 则验证码只打印到 api 容器日志，不真实发信——
       # 生产要邮箱登录真正可用必须配置（格式与 SPF/DKIM 提醒见 deploy.md SMTP 小节）
       SMTP_URL: ${SMTP_URL:-}
-      # 默认与 config.ts 兜底一致；改用自有发信地址在 .env.production 设 MAIL_FROM
-      MAIL_FROM: ${MAIL_FROM:-知行 <noreply@example.com>}
+      # 必须在 .env.production 明确填写已验证域名的发件人，避免误用示例地址发信
+      MAIL_FROM: ${MAIL_FROM:?请在 .env.production 设置已验证域名的 MAIL_FROM}
     # 首启需等 db 就绪再跑 prisma migrate，否则迁移竞态失败（deploy.md 硬化清单）
     depends_on:
       db: { condition: service_healthy }

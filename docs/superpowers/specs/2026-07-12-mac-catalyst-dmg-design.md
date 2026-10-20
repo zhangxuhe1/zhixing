@@ -56,7 +56,7 @@
 
 **脚本 `scripts/mac-dmg.sh`**（对齐 scripts/ios-test.sh 风格）：
 
-1. `xcodegen generate` → `xcodebuild` 以 `destination 'generic/platform=macOS,variant=Mac Catalyst'` + Release 配置构建（`APP_API_BASE` 取 release 档 `https://api.example.com`），ad-hoc 签名需**同时覆写** `CODE_SIGN_STYLE=Manual` + `CODE_SIGN_IDENTITY="-"`——工程默认 Automatic 且无 Team，不覆写会先死在"缺 development team"、到不了 ad-hoc（ad-hoc 是 Apple Silicon 启动的最低要求，无需证书）；
+1. `xcodegen generate` → `xcodebuild` 以 `destination 'generic/platform=macOS,variant=Mac Catalyst'` + Release 配置构建（`APP_API_BASE` 从未跟踪的 `Config/Release.local.xcconfig` 读取），ad-hoc 签名需**同时覆写** `CODE_SIGN_STYLE=Manual` + `CODE_SIGN_IDENTITY="-"`——工程默认 Automatic 且无 Team，不覆写会先死在"缺 development team"、到不了 ad-hoc（ad-hoc 是 Apple Silicon 启动的最低要求，无需证书）；
 2. `hdiutil` 生成 dmg：构建产物默认名为 `Zhixing.app`，装盘前重命名为 `知行.app`（重命名不破坏签名；安装说明里的路径/xattr 命令与之对齐），卷内含 `知行.app` + `/Applications` 快捷方式（拖拽安装布局），产物命名 `Zhixing-<版本号>.dmg`；
 3. 升级钩子：脚本检测环境变量 `MAC_SIGN_IDENTITY`，设了就走 Developer ID 签名 + `notarytool` 公证 + 装订，没设就 ad-hoc——将来办会员后零改动升级为可公开分发版。
 

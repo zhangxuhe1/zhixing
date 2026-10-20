@@ -17,6 +17,8 @@ pnpm test                       # 全部测试
 
 - 内容灌入见 docs/content-ops.md；部署见 docs/deploy.md
 - iOS 工程见 apps/ios（需 Xcode，计划：docs/superpowers/plans/2026-07-07-m1-ios.md）
+- 发布地址、发件人和私人运维资料的本地配置见 [私人配置说明](docs/private-config.md)；
+  Mac/iOS Release 构建前需填写被 Git 忽略的 `apps/ios/Config/Release.local.xcconfig`。
 
 ## 内容管线（AI 风物卡）
 

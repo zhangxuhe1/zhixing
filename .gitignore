@@ -10,3 +10,5 @@ backups/
 apps/ios/Zhixing.xcodeproj/
 xcuserdata/
 DerivedData/
+.private/
+apps/ios/Config/*.local.xcconfig
